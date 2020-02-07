@@ -1,0 +1,22 @@
+{
+  "name": "Useful Forks",
+  "version": "1.0",
+  "description": "Displays Github forks ordered by stars, and with additional information",
+  "permissions": [
+    "*://github.com/*",
+    "*://api.github.com/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "*://github.com/*/network/members"
+      ],
+      "js": [
+        "useful_forks.js"
+      ],
+      "run_at": "document_end",
+      "all_frames": true
+    }
+  ],
+  "manifest_version": 2
+}
