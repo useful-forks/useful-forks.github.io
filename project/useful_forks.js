@@ -8,7 +8,7 @@ const additional_css_literal = '#useful_forks_wrapper .repo div {display: inline
 
 function build_fork_element_html(combined_name, num_stars, num_watches, num_forks)
 {
-    return '<div class="repo"><div class="useful_forks_link">' + svg_literal_fork + '  <a href="/' + combined_name + '">' + combined_name + '</a></div><div class="useful_forks_info">' + svg_literal_star + ' x ' + num_stars + ' | ' + svg_literal_eye + ' x ' + num_watches + ' | ' + svg_literal_fork + ' x ' + num_forks + '</div></div>';
+    return '<div class="repo"><div class="useful_forks_link">' + svg_literal_fork + '  <a href=' + combined_name + '"/">' + combined_name + '</a></div><div class="useful_forks_info">' + svg_literal_star + ' x ' + num_stars + ' | ' + svg_literal_eye + ' x ' + num_watches + ' | ' + svg_literal_fork + ' x ' + num_forks + '</div></div>';
 }
 
 function add_fork_elements(forkdata_array)
