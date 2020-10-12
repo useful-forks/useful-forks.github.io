@@ -30,16 +30,32 @@ function build_fork_element_html(combined_name, num_stars, num_watches, num_fork
       + '</div></tr>';
 }
 
-function commits_count(response, fork_username) {
+function update_data_innerHTML(innerHTML) {
+  document.getElementById('useful_forks_data').innerHTML = innerHTML;
+}
+
+function commits_count(request, fork_username) {
   return () => {
-    response = JSON.parse(response.responseText);
+    const response = JSON.parse(request.responseText);
     let old_data = document.getElementById(fork_username);
+
+    if (response.total_commits === 0) {
+      old_data.remove();
+    }
+
     let appendedData = old_data.insertCell();
     appendedData.innerHTML = '<div class="useful_forks_commits">'
         + '&nbsp;| ' + ahead_badge(response.ahead_by)
         + '&nbsp;| ' + behind_badge(response.behind_by)
-        + '&nbsp;| total_commits=' + response.total_commits
         + '</div>';
+  }
+}
+
+function commits_count_failure(fork_username) {
+  return () => {
+    let old_data = document.getElementById(fork_username);
+    let appendedData = old_data.insertCell();
+    appendedData.innerHTML = '<div class="useful_forks_commits">&nbsp;| Something is wrong with this repository</div>';
   }
 }
 
@@ -66,16 +82,16 @@ function add_fork_elements(forkdata_array, user, repo) {
 
     const fork_username = extract_username_from_fork(elem_ref.full_name);
     let request = authenticatedRequestFactory('https://api.github.com/repos/' + user + '/' + repo + '/compare/master...' + fork_username + ':master');
-    request.onreadystatechange = onreadystatechangeFactory(request, commits_count(request, fork_username));
+    request.onreadystatechange = onreadystatechangeFactory(request, commits_count(request, fork_username), commits_count_failure(fork_username));
     request.send();
   }
 
   wrapper_html += '</table>';
 
-  document.getElementById('useful_forks_data').innerHTML = wrapper_html; // update data table
+  update_data_innerHTML(wrapper_html);
 }
 
-function onreadystatechangeFactory(xhr, successFn) {
+function onreadystatechangeFactory(xhr, successFn, failureFn) {
   return () => {
     if (xhr.readyState === 4) {
       if (xhr.status === 200) {
@@ -84,6 +100,7 @@ function onreadystatechangeFactory(xhr, successFn) {
         console.warn('Looks like the rate-limit was exceeded.');
       } else {
         console.warn('GitHub API returned status:', xhr.status);
+        failureFn();
       }
     } else {
       // Request is still in progress
@@ -113,22 +130,40 @@ function prepare_display() {
   wrapper.append(data_display);
 }
 
-function load_useful_forks(user, repo) {
-  add_css();
-  prepend_title();
-  prepare_display();
+function check_all_forks(request, user, repo) {
+  const response = JSON.parse(request.responseText);
+  console.log(response);
+  add_fork_elements(response, user, repo);
+}
 
-  // todo: check "forks_count" for >100 (query "page=X")
-  let request = authenticatedRequestFactory('https://api.github.com/repos/' + user + '/' + repo + '/forks?sort=stargazers&per_page=100')
+function request_fork_page(page_number, user, repo) {
+  let request = authenticatedRequestFactory('https://api.github.com/repos/' + user + '/' + repo + '/forks?sort=stargazers&per_page=100&page=' + page_number)
   request.onreadystatechange = onreadystatechangeFactory(request,
-      () => add_fork_elements(JSON.parse(request.responseText), user, repo)
-  );
+      () => {
+        const response = JSON.parse(request.responseText);
+
+        if (!response || response.length === 0) {
+          if (page_number === 0) {
+            update_data_innerHTML("No forks found.")
+          }
+          return;
+        }
+        // todo: >100 forks
+        // else if (response.length > 100) {
+        //   request_fork_page(page_number++, user, repo);
+        // }
+
+        check_all_forks(request, user, repo);
+      });
   request.send();
 }
 
-/* Entry point of the extension */
+/* Entry point. */
 const pathComponents = window.location.pathname.split('/');
 if (pathComponents.length >= 3) {
   const user = pathComponents[1], repo = pathComponents[2];
-  load_useful_forks(user, repo);
+  add_css();
+  prepend_title();
+  prepare_display();
+  request_fork_page(0, user, repo);
 }
