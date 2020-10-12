@@ -41,6 +41,9 @@ function commits_count(request, fork_username) {
 
     if (response.total_commits === 0) {
       old_data.remove();
+      if (document.getElementById('useful_forks_table').rows.length === 0) {
+        update_data_innerHTML("All the forks have been filtered out: apparently the maintainers are doing a great job!");
+      }
     }
 
     let appendedData = old_data.insertCell();
@@ -73,7 +76,7 @@ function add_fork_elements(forkdata_array, user, repo) {
 
   console.log(forkdata_array);
 
-  let wrapper_html = '<table>';
+  let wrapper_html = '<table id="useful_forks_table">';
 
   for (let i = 0; i < Math.min(100, forkdata_array.length); ++i) {
     const elem_ref = forkdata_array[i];
