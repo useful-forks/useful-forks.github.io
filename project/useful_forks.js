@@ -74,8 +74,6 @@ function add_fork_elements(forkdata_array, user, repo) {
   if (!forkdata_array || forkdata_array.length === 0)
     return;
 
-  console.log(forkdata_array);
-
   let wrapper_html = '<table id="useful_forks_table">';
 
   for (let i = 0; i < Math.min(100, forkdata_array.length); ++i) {
@@ -135,7 +133,6 @@ function prepare_display() {
 
 function check_all_forks(request, user, repo) {
   const response = JSON.parse(request.responseText);
-  console.log(response);
   add_fork_elements(response, user, repo);
 }
 

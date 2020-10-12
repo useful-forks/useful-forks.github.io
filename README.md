@@ -1,11 +1,17 @@
 # Useful Forks
-
-Chrome extension, adding a sorted list of starred forks to the GitHub forks page.
+Chrome extension, adding a sorted list of starred forks to the GitHub forks page. Results are filtered out if there were never any commits pushed since the fork was created.
 
 Not published, if you want to install it, enable developer mode in `chrome://extensions` and load the `project` folder as an unpacked extension.
 
-![useful](https://user-images.githubusercontent.com/17261478/74049530-9a5e7f00-49d4-11ea-9162-d4ba35764302.PNG)
+You should change the [script file](project/useful_forks.js) so that it includes your GitHub username and an [Access Token](https://github.com/settings/tokens/new?scopes=repo&description=UsefulFork).
+
+![example](media/example.png)
 
 ## For devs
-
 The extension uses [content_scripts](https://developer.chrome.com/extensions/content_scripts#declaratively).
+
+## To-do
+* Recursive search (for forks of forks)
+* Search all forks (paginated results for > 100)
+* Publish as a chrome extension
+* Allow people to input their Access Token to increase API limits (from Extension's settings rather than through script)
