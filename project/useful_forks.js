@@ -1,11 +1,11 @@
-let USERNAME = ""
-let TOKEN = ""
+let GITHUB_USERNAME = ""
+let GITHUB_ACCESS_TOKEN = ""
 
 const svg_literal_fork = '<svg class="octicon octicon-repo-forked v-align-text-bottom" viewBox="0 0 10 16" version="1.1" width="10" height="16" aria-hidden="true"><path fill-rule="evenodd" d="M8 1a1.993 1.993 0 00-1 3.72V6L5 8 3 6V4.72A1.993 1.993 0 002 1a1.993 1.993 0 00-1 3.72V6.5l3 3v1.78A1.993 1.993 0 005 15a1.993 1.993 0 001-3.72V9.5l3-3V4.72A1.993 1.993 0 008 1zM2 4.2C1.34 4.2.8 3.65.8 3c0-.65.55-1.2 1.2-1.2.65 0 1.2.55 1.2 1.2 0 .65-.55 1.2-1.2 1.2zm3 10c-.66 0-1.2-.55-1.2-1.2 0-.65.55-1.2 1.2-1.2.65 0 1.2.55 1.2 1.2 0 .65-.55 1.2-1.2 1.2zm3-10c-.66 0-1.2-.55-1.2-1.2 0-.65.55-1.2 1.2-1.2.65 0 1.2.55 1.2 1.2 0 .65-.55 1.2-1.2 1.2z"></path></svg>';
 const svg_literal_star = '<svg aria-label="star" height="16" class="octicon octicon-star v-align-text-bottom" viewBox="0 0 14 16" version="1.1" width="14" role="img"><path fill-rule="evenodd" d="M14 6l-4.9-.64L7 1 4.9 5.36 0 6l3.6 3.26L2.67 14 7 11.67 11.33 14l-.93-4.74L14 6z"></path></svg>';
 const svg_literal_eye = '<svg class="octicon octicon-eye v-align-text-bottom" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"><path fill-rule="evenodd" d="M8.06 2C3 2 0 8 0 8s3 6 8.06 6C13 14 16 8 16 8s-3-6-7.94-6zM8 12c-2.2 0-4-1.78-4-4 0-2.2 1.8-4 4-4 2.22 0 4 1.8 4 4 0 2.22-1.78 4-4 4zm2-4c0 1.11-.89 2-2 2-1.11 0-2-.89-2-2 0-1.11.89-2 2-2 1.11 0 2 .89 2 2z"></path></svg>';
 
-const additional_css_literal = '#useful_forks_wrapper .repo div {display: inline-block;color: #666;margin: 2px 15px;} #useful_forks_wrapper .repo {text-align: center;}';
+const additional_css_literal = '#useful_forks_wrapper {padding-bottom: 50px;} #useful_forks_wrapper .repo div {display: inline-block;color: #666;margin: 2px 15px;}';
 
 function extract_username_from_fork(combined_name) {
   return combined_name.split('/')[0];
@@ -47,7 +47,7 @@ function authenticatedRequestFactory(url) {
   let request = new XMLHttpRequest();
   request.open('GET', url);
   request.setRequestHeader("Accept", "application/vnd.github.v3+json");
-  request.setRequestHeader("Authorization", "Basic " + btoa(USERNAME + ":" + TOKEN));
+  request.setRequestHeader("Authorization", "Basic " + btoa(GITHUB_USERNAME + ":" + GITHUB_ACCESS_TOKEN));
   return request;
 }
 
@@ -57,7 +57,7 @@ function add_fork_elements(forkdata_array, user, repo) {
 
   console.log(forkdata_array);
 
-  let wrapper_html = '<h5>Useful forks</h5><table>';
+  let wrapper_html = '<table>';
 
   for (let i = 0; i < Math.min(100, forkdata_array.length); ++i) {
     const elem_ref = forkdata_array[i];
@@ -70,16 +70,9 @@ function add_fork_elements(forkdata_array, user, repo) {
     request.send();
   }
 
-  wrapper_html += '</table><br/><br/>';
+  wrapper_html += '</table>';
 
-  let old_wrapper = document.getElementById('useful_forks_wrapper');
-  if (old_wrapper)
-    old_wrapper.remove();
-
-  let new_wrapper = document.createElement('div');
-  new_wrapper.setAttribute("id", "useful_forks_wrapper");
-  new_wrapper.innerHTML = wrapper_html;
-  document.getElementById('network').prepend(new_wrapper);
+  document.getElementById('useful_forks_data').innerHTML = wrapper_html; // update data table
 }
 
 function onreadystatechangeFactory(xhr, successFn) {
@@ -98,12 +91,34 @@ function onreadystatechangeFactory(xhr, successFn) {
   };
 }
 
-function load_useful_forks(user, repo) {
-  let styleSheet = document.createElement("style");
+function add_css() {
+  let styleSheet = document.createElement('style');
   styleSheet.type = "text/css";
   styleSheet.innerText = additional_css_literal;
   document.head.appendChild(styleSheet);
+}
 
+function prepend_title() {
+  let new_wrapper = document.createElement('div');
+  new_wrapper.setAttribute('id', 'useful_forks_wrapper');
+  new_wrapper.innerHTML = "<h4>Useful forks</h4>";
+  document.getElementById('network').prepend(new_wrapper);
+}
+
+function prepare_display() {
+  let wrapper = document.getElementById('useful_forks_wrapper');
+  let data_display = document.createElement('div');
+  data_display.setAttribute('id', 'useful_forks_data');
+  data_display.innerHTML = 'Currently scanning all the forks.';
+  wrapper.append(data_display);
+}
+
+function load_useful_forks(user, repo) {
+  add_css();
+  prepend_title();
+  prepare_display();
+
+  // todo: check "forks_count" for >100 (query "page=X")
   let request = authenticatedRequestFactory('https://api.github.com/repos/' + user + '/' + repo + '/forks?sort=stargazers&per_page=100')
   request.onreadystatechange = onreadystatechangeFactory(request,
       () => add_fork_elements(JSON.parse(request.responseText), user, repo)
@@ -111,6 +126,7 @@ function load_useful_forks(user, repo) {
   request.send();
 }
 
+/* Entry point of the extension */
 const pathComponents = window.location.pathname.split('/');
 if (pathComponents.length >= 3) {
   const user = pathComponents[1], repo = pathComponents[2];
