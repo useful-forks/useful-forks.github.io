@@ -1,7 +1,7 @@
 {
-  "name": "Useful Forks",
-  "version": "1.0",
-  "description": "Displays Github forks ordered by stars, and with additional information",
+  "name": "Useful Forks !",
+  "version": "1.1",
+  "description": "Displays GitHub forks ordered by stars, and with additional information",
   "permissions": [
     "*://github.com/*",
     "*://api.github.com/*"
@@ -14,7 +14,7 @@
       "js": [
         "useful_forks.js"
       ],
-      "run_at": "document_end",
+      "run_at": "document_idle",
       "all_frames": true
     }
   ],
