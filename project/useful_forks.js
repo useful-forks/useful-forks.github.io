@@ -18,6 +18,7 @@ const UF_MSG_NO_FORKS     = "No one forked this specific repository.";
 const UF_MSG_SCANNING     = "Currently scanning all the forks.";
 const UF_MSG_EMPTY_FILTER = "All the forks have been filtered out: apparently none of the forks have done anything productive!";
 const UF_MSG_API_RATE     = "Exceeded GitHub API rate-limits.";
+const UF_TABLE_SEPARATOR  = "&nbsp;|&nbsp;";
 
 const FORKS_PER_PAGE = 100; // enforced by GitHub API
 
@@ -47,7 +48,7 @@ function build_fork_element_html(table_body, combined_name, num_stars, num_watch
               $('<div>', {class: "useful_forks_link"}).html(svg_literal_fork + ' <a href=https://github.com/' + combined_name + '>' + combined_name + '</a>')
           ),
           $('<td>').append(
-              $('<div>', {class: "useful_forks_info"}).html(svg_literal_star + ' x ' + num_stars + ' | ' + svg_literal_eye + ' x ' + num_watches + ' | ' + svg_literal_fork + ' x ' + num_forks)
+              $('<div>', {class: "useful_forks_info"}).html(svg_literal_star + ' x ' + num_stars + UF_TABLE_SEPARATOR + svg_literal_eye + ' x ' + num_watches + UF_TABLE_SEPARATOR + svg_literal_fork + ' x ' + num_forks)
           )
       )
   );
@@ -68,7 +69,7 @@ function commits_count(request, table_body, fork_username) {
         getElementById_$(UF_ID_MSG).html(UF_MSG_EMPTY_FILTER);
       }
     } else {
-      const commits_badges = '&nbsp;| ' + ahead_badge(response.ahead_by)+ '&nbsp;| ' + behind_badge(response.behind_by);
+      const commits_badges = UF_TABLE_SEPARATOR + ahead_badge(response.ahead_by)+ UF_TABLE_SEPARATOR + behind_badge(response.behind_by);
       old_data.append(
           $('<td>').append(
               $('<div>', {class: "useful_forks_commits"}).html(commits_badges)
