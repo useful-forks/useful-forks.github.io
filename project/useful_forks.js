@@ -6,24 +6,19 @@ const UF_ID_TITLE = 'useful_forks_title';
 const UF_ID_MSG = 'useful_forks_msg';
 const UF_ID_DATA = 'useful_forks_data';
 const UF_ID_TABLE = 'useful_forks_table';
-const UF_ID_INPUT = 'useful_forks_token_input';
-const UF_ID_SUBMIT = 'useful_forks_token_submit';
 
 const svg_literal_fork = '<svg class="octicon octicon-repo-forked v-align-text-bottom" viewBox="0 0 10 16" version="1.1" width="10" height="16" aria-hidden="true"><path fill-rule="evenodd" d="M8 1a1.993 1.993 0 00-1 3.72V6L5 8 3 6V4.72A1.993 1.993 0 002 1a1.993 1.993 0 00-1 3.72V6.5l3 3v1.78A1.993 1.993 0 005 15a1.993 1.993 0 001-3.72V9.5l3-3V4.72A1.993 1.993 0 008 1zM2 4.2C1.34 4.2.8 3.65.8 3c0-.65.55-1.2 1.2-1.2.65 0 1.2.55 1.2 1.2 0 .65-.55 1.2-1.2 1.2zm3 10c-.66 0-1.2-.55-1.2-1.2 0-.65.55-1.2 1.2-1.2.65 0 1.2.55 1.2 1.2 0 .65-.55 1.2-1.2 1.2zm3-10c-.66 0-1.2-.55-1.2-1.2 0-.65.55-1.2 1.2-1.2.65 0 1.2.55 1.2 1.2 0 .65-.55 1.2-1.2 1.2z"></path></svg>';
 const svg_literal_star = '<svg aria-label="star" height="16" class="octicon octicon-star v-align-text-bottom" viewBox="0 0 14 16" version="1.1" width="14" role="img"><path fill-rule="evenodd" d="M14 6l-4.9-.64L7 1 4.9 5.36 0 6l3.6 3.26L2.67 14 7 11.67 11.33 14l-.93-4.74L14 6z"></path></svg>';
 const svg_literal_eye = '<svg class="octicon octicon-eye v-align-text-bottom" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"><path fill-rule="evenodd" d="M8.06 2C3 2 0 8 0 8s3 6 8.06 6C13 14 16 8 16 8s-3-6-7.94-6zM8 12c-2.2 0-4-1.78-4-4 0-2.2 1.8-4 4-4 2.22 0 4 1.8 4 4 0 2.22-1.78 4-4 4zm2-4c0 1.11-.89 2-2 2-1.11 0-2-.89-2-2 0-1.11.89-2 2-2 1.11 0 2 .89 2 2z"></path></svg>';
 
 const additional_css_literal = '#' + UF_ID_WRAPPER + ' {padding-bottom: 50px;}'
-    + '#' + UF_ID_WRAPPER + ' .repo div {display: inline-block;color: #666;margin: 2px 15px;}'
-    + '#' + UF_ID_INPUT + ' {width: 200px; height: 26px; padding-right: 70px;}'
-    + '#' + UF_ID_SUBMIT + ' {margin-left: -70px; height: 25px; width: 70px; background: blue; color: white; border: 0; -webkit-appearance: none;}';
+    + '#' + UF_ID_WRAPPER + ' .repo div {display: inline-block;color: #666;margin: 2px 15px;}';
 
 const UF_MSG_HEADER = "Useful forks";
 const UF_MSG_NO_FORKS = "No forks found.";
 const UF_MSG_SCANNING = "Currently scanning all the forks.";
 const UF_MSG_EMPTY_FILTER = "All the forks have been filtered out: apparently none of the forks have done anything productive!";
-const UF_MSG_API_RATE_0 = "Exceeded GitHub API rate-limits.";
-const UF_MSG_API_RATE_1 = 'Providing <a href="https://github.com/settings/tokens/new?scopes=repo&description=UsefulFork" target="_blank">an Access Token</a> will greatly increase this limit: ';
+const UF_MSG_API_RATE = "Exceeded GitHub API rate-limits.";
 
 
 function extract_username_from_fork(combined_name) {
@@ -123,37 +118,7 @@ function onreadystatechangeFactory(xhr, successFn, failureFn) {
         successFn();
       } else if (xhr.status === 403) {
         console.warn('Looks like the rate-limit was exceeded.');
-
-        let UF_MSG = getElementById_$(UF_ID_MSG);
-        UF_MSG.html(UF_MSG_API_RATE_0);
-
-        // todo: token is PER USER ! (GET '/user' attribute 'id')
-        const ACCESS_TOKEN_ID = "useful_forks_access_token_user_id_" + 0;
-        chrome.storage.sync.get(ACCESS_TOKEN_ID, function(result) {
-          console.log("chrome storage : GET called");
-          console.log(result);
-
-          if ($.isEmptyObject(result)) {
-            console.log("chrome storage : (should) SET called");
-
-            UF_MSG.html(UF_MSG_API_RATE_0 + '<br/>' + UF_MSG_API_RATE_1 + '<br/>');
-            UF_MSG.append(
-                $('<input type="text" placeholder="Token" id="' + UF_ID_INPUT + '"/>'),
-                $('<input type="button" value="Submit" id="' + UF_ID_SUBMIT + '"/>')
-            );
-
-            getElementById_$(UF_ID_SUBMIT).click( () => {
-              const ACCESS_TOKEN_VALUE = getElementById_$(UF_ID_INPUT).val();
-              console.log(ACCESS_TOKEN_VALUE);
-              // todo: save the token IF VALID
-              // chrome.storage.sync.set({ ACCESS_TOKEN_ID: ACCESS_TOKEN_VALUE }, function() {
-              //   console.log("chrome storage : SET called");
-              //   //  A data saved callback
-              // });
-            });
-            return;
-          }
-        });
+        getElementById_$(UF_ID_MSG).html(UF_MSG_API_RATE);
       } else {
         console.warn('GitHub API returned status:', xhr.status);
         failureFn();
