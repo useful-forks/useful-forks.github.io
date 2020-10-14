@@ -5,7 +5,7 @@ Not published, if you want to install it, enable `Developer mode` (switch at the
 
 You should change the [script file](project/useful_forks.js) so that it includes your GitHub username and an [Access Token](https://github.com/settings/tokens/new?scopes=repo&description=UsefulFork).
 
-![example](media/example.png)
+![example](media/demo.gif)
 
 ## For devs
 The extension uses [content_scripts](https://developer.chrome.com/extensions/content_scripts#declaratively).
