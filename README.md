@@ -11,7 +11,6 @@ You should change the [script file](project/useful_forks.js) so that it includes
 The extension uses [content_scripts](https://developer.chrome.com/extensions/content_scripts#declaratively).
 
 ## To-do
-* Recursive search (for forks of forks)
 * Search all forks (paginated results for > 100)
 * Publish as a chrome extension
 * Allow people to input their Access Token to increase API limits (from Extension's settings rather than through script)

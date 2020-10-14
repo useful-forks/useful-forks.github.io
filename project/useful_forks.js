@@ -19,6 +19,8 @@ const UF_MSG_SCANNING     = "Currently scanning all the forks.";
 const UF_MSG_EMPTY_FILTER = "All the forks have been filtered out: apparently none of the forks have done anything productive!";
 const UF_MSG_API_RATE     = "Exceeded GitHub API rate-limits.";
 
+const FORKS_PER_PAGE = 100; // enforced by GitHub API
+
 
 function extract_username_from_fork(combined_name) {
   return combined_name.split('/')[0];
@@ -97,7 +99,7 @@ function add_fork_elements(forkdata_array, user, repo) {
   getElementById_$(UF_ID_MSG).html("");
   let table_body = getElementById_$(UF_ID_TABLE).find("tbody");
 
-  for (let i = 0; i < Math.min(100, forkdata_array.length); ++i) {
+  for (let i = 0; i < Math.min(FORKS_PER_PAGE, forkdata_array.length); ++i) {
     const elem_ref = forkdata_array[i];
 
     // three logos data
@@ -108,6 +110,11 @@ function add_fork_elements(forkdata_array, user, repo) {
     let request = authenticatedRequestHeaderFactory('https://api.github.com/repos/' + user + '/' + repo + '/compare/master...' + fork_username + ':master');
     request.onreadystatechange = onreadystatechangeFactory(request, commits_count(request, table_body, fork_username), commits_count_failure(fork_username));
     request.send();
+
+    // forks of forks
+    if (elem_ref.forks_count > 0) {
+      request_fork_page(0, elem_ref.owner.login, elem_ref.name);
+    }
   }
 }
 
@@ -142,7 +149,7 @@ function check_all_forks(request, user, repo) {
 }
 
 function request_fork_page(page_number, user, repo) {
-  let request = authenticatedRequestHeaderFactory('https://api.github.com/repos/' + user + '/' + repo + '/forks?sort=stargazers&per_page=100&page=' + page_number)
+  let request = authenticatedRequestHeaderFactory('https://api.github.com/repos/' + user + '/' + repo + '/forks?sort=stargazers&per_page=' + FORKS_PER_PAGE + '&page=' + page_number)
   request.onreadystatechange = onreadystatechangeFactory(request,
       () => {
         const response = JSON.parse(request.responseText);
