@@ -38,18 +38,20 @@ function ahead_badge(amount) {
 
 /** Credits to https://shields.io/ */
 function behind_badge(amount) {
-  return '<svg xmlns="http://www.w3.org/2000/svg" width="92" height="18" role="img"><title>behind</title><linearGradient id="s" x2="0" y2="100%"><stop offset="0" stop-color="#fff" stop-opacity=".7"/><stop offset=".1" stop-color="#aaa" stop-opacity=".1"/><stop offset=".9" stop-color="#000" stop-opacity=".3"/><stop offset="1" stop-color="#000" stop-opacity=".5"/></linearGradient><clipPath id="r"><rect width="92" height="18" rx="4" fill="#fff"/></clipPath><g clip-path="url(#r)"><rect width="47" height="18" fill="#555"/><rect x="47" width="45" height="18" fill="#007ec6"/><rect width="92" height="18" fill="url(#s)"/></g><g fill="#fff" text-anchor="middle" font-family="Verdana,Geneva,DejaVu Sans,sans-serif" text-rendering="geometricPrecision" font-size="110"><text aria-hidden="true" x="245" y="140" fill="#010101" fill-opacity=".3" transform="scale(.1)" textLength="370">behind</text><text x="245" y="130" transform="scale(.1)" fill="#fff" textLength="370">behind</text><text x="685" y="130" transform="scale(.1)" fill="#fff" textLength="' + badget_width(amount) + '">' + amount + '</text></g></svg>';
+  const color = amount === 0 ? '#4c1' : '#007ec6'; // green only when not behind
+  return '<svg xmlns="http://www.w3.org/2000/svg" width="92" height="18" role="img"><title>behind</title><linearGradient id="s" x2="0" y2="100%"><stop offset="0" stop-color="#fff" stop-opacity=".7"/><stop offset=".1" stop-color="#aaa" stop-opacity=".1"/><stop offset=".9" stop-color="#000" stop-opacity=".3"/><stop offset="1" stop-color="#000" stop-opacity=".5"/></linearGradient><clipPath id="r"><rect width="92" height="18" rx="4" fill="#fff"/></clipPath><g clip-path="url(#r)"><rect width="47" height="18" fill="#555"/><rect x="47" width="45" height="18" fill="'+ color +'"/><rect width="92" height="18" fill="url(#s)"/></g><g fill="#fff" text-anchor="middle" font-family="Verdana,Geneva,DejaVu Sans,sans-serif" text-rendering="geometricPrecision" font-size="110"><text aria-hidden="true" x="245" y="140" fill="#010101" fill-opacity=".3" transform="scale(.1)" textLength="370">behind</text><text x="245" y="130" transform="scale(.1)" fill="#fff" textLength="370">behind</text><text x="685" y="130" transform="scale(.1)" fill="#fff" textLength="' + badget_width(amount) + '">' + amount + '</text></g></svg>';
 }
 
 function build_fork_element_html(table_body, combined_name, num_stars, num_watches, num_forks) {
   table_body.append(
       $('<tr>', {id: extract_username_from_fork(combined_name), class: "useful_forks_repo"}).append(
-          $('<td>').append(
-              $('<div>', {class: "useful_forks_link"}).html(svg_literal_fork + ' <a href=https://github.com/' + combined_name + '>' + combined_name + '</a>')
-          ),
-          $('<td>').append(
-              $('<div>', {class: "useful_forks_info"}).html(svg_literal_star + ' x ' + num_stars + UF_TABLE_SEPARATOR + svg_literal_eye + ' x ' + num_watches + UF_TABLE_SEPARATOR + svg_literal_fork + ' x ' + num_forks)
-          )
+          $('<td>').html(svg_literal_fork + ' <a href=https://github.com/' + combined_name + '>' + combined_name + '</a>'),
+          $('<td>').html(UF_TABLE_SEPARATOR),
+          $('<td>').html(svg_literal_star + ' x ' + num_stars),
+          $('<td>').html(UF_TABLE_SEPARATOR),
+          $('<td>').html(svg_literal_eye + ' x ' + num_watches),
+          $('<td>').html(UF_TABLE_SEPARATOR),
+          $('<td>').html(svg_literal_fork + ' x ' + num_forks)
       )
   );
 }
@@ -69,11 +71,11 @@ function commits_count(request, table_body, fork_username) {
         getElementById_$(UF_ID_MSG).html(UF_MSG_EMPTY_FILTER);
       }
     } else {
-      const commits_badges = UF_TABLE_SEPARATOR + ahead_badge(response.ahead_by)+ UF_TABLE_SEPARATOR + behind_badge(response.behind_by);
       old_data.append(
-          $('<td>').append(
-              $('<div>', {class: "useful_forks_commits"}).html(commits_badges)
-          )
+          $('<td>').html(UF_TABLE_SEPARATOR),
+          $('<td>').html(ahead_badge(response.ahead_by)),
+          $('<td>').html(UF_TABLE_SEPARATOR),
+          $('<td>').html(behind_badge(response.behind_by))
       )
     }
   }

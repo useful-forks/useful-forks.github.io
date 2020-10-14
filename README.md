@@ -12,5 +12,6 @@ The extension uses [content_scripts](https://developer.chrome.com/extensions/con
 
 ## To-do
 * Search all forks (paginated results for > 100)
+* Cache responses for a little while
 * Publish as a chrome extension
 * Allow people to input their Access Token to increase API limits (from Extension's settings rather than through script)
