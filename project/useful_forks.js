@@ -6,6 +6,9 @@ const UF_ID_TITLE = 'useful_forks_title';
 const UF_ID_MSG = 'useful_forks_msg';
 const UF_ID_DATA = 'useful_forks_data';
 const UF_ID_TABLE = 'useful_forks_table';
+
+/* todo: WIP for the Access Token input form */
+const UF_ID_FORM = 'useful_forks_token_form';
 const UF_ID_INPUT = 'useful_forks_token_input';
 const UF_ID_SUBMIT = 'useful_forks_token_submit';
 
@@ -123,37 +126,7 @@ function onreadystatechangeFactory(xhr, successFn, failureFn) {
         successFn();
       } else if (xhr.status === 403) {
         console.warn('Looks like the rate-limit was exceeded.');
-
-        let UF_MSG = getElementById_$(UF_ID_MSG);
-        UF_MSG.html(UF_MSG_API_RATE_0);
-
-        // todo: token is PER USER ! (GET '/user' attribute 'id')
-        const ACCESS_TOKEN_ID = "useful_forks_access_token_user_id_" + 0;
-        chrome.storage.sync.get(ACCESS_TOKEN_ID, function(result) {
-          console.log("chrome storage : GET called");
-          console.log(result);
-
-          if ($.isEmptyObject(result)) {
-            console.log("chrome storage : (should) SET called");
-
-            UF_MSG.html(UF_MSG_API_RATE_0 + '<br/>' + UF_MSG_API_RATE_1 + '<br/>');
-            UF_MSG.append(
-                $('<input type="text" placeholder="Token" id="' + UF_ID_INPUT + '"/>'),
-                $('<input type="button" value="Submit" id="' + UF_ID_SUBMIT + '"/>')
-            );
-
-            getElementById_$(UF_ID_SUBMIT).click( () => {
-              const ACCESS_TOKEN_VALUE = getElementById_$(UF_ID_INPUT).val();
-              console.log(ACCESS_TOKEN_VALUE);
-              // todo: save the token IF VALID
-              // chrome.storage.sync.set({ ACCESS_TOKEN_ID: ACCESS_TOKEN_VALUE }, function() {
-              //   console.log("chrome storage : SET called");
-              //   //  A data saved callback
-              // });
-            });
-            return;
-          }
-        });
+        getElementById_$(UF_ID_MSG).html(UF_MSG_API_RATE_0);
       } else {
         console.warn('GitHub API returned status:', xhr.status);
         failureFn();
@@ -208,11 +181,66 @@ function prepare_display() {
   );
 }
 
+function valid(string) {
+  return string && string.length > 0;
+}
+
+/**
+ * todo: WIP. Still need to call API to get username. And should be placed into Background?
+ */
+function check_token() {
+  if (valid(GITHUB_ACCESS_TOKEN) && valid(GITHUB_USERNAME)) {
+    return;
+  }
+
+  // todo: token is PER USER ?   (@ GET '/user' attribute 'id')
+  const ACCESS_TOKEN_ID = "useful_forks_access_token";
+  chrome.storage.sync.get(ACCESS_TOKEN_ID, result => {
+    console.log("chrome storage : GET called");
+    console.log(result);
+
+    if ($.isEmptyObject(result)) {
+      console.log("chrome storage : (should) SET called");
+
+      let UF_MSG = getElementById_$(UF_ID_MSG);
+      UF_MSG.html(UF_MSG_API_RATE_0 + '<br/>' + UF_MSG_API_RATE_1 + '<br/>');
+      UF_MSG.append(
+          $('<div>', {id: UF_ID_FORM}).append(
+              $('<input type="text" placeholder="A valid Token" id="' + UF_ID_INPUT + '"/>'),
+              $('<input type="button" value="Submit" id="' + UF_ID_SUBMIT + '"/>')
+          )
+      );
+
+      getElementById_$(UF_ID_SUBMIT).click( () => {
+        const ACCESS_TOKEN_VALUE = getElementById_$(UF_ID_INPUT).val();
+        const isValid = new RegExp("[0-9A-Za-z]{30,59}").test(ACCESS_TOKEN_VALUE);
+        console.log(isValid + " : " + ACCESS_TOKEN_VALUE);
+        if (isValid) {
+          chrome.storage.sync.set({ ACCESS_TOKEN_ID: ACCESS_TOKEN_VALUE }, () => {
+            // location.reload(); // todo: reload page when set properly?
+            console.log("chrome storage : SET called");
+            chrome.storage.sync.get(ACCESS_TOKEN_ID, token => { // todo: remove
+              console.log("chrome storage : saved GET called");
+              console.log(token);
+            });
+          });
+        } else {
+          getElementById_$(UF_ID_FORM).effect("shake", {distance: 8}, 340);
+        }
+
+      });
+    } else {
+      GITHUB_ACCESS_TOKEN = result;
+    }
+  });
+}
+
 /* Entry point. */
 const pathComponents = window.location.pathname.split('/');
 if (pathComponents.length >= 3) {
   const user = pathComponents[1], repo = pathComponents[2];
   add_css();
   prepare_display();
-  request_fork_page(0, user, repo);
+  check_token();
+  // request_fork_page(0, user, repo); // todo: only call if token has been set up
 }

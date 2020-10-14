@@ -12,8 +12,10 @@
       "matches": [
         "*://github.com/*/network/members"
       ],
+      "css": ["jquery-ui.min.css"],
       "js": [
         "jquery-3.5.1.min.js",
+        "jquery-ui.min.js",
         "useful_forks.js"
       ],
       "run_at": "document_idle",
