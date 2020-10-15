@@ -50,24 +50,28 @@ function behind_badge(amount) {
   return '<svg xmlns="http://www.w3.org/2000/svg" width="92" height="18" role="img"><title>How far behind of the original repo\'s master branch this fork\'s master branch is</title><linearGradient id="s" x2="0" y2="100%"><stop offset="0" stop-color="#fff" stop-opacity=".7"/><stop offset=".1" stop-color="#aaa" stop-opacity=".1"/><stop offset=".9" stop-color="#000" stop-opacity=".3"/><stop offset="1" stop-color="#000" stop-opacity=".5"/></linearGradient><clipPath id="r"><rect width="92" height="18" rx="4" fill="#fff"/></clipPath><g clip-path="url(#r)"><rect width="47" height="18" fill="#555"/><rect x="47" width="45" height="18" fill="'+ color +'"/><rect width="92" height="18" fill="url(#s)"/></g><g fill="#fff" text-anchor="middle" font-family="Verdana,Geneva,DejaVu Sans,sans-serif" text-rendering="geometricPrecision" font-size="110"><text aria-hidden="true" x="245" y="140" fill="#010101" fill-opacity=".3" transform="scale(.1)" textLength="370">behind</text><text x="245" y="130" transform="scale(.1)" fill="#fff" textLength="370">behind</text><text x="685" y="130" transform="scale(.1)" fill="#fff" textLength="' + badge_width(amount) + '">' + amount + '</text></g></svg>';
 }
 
-function build_fork_element_html(table_body, combined_name, num_stars, num_watches, num_forks) {
-  table_body.append(
-      $('<tr>', {id: extract_username_from_fork(combined_name), class: "useful_forks_repo"}).append(
-          $('<td>').html(svg_literal_fork + ' <a href=https://github.com/' + combined_name + '>' + combined_name + '</a>'),
-          $('<td>').html(UF_TABLE_SEPARATOR),
-          $('<td>').html(svg_literal_star + ' x ' + num_stars),
-          $('<td>').html(UF_TABLE_SEPARATOR),
-          $('<td>').html(svg_literal_eye + ' x ' + num_watches),
-          $('<td>').html(UF_TABLE_SEPARATOR),
-          $('<td>').html(svg_literal_fork + ' x ' + num_forks)
-      )
-  );
-}
-
 function getElementById_$(id) {
   return $(toHtmlId(id));
 }
 
+function getTdValue(rows, index, col) {
+  return rows.item(index).getElementsByTagName('td').item(col).getAttribute("value");
+}
+
+/** 'sortColumn' index starts at 0.   https://stackoverflow.com/a/37814596/9768291 */
+function sortTable(table_id, sortColumn){
+  let tableData = document.getElementById(table_id).getElementsByTagName('tbody').item(0);
+  let rows = tableData.getElementsByTagName('tr');
+  for(let i = 0; i < rows.length - 1; i++) {
+    for(let j = 0; j < rows.length - (i + 1); j++) {
+      if(getTdValue(rows, j, sortColumn) < getTdValue(rows, j+1, sortColumn)) {
+        tableData.insertBefore(rows.item(j+1), rows.item(j));
+      }
+    }
+  }
+}
+
+/** The secondary request which appends the badges. */
 function commits_count(request, table_body, fork_username) {
   return () => {
     const response = JSON.parse(request.responseText);
@@ -89,12 +93,14 @@ function commits_count(request, table_body, fork_username) {
   }
 }
 
+/** To remove erroneous repos. */
 function commits_count_failure(fork_username) {
   return () => {
     getElementById_$(fork_username).remove();
   }
 }
 
+/** To use the Access Token with a request. */
 function authenticatedRequestHeaderFactory(url) {
   let request = new XMLHttpRequest();
   request.open('GET', url);
@@ -103,6 +109,37 @@ function authenticatedRequestHeaderFactory(url) {
   return request;
 }
 
+function onreadystatechangeFactory(xhr, successFn, failureFn) {
+  return () => {
+    if (xhr.readyState === 4) {
+      if (xhr.status === 200) {
+        successFn();
+      } else if (xhr.status === 403) {
+        console.warn('Looks like the rate-limit was exceeded.');
+        getElementById_$(UF_ID_MSG).html(UF_MSG_API_RATE);
+      } else {
+        console.warn('GitHub API returned status:', xhr.status);
+        failureFn();
+      }
+    } else {
+      // Request is still in progress
+    }
+  };
+}
+
+/** Dynamically fills the second part of the rows. */
+function build_fork_element_html(table_body, combined_name, num_stars, num_watches, num_forks) {
+  table_body.append(
+      $('<tr>', {id: extract_username_from_fork(combined_name), class: "useful_forks_repo"}).append(
+          $('<td>').html(svg_literal_fork + ' <a href=https://github.com/' + combined_name + '>' + combined_name + '</a>'),
+          $('<td>').html(UF_TABLE_SEPARATOR + svg_literal_star + ' x ' + num_stars).attr("value", num_stars),
+          $('<td>').html(UF_TABLE_SEPARATOR + svg_literal_eye + ' x ' + num_watches).attr("value", num_watches),
+          $('<td>').html(UF_TABLE_SEPARATOR + svg_literal_fork + ' x ' + num_forks).attr("value", num_forks)
+      )
+  );
+}
+
+/** Prepares, appends, and updates dynamically a table row. */
 function add_fork_elements(forkdata_array, user, repo) {
   if (!forkdata_array || forkdata_array.length === 0)
     return;
@@ -129,31 +166,6 @@ function add_fork_elements(forkdata_array, user, repo) {
   }
 }
 
-function onreadystatechangeFactory(xhr, successFn, failureFn) {
-  return () => {
-    if (xhr.readyState === 4) {
-      if (xhr.status === 200) {
-        successFn();
-      } else if (xhr.status === 403) {
-        console.warn('Looks like the rate-limit was exceeded.');
-        getElementById_$(UF_ID_MSG).html(UF_MSG_API_RATE);
-      } else {
-        console.warn('GitHub API returned status:', xhr.status);
-        failureFn();
-      }
-    } else {
-      // Request is still in progress
-    }
-  };
-}
-
-function add_css() {
-  let styleSheet = document.createElement('style');
-  styleSheet.type = "text/css";
-  styleSheet.innerText = additional_css_literal;
-  document.head.appendChild(styleSheet);
-}
-
 /** Paginated request. Pages index start at 1. */
 function request_fork_page(page_number, user, repo) {
   let request = authenticatedRequestHeaderFactory('https://api.github.com/repos/' + user + '/' + repo + '/forks?sort=stargazers&per_page=' + FORKS_PER_PAGE + '&page=' + page_number)
@@ -176,6 +188,11 @@ function request_fork_page(page_number, user, repo) {
           }
         }
 
+        /* Half-assed sort. (todo: redo this) */
+        $( () => {
+          sortTable(UF_ID_TABLE, 1);
+        });
+
         /* Populate the table. */
         add_fork_elements(response, user, repo);
       });
@@ -196,7 +213,14 @@ function prepare_display() {
   );
 }
 
-/* Entry point. */
+function add_css() {
+  let styleSheet = document.createElement('style');
+  styleSheet.type = "text/css";
+  styleSheet.innerText = additional_css_literal;
+  document.head.appendChild(styleSheet);
+}
+
+/** Entry point. */
 const pathComponents = window.location.pathname.split('/');
 if (pathComponents.length >= 3) {
   const user = pathComponents[1], repo = pathComponents[2];
