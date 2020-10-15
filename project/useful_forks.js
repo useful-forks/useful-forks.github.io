@@ -150,7 +150,7 @@ function add_fork_elements(forkdata_array, user, repo) {
   for (let i = 0; i < Math.min(FORKS_PER_PAGE, forkdata_array.length); ++i) {
     const elem_ref = forkdata_array[i];
 
-    /* Basic data (#stars, #watchers, #forks). */
+    /* Basic data (stars, watchers, forks). */
     build_fork_element_html(table_body, elem_ref.full_name, elem_ref.stargazers_count, elem_ref.watchers_count, elem_ref.forks_count);
 
     /* Commits diff data (ahead/behind). */
@@ -173,7 +173,7 @@ function request_fork_page(page_number, user, repo) {
       () => {
         const response = JSON.parse(request.responseText);
         if (!response || response.length === 0) {
-          if (page_number === 0) {
+          if (page_number === 1) {
             getElementById_$(UF_ID_MSG).html(UF_MSG_NO_FORKS);
           }
           return;
