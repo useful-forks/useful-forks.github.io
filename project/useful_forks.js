@@ -27,19 +27,19 @@ function extract_username_from_fork(combined_name) {
   return combined_name.split('/')[0];
 }
 
-function badget_width(number) {
+function badge_width(number) {
   return 70 * number.toString().length; // magic number 70 extracted from querying 'shields.io'
 }
 
 /** Credits to https://shields.io/ */
 function ahead_badge(amount) {
-  return '<svg xmlns="http://www.w3.org/2000/svg" width="88" height="18" role="img"><title>ahead</title><linearGradient id="s" x2="0" y2="100%"><stop offset="0" stop-color="#fff" stop-opacity=".7"/><stop offset=".1" stop-color="#aaa" stop-opacity=".1"/><stop offset=".9" stop-color="#000" stop-opacity=".3"/><stop offset="1" stop-color="#000" stop-opacity=".5"/></linearGradient><clipPath id="r"><rect width="88" height="18" rx="4" fill="#fff"/></clipPath><g clip-path="url(#r)"><rect width="43" height="18" fill="#555"/><rect x="43" width="45" height="18" fill="#007ec6"/><rect width="88" height="18" fill="url(#s)"/></g><g fill="#fff" text-anchor="middle" font-family="Verdana,Geneva,DejaVu Sans,sans-serif" text-rendering="geometricPrecision" font-size="110"><text aria-hidden="true" x="225" y="140" fill="#010101" fill-opacity=".3" transform="scale(.1)" textLength="330">ahead</text><text x="225" y="130" transform="scale(.1)" fill="#fff" textLength="330">ahead</text><text x="645" y="130" transform="scale(.1)" fill="#fff" textLength="' + badget_width(amount) + '">' + amount + '</text></g></svg>';
+  return '<svg xmlns="http://www.w3.org/2000/svg" width="88" height="18" role="img"><title>How far ahead of the original repo\'s master branch this fork\'s master branch is</title><linearGradient id="s" x2="0" y2="100%"><stop offset="0" stop-color="#fff" stop-opacity=".7"/><stop offset=".1" stop-color="#aaa" stop-opacity=".1"/><stop offset=".9" stop-color="#000" stop-opacity=".3"/><stop offset="1" stop-color="#000" stop-opacity=".5"/></linearGradient><clipPath id="r"><rect width="88" height="18" rx="4" fill="#fff"/></clipPath><g clip-path="url(#r)"><rect width="43" height="18" fill="#555"/><rect x="43" width="45" height="18" fill="#007ec6"/><rect width="88" height="18" fill="url(#s)"/></g><g fill="#fff" text-anchor="middle" font-family="Verdana,Geneva,DejaVu Sans,sans-serif" text-rendering="geometricPrecision" font-size="110"><text aria-hidden="true" x="225" y="140" fill="#010101" fill-opacity=".3" transform="scale(.1)" textLength="330">ahead</text><text x="225" y="130" transform="scale(.1)" fill="#fff" textLength="330">ahead</text><text x="645" y="130" transform="scale(.1)" fill="#fff" textLength="' + badge_width(amount) + '">' + amount + '</text></g></svg>';
 }
 
 /** Credits to https://shields.io/ */
 function behind_badge(amount) {
-  const color = amount === 0 ? '#4c1' : '#007ec6'; // green only when not behind
-  return '<svg xmlns="http://www.w3.org/2000/svg" width="92" height="18" role="img"><title>behind</title><linearGradient id="s" x2="0" y2="100%"><stop offset="0" stop-color="#fff" stop-opacity=".7"/><stop offset=".1" stop-color="#aaa" stop-opacity=".1"/><stop offset=".9" stop-color="#000" stop-opacity=".3"/><stop offset="1" stop-color="#000" stop-opacity=".5"/></linearGradient><clipPath id="r"><rect width="92" height="18" rx="4" fill="#fff"/></clipPath><g clip-path="url(#r)"><rect width="47" height="18" fill="#555"/><rect x="47" width="45" height="18" fill="'+ color +'"/><rect width="92" height="18" fill="url(#s)"/></g><g fill="#fff" text-anchor="middle" font-family="Verdana,Geneva,DejaVu Sans,sans-serif" text-rendering="geometricPrecision" font-size="110"><text aria-hidden="true" x="245" y="140" fill="#010101" fill-opacity=".3" transform="scale(.1)" textLength="370">behind</text><text x="245" y="130" transform="scale(.1)" fill="#fff" textLength="370">behind</text><text x="685" y="130" transform="scale(.1)" fill="#fff" textLength="' + badget_width(amount) + '">' + amount + '</text></g></svg>';
+  const color = amount === 0 ? '#4c1' : '#007ec6'; // green only when not behind, blue otherwise
+  return '<svg xmlns="http://www.w3.org/2000/svg" width="92" height="18" role="img"><title>How far behind of the original repo\'s master branch this fork\'s master branch is</title><linearGradient id="s" x2="0" y2="100%"><stop offset="0" stop-color="#fff" stop-opacity=".7"/><stop offset=".1" stop-color="#aaa" stop-opacity=".1"/><stop offset=".9" stop-color="#000" stop-opacity=".3"/><stop offset="1" stop-color="#000" stop-opacity=".5"/></linearGradient><clipPath id="r"><rect width="92" height="18" rx="4" fill="#fff"/></clipPath><g clip-path="url(#r)"><rect width="47" height="18" fill="#555"/><rect x="47" width="45" height="18" fill="'+ color +'"/><rect width="92" height="18" fill="url(#s)"/></g><g fill="#fff" text-anchor="middle" font-family="Verdana,Geneva,DejaVu Sans,sans-serif" text-rendering="geometricPrecision" font-size="110"><text aria-hidden="true" x="245" y="140" fill="#010101" fill-opacity=".3" transform="scale(.1)" textLength="370">behind</text><text x="245" y="130" transform="scale(.1)" fill="#fff" textLength="370">behind</text><text x="685" y="130" transform="scale(.1)" fill="#fff" textLength="' + badge_width(amount) + '">' + amount + '</text></g></svg>';
 }
 
 function build_fork_element_html(table_body, combined_name, num_stars, num_watches, num_forks) {
@@ -105,18 +105,19 @@ function add_fork_elements(forkdata_array, user, repo) {
   for (let i = 0; i < Math.min(FORKS_PER_PAGE, forkdata_array.length); ++i) {
     const elem_ref = forkdata_array[i];
 
-    // three logos data
+    /* Basic data (#stars, #watchers, #forks). */
     build_fork_element_html(table_body, elem_ref.full_name, elem_ref.stargazers_count, elem_ref.watchers_count, elem_ref.forks_count);
 
-    // commits count data
+    /* Commits diff data (ahead/behind). */
     const fork_username = extract_username_from_fork(elem_ref.full_name);
     let request = authenticatedRequestHeaderFactory('https://api.github.com/repos/' + user + '/' + repo + '/compare/master...' + fork_username + ':master');
     request.onreadystatechange = onreadystatechangeFactory(request, commits_count(request, table_body, fork_username), commits_count_failure(fork_username));
     request.send();
 
-    // forks of forks
+    /* Forks of forks. */
     if (elem_ref.forks_count > 0) {
-      request_fork_page(0, elem_ref.owner.login, elem_ref.name);
+      console.log("FROM ADD_FORK !!")
+      request_fork_page(1, elem_ref.owner.login, elem_ref.name);
     }
   }
 }
@@ -146,29 +147,30 @@ function add_css() {
   document.head.appendChild(styleSheet);
 }
 
-function check_all_forks(request, user, repo) {
-  const response = JSON.parse(request.responseText);
-  add_fork_elements(response, user, repo);
-}
-
+/** Paginated request. Pages index start at 1. */
 function request_fork_page(page_number, user, repo) {
   let request = authenticatedRequestHeaderFactory('https://api.github.com/repos/' + user + '/' + repo + '/forks?sort=stargazers&per_page=' + FORKS_PER_PAGE + '&page=' + page_number)
   request.onreadystatechange = onreadystatechangeFactory(request,
       () => {
         const response = JSON.parse(request.responseText);
-
         if (!response || response.length === 0) {
           if (page_number === 0) {
             getElementById_$(UF_ID_MSG).html(UF_MSG_NO_FORKS);
           }
           return;
         }
-        // todo: >100 forks
-        // else if (response.length > 100) {
-        //   request_fork_page(page_number++, user, repo);
-        // }
 
-        check_all_forks(request, user, repo);
+        /* Pagination (beyond 100 forks). */
+        const link_header = request.getResponseHeader("link");
+        if (link_header) {
+          let contains_next_page = link_header.indexOf('>; rel="next"');
+          if (contains_next_page !== -1) {
+            request_fork_page(++page_number, user, repo);
+          }
+        }
+
+        /* Populate the table. */
+        add_fork_elements(response, user, repo);
       });
   request.send();
 }
@@ -193,5 +195,5 @@ if (pathComponents.length >= 3) {
   const user = pathComponents[1], repo = pathComponents[2];
   add_css();
   prepare_display();
-  request_fork_page(0, user, repo);
+  request_fork_page(1, user, repo);
 }

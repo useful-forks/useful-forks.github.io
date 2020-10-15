@@ -11,7 +11,7 @@ You should change the [script file](project/useful_forks.js) so that it includes
 The extension uses [content_scripts](https://developer.chrome.com/extensions/content_scripts#declaratively).
 
 ## To-do
-* Search all forks (paginated results for > 100)
-* Cache responses for a little while
+* Sort by Star if forks of forks were inserted
+* Cache responses for a little while (https://docs.github.com/en/free-pro-team@latest/rest/guides/getting-started-with-the-rest-api#conditional-requests)
 * Publish as a chrome extension
 * Allow people to input their Access Token to increase API limits (from Extension's settings rather than through script)
