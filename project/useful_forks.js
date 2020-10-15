@@ -80,7 +80,7 @@ function sortTable(table_id, sortColumn){
 }
 
 /** The secondary request which appends the badges. */
-function commits_count(request, fork_username) {
+function commits_count(request, table_body, fork_username) {
   return () => {
     const response = JSON.parse(request.responseText);
 
@@ -124,37 +124,8 @@ function onreadystatechangeFactory(xhr, successFn, failureFn) {
         successFn();
       } else if (xhr.status === 403) {
         console.warn('Looks like the rate-limit was exceeded.');
-
         let UF_MSG = getElementById_$(UF_ID_MSG);
         UF_MSG.html(UF_MSG_API_RATE_0);
-
-        // todo: token is PER USER ! (GET '/user' attribute 'id')
-        const ACCESS_TOKEN_ID = "useful_forks_access_token_user_id_" + 0;
-        chrome.storage.sync.get(ACCESS_TOKEN_ID, function(result) {
-          console.log("chrome storage : GET called");
-          console.log(result);
-
-          if ($.isEmptyObject(result)) {
-            console.log("chrome storage : (should) SET called");
-
-            UF_MSG.html(UF_MSG_API_RATE_0 + '<br/>' + UF_MSG_API_RATE_1 + '<br/>');
-            UF_MSG.append(
-                $('<input type="text" placeholder="Token" id="' + UF_ID_INPUT + '"/>'),
-                $('<input type="button" value="Submit" id="' + UF_ID_SUBMIT + '"/>')
-            );
-
-            getElementById_$(UF_ID_SUBMIT).click( () => {
-              const ACCESS_TOKEN_VALUE = getElementById_$(UF_ID_INPUT).val();
-              console.log(ACCESS_TOKEN_VALUE);
-              // todo: save the token IF VALID
-              // chrome.storage.sync.set({ ACCESS_TOKEN_ID: ACCESS_TOKEN_VALUE }, function() {
-              //   console.log("chrome storage : SET called");
-              //   //  A data saved callback
-              // });
-            });
-            return;
-          }
-        });
       } else {
         console.warn('GitHub API returned status:', xhr.status);
         failureFn();
@@ -175,6 +146,7 @@ function build_fork_element_html(table_body, combined_name, num_stars, num_watch
           $('<td>').html(UF_TABLE_SEPARATOR + svg_literal_fork + ' x ' + num_forks).attr("value", num_forks)
       )
   );
+}
 
 /** Prepares, appends, and updates dynamically a table row. */
 function add_fork_elements(forkdata_array, user, repo) {
