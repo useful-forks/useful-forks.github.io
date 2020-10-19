@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="description" content="Find useful forks of GitHub projects" />
+  <link rel="icon" href="./favicon.ico" />
+  <link rel="apple-touch-icon" href="./favicon.ico" />
+  <link rel="bookmark" href="./favicon.ico" />
+  <link rel="shortcut icon" href="./favicon.ico" />
+  <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.4.1/css/all.css"
+        integrity="sha384-5sAR7xN1Nv6T6+dT2mhtzEpVJvfS3NScPQTrOxhwjIuvcA67KV2R5Jz6kr4abQsz" crossorigin="anonymous"
+        rel="preload" />
+  <link rel="stylesheet" rel="preload" href="https://cdnjs.cloudflare.com/ajax/libs/bulma/0.7.2/css/bulma.min.css" />
+  <link rel="stylesheet" type="text/css" href="https://unpkg.com/notie/dist/notie.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/github-fork-ribbon-css/0.2.3/gh-fork-ribbon.min.css" />
+
+  <title>Useful Forks</title>
+</head>
+
+<body>
+<!-- GitHub ribbon -->
+<a class="github-fork-ribbon" href="https://github.com/payne911/useful-forks" data-ribbon="Fork me on GitHub" title="Fork me on GitHub">Fork me on GitHub</a>
+
+<!-- Navigation bar -->
+<nav class="navbar is-dark" style="z-index: 1">
+  <div class="container">
+    <div class="navbar-brand">
+      <a class="navbar-item" href="https://t9t.io">
+        <img src="./header.ico" width="28" height="28" />
+      </a>
+      <a class="navbar-item" href="https://github.com/payne911/useful-forks">
+        <strong>GitHub</strong>
+      </a>
+      <a class="navbar-item" href="https://chrome.google.com/webstore/">
+        <strong>Chrome Extension (WIP)</strong>
+      </a>
+
+      <div class="navbar-burger burger" data-target="navbarExampleTransparentExample">
+        <span></span>
+        <span></span>
+        <span></span>
+      </div>
+    </div>
+
+    <div id="navbarExampleTransparentExample" class="navbar-menu">
+      <div class="navbar-end">
+        <a id="addTokenBtn" class="navbar-item">
+          <strong>Add access token</strong>
+        </a>
+      </div>
+    </div>
+  </div>
+  </div>
+</nav>
+
+<div class="modal">
+  <div class="modal-background"></div>
+  <div class="modal-card">
+    <header class="modal-card-head">
+      <p id="modalCardTitle" class="modal-card-title">Add GitHub access token</p>
+      <button id="closeModalBtn" class="delete" aria-label="close"></button>
+    </header>
+    <section class="modal-card-body">
+      <p>Star-history use GitHub API to retrieve repository metadata. You may see this page because you have hit the
+        <a href="https://developer.github.com/v3/#rate-limiting">GitHub API rate limit</a>. </p>
+      <br />
+      <p>Star-history will need your <a href="https://github.com/settings/tokens">personal access token</a> to unlimit
+        it. If you don't already have one, <a href="https://github.com/settings/tokens/new">create one</a>, and paste
+        it into the textbox below (no scope to your personal data is needed)</p>
+
+      <br />
+
+      <label class="label">access token (will be stored in your local storage)</label>
+      <input class="input" id="tokenInput" placeholder="90c6b8218dae4122b07b4a0fae252c619a08941b" />
+      <br />
+      <br />
+      <button id="saveTokenBtn" class="button is-success is-pulled-right">Save</button>
+    </section>
+  </div>
+</div>
+
+<dev class="section">
+  <div class="container has-text-centered">
+    <div class="search-container">
+      <div class="field has-addons">
+        <div class="control is-expanded">
+          <input class="input is-dark" type="text" id="repo" name="repo" placeholder="payne911/useful-forks">
+        </div>
+        <p class="control">
+          <button class="button is-dark is-outlined" id="theBtn">
+            Find useful forks
+          </button>
+        </p>
+      </div>
+    </div>
+  </div>
+  <div class="container has-text-centered">
+    <div id="chart">
+      <svg></svg>
+    </div>
+  </div>
+</dev>
+
+<!-- Footer -->
+<footer class="footer" style="background-color:white">
+  <div class="container">
+    <hr style="background-color:#dbdbdb; height: 1px" />
+    <div style="float:left">
+      Website template adapted from
+      <a href="https://github.com/timqian/star-history/tree/master/website"><span><strong>star-history</strong></span></a>
+    </div>
+    <div style="float: right">
+      <a class="icon button is-white" href="https://github.com/payne911">
+        <i class="fab fa-github"></i>
+      </a>
+      <a class="icon button is-white" href="mailto:jeremi.grenier.berthiaume@gmail.com">
+        <i class="fas fa-envelope"></i>
+      </a>
+    </div>
+  </div>
+</footer>
+
+<script type="text/javascript" src="./src/index.js" charset="utf-8"></script>
+</body>
+
+</html>

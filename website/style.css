@@ -1,0 +1,29 @@
+text {
+  font: 12px sans-serif;
+}
+
+svg {
+  display: block;
+}
+
+#chart {
+  visibility: hidden;
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
+  margin: auto;
+  padding: 10px;
+  max-width: 800px;
+  min-width: 70%;
+  /* height: 75vh; */
+}
+
+#button-group {
+  visibility: hidden;
+}
+
+.search-container {
+  min-width: 70%;
+  max-width: 800px;
+  display: inline-block;
+}
