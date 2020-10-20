@@ -1,11 +1,13 @@
-![<img src="media/useful-forks-logo.png" width="250"/>](media/useful-forks-logo.png)
+![logo](media/useful-forks-logo.png)
 
 # Useful Forks
 Adding a sorted list of starred forks to the GitHub forks page. Results are filtered out if there were never any commits pushed since the fork was created.
 
-The website form is great for people that just want to use this tool every now and then.
+The project is released as:
+1. A website: great for people that just want to use this tool every now and then.
+2. A Chrome Extension: has the advantage of always performing the search whenever you open a project's GitHub Forks page.
 
-The Chrome Extension has the advantage of always performing the filtering whenever you open a project's GitHub Forks page.
+---
 
 ## Website (WIP)
 The project is [available online](https://payne911.github.io/useful-forks/) thanks to GitHub Pages.
