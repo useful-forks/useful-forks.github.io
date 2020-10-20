@@ -10,6 +10,8 @@ The Chrome Extension has the advantage of always performing the filtering whenev
 ## Website (WIP)
 The project is [available online](https://payne911.github.io/useful-forks/) thanks to GitHub Pages.
 
+However, it is not in a working state right now. Please use the Chrome Extension in the meantime.
+
 ## Chrome Extension (WIP)
 Not published yet. If you want to install it:
 1. Clone this repository
