@@ -14,7 +14,7 @@
       ],
       "js": [
         "jquery-3.5.1.min.js",
-        "useful_forks.js"
+        "useful-forks.js"
       ],
       "run_at": "document_idle",
       "all_frames": true

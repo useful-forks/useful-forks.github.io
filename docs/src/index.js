@@ -87,9 +87,9 @@ document.getElementById('saveTokenBtn').addEventListener('click', e => {
   drawAddTokenBtn(token);
 });
 
-function drawAddTokenBtn(token) {
+function drawAddTokenBtn(accessToken) {
   let verb = 'Add';
-  if (token) {
+  if (accessToken) {
     verb = 'Edit'
   }
   const tokenBtn = '<img src="assets/settings-icon.png" alt="settings" />'

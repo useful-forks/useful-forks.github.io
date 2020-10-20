@@ -17,7 +17,7 @@ However, it is not in a working state right now. Please use the Chrome Extension
 ## Chrome Extension (WIP)
 Not published yet. If you want to install it:
 1. Clone this repository
-2. Change the [script file](project/useful_forks.js) so that it includes your GitHub username and an [Access Token](https://github.com/settings/tokens/new?scopes=repo&description=UsefulFork).
+2. Change the [script file](project/useful-forks.js) so that it includes your GitHub username and an [Access Token](https://github.com/settings/tokens/new?scopes=repo&description=UsefulFork).
 3. Go to the `chrome://extensions` URL
 4. Enable `Developer mode` (switch at the top-right)
 5. Click `Load unpacked` (button at the top-left)

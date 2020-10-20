@@ -17,7 +17,7 @@ text {
 }
 
 .search-container {
-  min-width: 70%;
+  min-width: 50%;
   max-width: 800px;
   display: inline-block;
 }

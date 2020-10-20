@@ -1,4 +1,3 @@
-let GITHUB_USERNAME = ""
 let GITHUB_ACCESS_TOKEN = ""
 
 const UF_ID_WRAPPER = 'useful_forks_wrapper';
@@ -105,7 +104,7 @@ function authenticatedRequestHeaderFactory(url) {
   let request = new XMLHttpRequest();
   request.open('GET', url);
   request.setRequestHeader("Accept", "application/vnd.github.v3+json");
-  request.setRequestHeader("Authorization", "Basic " + btoa(GITHUB_USERNAME + ":" + GITHUB_ACCESS_TOKEN));
+  request.setRequestHeader("Authorization", "token " + GITHUB_ACCESS_TOKEN);
   return request;
 }
 
