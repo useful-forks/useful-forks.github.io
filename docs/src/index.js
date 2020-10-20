@@ -92,7 +92,9 @@ function drawAddTokenBtn(token) {
   if (token) {
     verb = 'Edit'
   }
-  document.getElementById('addTokenBtn').innerHTML = '<strong>' + verb + ' Access Token</strong>';
+  const tokenBtn = '<img src="assets/settings-icon.png" alt="settings" />'
+      + '<strong>&nbsp;&nbsp;' + verb + ' Access Token</strong>'
+  document.getElementById('addTokenBtn').innerHTML = tokenBtn;
   document.getElementById('modalCardTitle').innerHTML = verb + ' GitHub Access Token';
 }
 
