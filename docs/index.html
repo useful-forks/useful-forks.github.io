@@ -86,19 +86,17 @@
     <div class="search-container">
       <div class="field has-addons">
         <div class="control is-expanded">
-          <input class="input is-dark" type="text" id="repo" name="repo" placeholder="payne911/useful-forks" />
+          <input class="input is-dark" type="text" id="repo" name="repo" placeholder="payne911/useful-forks" autofocus />
         </div>
         <p class="control">
-          <button class="button is-dark is-outlined" id="theBtn">
+          <button class="button is-dark is-outlined" id="searchBtn">
             Find useful forks
           </button>
         </p>
       </div>
     </div>
   </div>
-  <div class="container has-text-centered">
-    <div id="chart">
-    </div>
+  <div class="container" id="useful_forks_inject">
   </div>
 </dev>
 
@@ -118,7 +116,9 @@
   </div>
 </footer>
 
-<script type="text/javascript" src="./src/index.js" charset="utf-8"></script>
+<script type="text/javascript" src="../project/jquery-3.5.1.min.js"></script>
+<script type="text/javascript" src="src/queries-logic.js" charset="utf-8"></script>
+<script type="text/javascript" src="src/index.js" charset="utf-8"></script>
 </body>
 
 </html>
