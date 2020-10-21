@@ -27,14 +27,19 @@ Once it's activated, the extension will automatically trigger itself whenever yo
 
 ![example](media/demo.gif)
 
+# How it works
+![Activity_Diagram](media/query-diagram.png)
+
+This Activity Diagram (UML) should clarify a bit the inner-workings of the algorithm, and why it may some times require so many API calls.
+
 # To-do
-* Finish the website
-* Sorting algos
+* (Website) Remove the 'spinner' once the query is done
+* Fix the sorting algo
 * Cache responses for a little while 
   * https://docs.github.com/en/free-pro-team@latest/rest/guides/getting-started-with-the-rest-api#conditional-requests
   * https://docs.github.com/en/free-pro-team@latest/rest/overview/resources-in-the-rest-api#conditional-requests
   * https://stackoverflow.com/a/14890859/9768291
-* Publish as a chrome extension (create 'options' and 'background' pages?)
+* Publish as a Chrome Extension (create 'options' and 'background' pages?)
   * See: https://developer.chrome.com/extensions/samples
     * https://developer.chrome.com/extensions/examples/tutorials/broken_background_color.zip
     * https://developer.chrome.com/extensions/examples/tutorials/getstarted.zip
