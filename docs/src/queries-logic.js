@@ -122,7 +122,7 @@ function onreadystatechangeFactory(xhr, successFn, failureFn) {
 function build_fork_element_html(table_body, combined_name, num_stars, num_watches, num_forks) {
   table_body.append(
       $('<tr>', {id: extract_username_from_fork(combined_name), class: "useful_forks_repo"}).append(
-          $('<td>').html(svg_literal_fork + ' <a href=https://github.com/' + combined_name + '>' + combined_name + '</a>'),
+          $('<td>').html(svg_literal_fork + ' <a href=https://github.com/' + combined_name + ' target="_blank" rel="noopener noreferrer">' + combined_name + '</a>'),
           $('<td>').html(UF_TABLE_SEPARATOR + svg_literal_star + ' x ' + num_stars).attr("value", num_stars),
           $('<td>').html(UF_TABLE_SEPARATOR + svg_literal_eye + ' x ' + num_watches).attr("value", num_watches),
           $('<td>').html(UF_TABLE_SEPARATOR + svg_literal_fork + ' x ' + num_forks).attr("value", num_forks)
