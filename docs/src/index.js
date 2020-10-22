@@ -36,6 +36,7 @@ function initiate_search() {
   }
 
   disable_btn();
+  clear_old_data();
   request_fork_page(1, values[len-2], values[len-1], token);
 }
 

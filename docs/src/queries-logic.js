@@ -1,5 +1,5 @@
 let GITHUB_ACCESS_TOKEN   = ""
-let INITIAL_QUERY_USER    = "" // todo: reinitialize for next query
+let INITIAL_QUERY_USER    = ""
 
 const UF_ID_WRAPPER = 'useful_forks_wrapper';
 const UF_ID_MSG     = 'useful_forks_msg';
@@ -12,8 +12,9 @@ const svg_literal_eye  = '<svg class="octicon octicon-eye v-align-text-bottom" v
 
 const UF_MSG_NO_FORKS     = "No one forked this specific repository.";
 const UF_MSG_SCANNING     = "Currently scanning all the forks.";
+const UF_MSG_ERROR        = "There seems to have been an error. (Maybe you had a typo in the provided input?)";
 const UF_MSG_EMPTY_FILTER = "All the forks have been filtered out: you can now rest easy!";
-const UF_MSG_API_RATE     = "<b>Exceeded GitHub API rate-limits.</b> Consider providing an <b>Access Token</b>.";
+const UF_MSG_API_RATE     = "<b>Exceeded GitHub API rate-limits.</b> Consider providing an <b>Access Token</b> if you haven't already.<br/>The amount of API calls you are allowed to do will re-accumulate over time: you can try again later on.<br/>It's also possible that the queried repository has so many forks that it's impossible to scan completely without running out of API calls.";
 const UF_TABLE_SEPARATOR  = "&nbsp;|&nbsp;";
 
 const FORKS_PER_PAGE = 100; // enforced by GitHub API
@@ -88,6 +89,21 @@ function commits_count_failure(fork_username) {
   }
 }
 
+function clearMsg() {
+  getElementById_$(UF_ID_MSG).html("");
+}
+
+function getTableBody() {
+  return getElementById_$(UF_ID_TABLE).find($("tbody"));
+}
+
+/** Used to reset the state for a brand new request. */
+function clear_old_data() {
+  getTableBody().empty();
+  clearMsg();
+  INITIAL_QUERY_USER = "";
+}
+
 /** To use the Access Token with a request. */
 function authenticatedRequestHeaderFactory(url) {
   let request = new XMLHttpRequest();
@@ -107,7 +123,9 @@ function onreadystatechangeFactory(xhr, successFn, failureFn) {
       } else if (xhr.status === 403) {
         console.warn('Looks like the rate-limit was exceeded.');
         getElementById_$(UF_ID_MSG).html(UF_MSG_API_RATE);
-        // todo: open the Access Token dialog?
+        if (!GITHUB_ACCESS_TOKEN) {
+          $('.modal').addClass('is-active'); // opens the Token dialog
+        }
       } else {
         console.warn('GitHub API returned status:', xhr.status);
         failureFn();
@@ -135,9 +153,9 @@ function add_fork_elements(forkdata_array, user, repo) {
   if (!forkdata_array || forkdata_array.length === 0)
     return;
 
-  getElementById_$(UF_ID_MSG).html("");
-  let table_body = getElementById_$(UF_ID_TABLE).find("tbody");
+  clearMsg();
 
+  let table_body = getTableBody();
   for (let i = 0; i < Math.min(FORKS_PER_PAGE, forkdata_array.length); ++i) {
     const elem_ref = forkdata_array[i];
 
@@ -197,6 +215,10 @@ function request_fork_page(page_number, user, repo, token) {
 
         /* Populate the table. */
         add_fork_elements(response, user, repo);
+      },
+      () => {
+        getElementById_$(UF_ID_MSG).html(UF_MSG_ERROR);
+        getElementById_$("searchBtn").removeClass('is-loading');
       });
   request.send();
 }

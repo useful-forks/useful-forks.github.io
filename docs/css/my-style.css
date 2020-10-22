@@ -1,5 +1,6 @@
 #useful_forks_msg {
   text-align: center;
+  padding-bottom: 20px;
 }
 
 tr:hover {
@@ -22,4 +23,8 @@ table {
   min-width: 60%;
   max-width: 800px;
   display: inline-block;
+}
+
+.allButFooter {
+  min-height: calc(100vh - 200px);
 }

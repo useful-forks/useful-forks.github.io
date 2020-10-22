@@ -27,78 +27,82 @@
 </head>
 
 <body>
+<!-- Trick to force footer at bottom. -->
+<div class="allButFooter">
 
-<!-- Navigation bar -->
-<nav class="navbar is-dark" style="z-index: 1">
-  <div class="container">
-    <div class="navbar-brand">
-      <a class="navbar-item" href="https://github.com/payne911/useful-forks" target="_blank" rel="noopener noreferrer">
-        <img src="assets/github-white-icon.png" alt="GitHub_logo" />
-        <strong>&nbsp;&nbsp;Open-Source Project</strong>
-      </a>
-      <a class="navbar-item" href="https://chrome.google.com/webstore/" target="_blank" rel="noopener noreferrer">
-        <img src="assets/chrome-icon.png" alt="Chrome_logo" />
-        <strong>&nbsp;&nbsp;Chrome Extension (WIP)</strong>
-      </a>
-    </div>
-
-    <div id="navbarExampleTransparentExample" class="navbar-menu">
-      <div class="navbar-end">
-        <a id="addTokenBtn" class="navbar-item">
-          <img src="assets/settings-icon.png" alt="settings" />
-          <strong>&nbsp;&nbsp;Add an Access Token</strong>
+  <!-- Navigation bar -->
+  <nav class="navbar is-dark" style="z-index: 1">
+    <div class="container">
+      <div class="navbar-brand">
+        <a class="navbar-item" href="https://github.com/payne911/useful-forks" target="_blank" rel="noopener noreferrer">
+          <img src="assets/github-white-icon.png" alt="GitHub_logo" />
+          <strong>&nbsp;&nbsp;Open-Source Project</strong>
+        </a>
+        <a class="navbar-item" href="https://github.com/payne911/useful-forks#chrome-extension-wip" target="_blank" rel="noopener noreferrer">
+          <img src="assets/chrome-icon.png" alt="Chrome_logo" />
+          <strong>&nbsp;&nbsp;Chrome Extension (WIP)</strong>
         </a>
       </div>
-    </div>
-  </div>
-</nav>
 
-<!-- Access Token popup -->
-<div class="modal">
-  <div class="modal-background"></div>
-  <div class="modal-card">
-    <header class="modal-card-head">
-      <p id="modalCardTitle" class="modal-card-title">Add a GitHub Access Token</p>
-      <button id="closeModalBtn" class="delete" aria-label="close"></button>
-    </header>
-    <section class="modal-card-body">
-      <p>Useful-Forks uses the GitHub API to retrieve repository metadata. You may see this page because you have hit the
-        <a href="https://developer.github.com/v3/#rate-limiting" target="_blank" rel="noopener noreferrer">
-          GitHub API rate limit</a>.
-      </p><br/>
-      <p>Useful-Forks will need a personal Access Token to increase that limit (it increases it by almost 5000 calls per hour).
-        If you don't already have one, you can
-        <b><a href="https://github.com/settings/tokens/new?scopes=repo&description=UsefulForks" target="_blank" rel="noopener noreferrer">
-          create one</a></b>
-        and paste it into the text-box below. The required scope is already defined by the link above.
-      </p><br/>
-      <label class="label">Access Token (will be stored in your browser's local storage):</label>
-      <input class="input" id="tokenInput" placeholder="90c6b8218dae4122b07b4a0fae252c619a08941b" />
-      <br/><br/>
-      <button id="saveTokenBtn" class="button is-success is-pulled-right">Save</button>
-    </section>
-  </div>
-</div>
-
-<!-- The actual "body" where all the action happens -->
-<dev class="section">
-  <div class="container has-text-centered">
-    <div class="search-container">
-      <div class="field has-addons">
-        <div class="control is-expanded">
-          <input class="input is-dark" type="text" id="repo" name="repo" placeholder="payne911/useful-forks" autofocus />
+      <div id="navbarExampleTransparentExample" class="navbar-menu">
+        <div class="navbar-end">
+          <a id="addTokenBtn" class="navbar-item">
+            <img src="assets/settings-icon.png" alt="settings" />
+            <strong>&nbsp;&nbsp;Add an Access Token</strong>
+          </a>
         </div>
-        <p class="control">
-          <button class="button is-dark is-outlined" id="searchBtn">
-            Find useful forks
-          </button>
-        </p>
       </div>
     </div>
+  </nav>
+
+  <!-- Access Token popup -->
+  <div class="modal">
+    <div class="modal-background"></div>
+    <div class="modal-card">
+      <header class="modal-card-head">
+        <p id="modalCardTitle" class="modal-card-title">Add a GitHub Access Token</p>
+        <button id="closeModalBtn" class="delete" aria-label="close"></button>
+      </header>
+      <section class="modal-card-body">
+        <p>Useful-Forks uses the GitHub API to retrieve repository metadata. You may see this page because you have hit the
+          <a href="https://developer.github.com/v3/#rate-limiting" target="_blank" rel="noopener noreferrer">
+            GitHub API rate limit</a>.
+        </p><br/>
+        <p>Useful-Forks will need a personal Access Token to increase that limit (it increases it by almost 5000 calls per hour).
+          If you don't already have one, you can
+          <b><a href="https://github.com/settings/tokens/new?scopes=repo&description=UsefulForks" target="_blank" rel="noopener noreferrer">
+            create one</a></b>
+          and paste it into the text-box below. The required scope is already defined by the link above.
+        </p><br/>
+        <label class="label">Access Token (will be stored in your browser's local storage):</label>
+        <input class="input" id="tokenInput" placeholder="90c6b8218dae4122b07b4a0fae252c619a08941b" />
+        <br/><br/>
+        <button id="saveTokenBtn" class="button is-success is-pulled-right">Save</button>
+      </section>
+    </div>
   </div>
-  <div class="container" id="useful_forks_inject">
-  </div>
-</dev>
+
+  <!-- The actual "body" where all the action happens -->
+  <dev class="section">
+    <div class="container has-text-centered">
+      <div class="search-container">
+        <div class="field has-addons">
+          <div class="control is-expanded">
+            <input class="input is-dark" type="text" id="repo" name="repo" placeholder="payne911/PieMenu" autofocus />
+          </div>
+          <p class="control">
+            <button class="button is-dark is-outlined" id="searchBtn">
+              Find useful forks
+            </button>
+          </p>
+        </div>
+      </div>
+    </div>
+    <div class="container" id="useful_forks_inject">
+    </div>
+  </dev>
+
+</div>
 
 <!-- Footer -->
 <footer class="footer" style="background-color:white">
