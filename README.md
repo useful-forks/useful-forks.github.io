@@ -1,13 +1,18 @@
 ![logo](media/useful-forks-logo.png)
 
 # Useful Forks
-Adding a sorted list of starred forks to the GitHub forks page. Results are filtered out if there were never any commits pushed since the fork was created.
+Adding a sorted list of starred forks to the GitHub forks page.
+Results are filtered out if there were never any commits pushed since the fork was created.
+
+This is meant to help with increasing the discoverability of useful forks of open-source projects.
+Some times, a project might be abandoned, or someone had a different idea of how it should be implemented...
+And when you go looking for those interesting forks, you find yourself searching through potentially hundreds of forks.
+
+---
 
 The project is released as:
 1. A website: great for people that just want to use this tool every now and then.
 2. A Chrome Extension: has the advantage of always performing the search whenever you open a project's GitHub Forks page.
-
----
 
 ## Website (WIP)
 The project is [available online](https://payne911.github.io/useful-forks/) thanks to GitHub Pages.
@@ -32,8 +37,13 @@ Once it's activated, the extension will automatically trigger itself whenever yo
 
 This Activity Diagram (UML) should clarify a bit the inner-workings of the algorithm, and why it may some times require so many API calls.
 
-# To-do
-* (Website) Remove the 'spinner' once the query is done
+## For contributors
+If you want to help, the structure of the repo is rather simple. In terms of folders:
+* `docs` contains the website
+* `project` contains the Chrome Extension
+
+### To-do
+* (Website) Remove the 'spinner' once all the queries are done
 * Fix the sorting algo
 * Cache responses for a little while 
   * https://docs.github.com/en/free-pro-team@latest/rest/guides/getting-started-with-the-rest-api#conditional-requests
