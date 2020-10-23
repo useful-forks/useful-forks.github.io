@@ -79,3 +79,10 @@ function drawAddTokenBtn(accessToken) {
       + '<strong>&nbsp;&nbsp;' + verb + ' Access Token</strong>');
   $('#modalCardTitle').html(verb + ' GitHub Access Token');
 }
+
+/* Automatically queries when an URL parameter is present. */
+const url = window.location.href.split('?repository=');
+if (url.length === 2) {
+  $('#repo').val(url[1]);
+  $('#searchBtn').click();
+}
