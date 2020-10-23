@@ -70,18 +70,17 @@ function sortTable(table_id, sortColumn){
 }
 
 /** The secondary request which appends the badges. */
-function commits_count(request, table_body, fork_username) {
+function commits_count(request, table_body, table_row) {
   return () => {
     const response = JSON.parse(request.responseText);
 
-    let old_data = getElementById_$(fork_username);
     if (response.total_commits === 0) {
-      old_data.remove();
+      table_row.remove();
       if (table_body.children().length === 0) {
         getElementById_$(UF_ID_MSG).html(UF_MSG_EMPTY_FILTER);
       }
     } else {
-      old_data.append(
+      table_row.append(
           $('<td>').html(UF_TABLE_SEPARATOR),
           $('<td>').html(ahead_badge(response.ahead_by)),
           $('<td>').html(UF_TABLE_SEPARATOR),
@@ -96,9 +95,9 @@ function commits_count(request, table_body, fork_username) {
 }
 
 /** To remove erroneous repos. */
-function commits_count_failure(fork_username) {
+function commits_count_failure(table_row) {
   return () => {
-    getElementById_$(fork_username).remove();
+    table_row.remove();
 
     /* Detection of final request. */
     REQUESTS_COUNTER--;
@@ -156,14 +155,16 @@ function onreadystatechangeFactory(xhr, successFn, failureFn) {
 
 /** Dynamically fills the second part of the rows. */
 function build_fork_element_html(table_body, combined_name, num_stars, num_watches, num_forks) {
+  const NEW_ROW = $('<tr>', {id: extract_username_from_fork(combined_name), class: "useful_forks_repo"});
   table_body.append(
-      $('<tr>', {id: extract_username_from_fork(combined_name), class: "useful_forks_repo"}).append(
+      NEW_ROW.append(
           $('<td>').html(svg_literal_fork + ' <a href=https://github.com/' + combined_name + ' target="_blank" rel="noopener noreferrer">' + combined_name + '</a>'),
           $('<td>').html(UF_TABLE_SEPARATOR + svg_literal_star + ' x ' + num_stars).attr("value", num_stars),
           $('<td>').html(UF_TABLE_SEPARATOR + svg_literal_eye + ' x ' + num_watches).attr("value", num_watches),
           $('<td>').html(UF_TABLE_SEPARATOR + svg_literal_fork + ' x ' + num_forks).attr("value", num_forks)
       )
   );
+  return NEW_ROW;
 }
 
 /** Prepares, appends, and updates dynamically a table row. */
@@ -178,12 +179,12 @@ function add_fork_elements(forkdata_array, user, repo) {
     const elem_ref = forkdata_array[i];
 
     /* Basic data (stars, watchers, forks). */
-    build_fork_element_html(table_body, elem_ref.full_name, elem_ref.stargazers_count, elem_ref.watchers_count, elem_ref.forks_count);
+    const NEW_ROW = build_fork_element_html(table_body, elem_ref.full_name, elem_ref.stargazers_count, elem_ref.watchers_count, elem_ref.forks_count);
 
     /* Commits diff data (ahead/behind). */
     const fork_username = extract_username_from_fork(elem_ref.full_name);
     let request = authenticatedRequestHeaderFactory('https://api.github.com/repos/' + user + '/' + repo + '/compare/master...' + fork_username + ':master');
-    request.onreadystatechange = onreadystatechangeFactory(request, commits_count(request, table_body, fork_username), commits_count_failure(fork_username));
+    request.onreadystatechange = onreadystatechangeFactory(request, commits_count(request, table_body, NEW_ROW), commits_count_failure(NEW_ROW));
     request.send();
 
     /* Forks of forks. */
