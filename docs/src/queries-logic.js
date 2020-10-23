@@ -142,7 +142,7 @@ function onreadystatechangeFactory(xhr, successFn, failureFn) {
         console.warn('Looks like the rate-limit was exceeded.');
         getElementById_$(UF_ID_MSG).html(UF_MSG_API_RATE);
         if (!GITHUB_ACCESS_TOKEN) {
-          $('.modal').addClass('is-active'); // opens the Token dialog
+          getElementById_$("useful_forks_token_popup").addClass('is-active'); // opens the Token dialog
         }
       } else {
         console.warn('GitHub API returned status:', xhr.status);

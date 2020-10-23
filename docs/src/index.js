@@ -1,9 +1,20 @@
-// Gather the saved Access Token
+const JQ_REPO_FIELD  = $('#repo');
+const JQ_SEARCH_BTN  = $('#searchBtn');
+const JQ_POPUP_TITLE = $('#modalCardTitle');
+const JQ_TOKEN_CLOSE = $('#closeModalBtn');
+const JQ_TOKEN_FIELD = $('#tokenInput');
+const JQ_TOKEN_SAVE  = $('#saveTokenBtn');
+const JQ_TOKEN_BTN   = $('#addTokenBtn');
+const JQ_POPUP       = $('#useful_forks_token_popup');
+
+
+/* Gather the saved Access Token */
 const GITHUB_ACCESS_TOKEN_STORAGE_KEY = "useful-forks-access-token";
 let token = localStorage.getItem(GITHUB_ACCESS_TOKEN_STORAGE_KEY);
 drawAddTokenBtn(token);
 
-// Initialize the structure used by the 'queries-logic.js'
+
+/* Initialize the structure used by the 'queries-logic.js' */
 $('#useful_forks_inject').append(
     $('<div>', {id: UF_ID_WRAPPER}).append(
         $('<br>'),
@@ -22,50 +33,49 @@ $('#useful_forks_inject').append(
 function initiate_search() {
 
   /* Checking if search is allowed. */
-  const SEARCH_BTN = $('#searchBtn');
-  if (REQUESTS_COUNTER !== 0 || SEARCH_BTN.hasClass('is-loading')) {
+  if (REQUESTS_COUNTER !== 0 || JQ_SEARCH_BTN.hasClass('is-loading')) {
     return; // abort
   }
 
-  let values = $('#repo').val().split('/').filter(Boolean);
+  let values = JQ_REPO_FIELD.val().split('/').filter(Boolean);
   let len = values.length;
 
   if (len < 1) {
-    $('#' + UF_ID_MSG).html('Please enter a valid query: it should contain two strings separated by a "/"');
+    getElementById_$(UF_ID_MSG).html('Please enter a valid query: it should contain two strings separated by a "/"');
     return; // abort
   }
 
-  SEARCH_BTN.addClass('is-loading');
+  JQ_SEARCH_BTN.addClass('is-loading');
   clear_old_data();
   request_fork_page(1, values[len-2], values[len-1], token);
 }
 
-$('#searchBtn').click(event => {
+JQ_SEARCH_BTN.click(event => {
   event.preventDefault();
   initiate_search();
 });
 
-$('#repo').keyup(event => {
+JQ_REPO_FIELD.keyup(event => {
   if (event.keyCode === 13) { // only when pressing 'ENTER'
     initiate_search();
   }
 });
 
-$('#addTokenBtn').click(event => {
+JQ_TOKEN_BTN.click(event => {
   event.preventDefault();
-  $('.modal').addClass('is-active');
+  JQ_POPUP.addClass('is-active');
 });
 
-$('#closeModalBtn').click(event => {
+JQ_TOKEN_CLOSE.click(event => {
   event.preventDefault();
-  $('.modal').removeClass('is-active');
+  JQ_POPUP.removeClass('is-active');
 });
 
-$('#saveTokenBtn').click(event => {
+JQ_TOKEN_SAVE.click(event => {
   event.preventDefault();
-  const INPUT_TOKEN = document.getElementById('tokenInput').value;
+  const INPUT_TOKEN = JQ_TOKEN_FIELD.val();
   localStorage.setItem(GITHUB_ACCESS_TOKEN_STORAGE_KEY, INPUT_TOKEN);
-  $('.modal').removeClass('is-active');
+  JQ_POPUP.removeClass('is-active');
   drawAddTokenBtn(INPUT_TOKEN);
 });
 
@@ -73,16 +83,16 @@ function drawAddTokenBtn(accessToken) {
   let verb = 'Add';
   if (accessToken) {
     verb = 'Edit'
-    $('#tokenInput').val(accessToken);
+    JQ_TOKEN_FIELD.val(accessToken);
   }
-  $('#addTokenBtn').html('<img src="assets/settings-icon.png" alt="settings" />'
+  JQ_TOKEN_BTN.html('<img src="assets/settings-icon.png" alt="settings" />'
       + '<strong>&nbsp;&nbsp;' + verb + ' Access Token</strong>');
-  $('#modalCardTitle').html(verb + ' GitHub Access Token');
+  JQ_POPUP_TITLE.html(verb + ' GitHub Access Token');
 }
 
 /* Automatically queries when an URL parameter is present. */
 const url = window.location.href.split('?repository=');
 if (url.length === 2) {
-  $('#repo').val(url[1]);
-  $('#searchBtn').click();
+  JQ_REPO_FIELD.val(url[1]);
+  JQ_SEARCH_BTN.click();
 }
