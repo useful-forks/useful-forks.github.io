@@ -34,7 +34,7 @@ function extract_username_from_fork(combined_name) {
 }
 
 function badge_width(number) {
-  return 70 * number.toString().length; // magic number 70 extracted from querying 'shields.io'
+  return 70 * number.toString().length; // magic number 70 extracted from analyzing 'shields.io'
 }
 
 /** Credits to https://shields.io/ */
