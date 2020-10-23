@@ -239,7 +239,7 @@ function request_fork_page(page_number, user, repo, token) {
           }
         }
 
-        // sortTable();
+        sortTable();
 
         /* Populate the table. */
         add_fork_elements(response, user, repo);
