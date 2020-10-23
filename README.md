@@ -15,14 +15,14 @@ The project is released as:
 2. A Chrome Extension: has the advantage of always performing the search whenever you open a project's GitHub Forks page.
 
 ## Website (WIP)
-The project is [available online](https://payne911.github.io/useful-forks/) thanks to GitHub Pages.
+The project is [available online](https://useful-forks.github.io/) thanks to GitHub Pages.
 
 However, it is not in a working state right now. Please use the Chrome Extension in the meantime.
 
 ## Chrome Extension (WIP)
 Not published yet. If you want to install it:
 1. Clone this repository
-2. Change the [script file](project/useful-forks.js) so that it includes an [Access Token](https://github.com/settings/tokens/new?scopes=repo&description=UsefulFork).
+2. Change the [script file](project/useful-forks.js) so that it includes an [Access Token](https://github.com/settings/tokens/new?scopes=repo&description=UsefulForks).
 3. Go to the `chrome://extensions` URL
 4. Enable `Developer mode` (switch at the top-right)
 5. Click `Load unpacked` (button at the top-left)
