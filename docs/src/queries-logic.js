@@ -182,8 +182,7 @@ function add_fork_elements(forkdata_array, user, repo) {
     const NEW_ROW = build_fork_element_html(table_body, elem_ref.full_name, elem_ref.stargazers_count, elem_ref.watchers_count, elem_ref.forks_count);
 
     /* Commits diff data (ahead/behind). */
-    const fork_username = extract_username_from_fork(elem_ref.full_name);
-    let request = authenticatedRequestHeaderFactory('https://api.github.com/repos/' + user + '/' + repo + '/compare/master...' + fork_username + ':master');
+    let request = authenticatedRequestHeaderFactory('https://api.github.com/repos/' + user + '/' + repo + '/compare/master...' + extract_username_from_fork(elem_ref.full_name) + ':master');
     request.onreadystatechange = onreadystatechangeFactory(request, commits_count(request, table_body, NEW_ROW), commits_count_failure(NEW_ROW));
     request.send();
 
