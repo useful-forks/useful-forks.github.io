@@ -24,7 +24,6 @@ function initiate_search() {
   /* Checking if search is allowed. */
   const SEARCH_BTN = $('#searchBtn');
   if (REQUESTS_COUNTER !== 0 || SEARCH_BTN.hasClass('is-loading')) {
-    console.log("PREVENT!!!")
     return; // abort
   }
 
