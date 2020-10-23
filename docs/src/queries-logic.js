@@ -58,7 +58,7 @@ function getElementById_$(id) {
 }
 
 function getTdValue(rows, index, col) {
-  return rows.item(index).getElementsByTagName('td').item(col).getAttribute("value");
+  return Number(rows.item(index).getElementsByTagName('td').item(col).getAttribute("value"));
 }
 
 function sortTable() {
@@ -239,7 +239,7 @@ function request_fork_page(page_number, user, repo, token) {
           }
         }
 
-        sortTable();
+        // sortTable();
 
         /* Populate the table. */
         add_fork_elements(response, user, repo);
