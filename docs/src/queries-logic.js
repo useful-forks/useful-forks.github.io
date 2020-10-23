@@ -23,8 +23,13 @@ let INITIAL_QUERY_USER = ""
 let REQUESTS_COUNTER   = 0
 
 
+function allRequestsAreDone() {
+  return REQUESTS_COUNTER <= 0;
+}
+
 function checkIfAllRequestsAreDone() {
-  if (REQUESTS_COUNTER <= 0) {
+  if (allRequestsAreDone()) {
+    sortTable();
     getElementById_$("searchBtn").removeClass('is-loading');
   }
 }
@@ -56,8 +61,12 @@ function getTdValue(rows, index, col) {
   return rows.item(index).getElementsByTagName('td').item(col).getAttribute("value");
 }
 
+function sortTable() {
+  sortTableColumn(UF_ID_TABLE, 1);
+}
+
 /** 'sortColumn' index starts at 0.   https://stackoverflow.com/a/37814596/9768291 */
-function sortTable(table_id, sortColumn){
+function sortTableColumn(table_id, sortColumn){
   let tableData = document.getElementById(table_id).getElementsByTagName('tbody').item(0);
   let rows = tableData.getElementsByTagName('tr');
   for(let i = 0; i < rows.length - 1; i++) {
@@ -230,10 +239,7 @@ function request_fork_page(page_number, user, repo, token) {
           }
         }
 
-        /* Half-assed sort. (todo: redo this) */
-        $( () => {
-          sortTable(UF_ID_TABLE, 1);
-        });
+        sortTable();
 
         /* Populate the table. */
         add_fork_elements(response, user, repo);
