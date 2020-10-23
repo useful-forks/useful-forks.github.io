@@ -17,13 +17,6 @@ $('#useful_forks_inject').append(
 );
 
 
-function disable_btn() {
-  const SEARCH_BTN = $('#searchBtn');
-  if (SEARCH_BTN.hasClass('is-loading')) {
-    return; // abort
-  }
-  SEARCH_BTN.addClass('is-loading');
-}
 
 /** Extracts 'user' and 'repo' values from potential URL inputs. */
 function initiate_search() {
@@ -35,7 +28,13 @@ function initiate_search() {
     return; // abort
   }
 
-  disable_btn();
+  /* Checking if search is allowed. */
+  const SEARCH_BTN = $('#searchBtn');
+  if (SEARCH_BTN.hasClass('is-loading')) {
+    return; // abort
+  }
+
+  SEARCH_BTN.addClass('is-loading');
   clear_old_data();
   request_fork_page(1, values[len-2], values[len-1], token);
 }

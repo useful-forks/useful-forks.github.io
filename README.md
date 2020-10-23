@@ -43,7 +43,6 @@ If you want to help, the structure of the repo is rather simple. In terms of fol
 * `project` contains the Chrome Extension
 
 ### To-do
-* (Website) Remove the 'spinner' once all the queries are done
 * Fix the sorting algo
 * Cache responses for a little while 
   * https://docs.github.com/en/free-pro-team@latest/rest/guides/getting-started-with-the-rest-api#conditional-requests

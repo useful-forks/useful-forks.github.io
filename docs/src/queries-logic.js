@@ -1,5 +1,4 @@
-let GITHUB_ACCESS_TOKEN   = ""
-let INITIAL_QUERY_USER    = ""
+let GITHUB_ACCESS_TOKEN = ""
 
 const UF_ID_WRAPPER = 'useful_forks_wrapper';
 const UF_ID_MSG     = 'useful_forks_msg';
@@ -19,6 +18,16 @@ const UF_TABLE_SEPARATOR  = "&nbsp;|&nbsp;";
 
 const FORKS_PER_PAGE = 100; // enforced by GitHub API
 
+/* Variables that should be cleared for every new query. */
+let INITIAL_QUERY_USER = ""
+let REQUESTS_COUNTER   = 0
+
+
+function checkIfAllRequestsAreDone() {
+  if (REQUESTS_COUNTER <= 0) {
+    getElementById_$("searchBtn").removeClass('is-loading');
+  }
+}
 
 function extract_username_from_fork(combined_name) {
   return combined_name.split('/')[0];
@@ -79,6 +88,10 @@ function commits_count(request, table_body, fork_username) {
           $('<td>').html(behind_badge(response.behind_by))
       )
     }
+
+    /* Detection of final request. */
+    REQUESTS_COUNTER--;
+    checkIfAllRequestsAreDone();
   }
 }
 
@@ -86,6 +99,10 @@ function commits_count(request, table_body, fork_username) {
 function commits_count_failure(fork_username) {
   return () => {
     getElementById_$(fork_username).remove();
+
+    /* Detection of final request. */
+    REQUESTS_COUNTER--;
+    checkIfAllRequestsAreDone();
   }
 }
 
@@ -102,6 +119,7 @@ function clear_old_data() {
   getTableBody().empty();
   clearMsg();
   INITIAL_QUERY_USER = "";
+  REQUESTS_COUNTER = 0;
 }
 
 /** To use the Access Token with a request. */
@@ -156,7 +174,7 @@ function add_fork_elements(forkdata_array, user, repo) {
   clearMsg();
 
   let table_body = getTableBody();
-  for (let i = 0; i < Math.min(FORKS_PER_PAGE, forkdata_array.length); ++i) {
+  for (let i = 0; i < forkdata_array.length; i++) {
     const elem_ref = forkdata_array[i];
 
     /* Basic data (stars, watchers, forks). */
@@ -192,12 +210,16 @@ function request_fork_page(page_number, user, repo, token) {
   request.onreadystatechange = onreadystatechangeFactory(request,
       () => {
         const response = JSON.parse(request.responseText);
+
+        /* On empty response (repo has not been forked). */
         if (!response || response.length === 0) {
           if (page_number === 1) {
             getElementById_$(UF_ID_MSG).html(UF_MSG_NO_FORKS);
           }
           return;
         }
+
+        REQUESTS_COUNTER += response.length; // to keep track of when the query ends
 
         /* Pagination (beyond 100 forks). */
         const link_header = request.getResponseHeader("link");
@@ -218,7 +240,7 @@ function request_fork_page(page_number, user, repo, token) {
       },
       () => {
         getElementById_$(UF_ID_MSG).html(UF_MSG_ERROR);
-        getElementById_$("searchBtn").removeClass('is-loading');
+        checkIfAllRequestsAreDone();
       });
   request.send();
 }
