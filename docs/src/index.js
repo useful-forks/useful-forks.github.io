@@ -20,17 +20,19 @@ $('#useful_forks_inject').append(
 
 /** Extracts 'user' and 'repo' values from potential URL inputs. */
 function initiate_search() {
+
+  /* Checking if search is allowed. */
+  const SEARCH_BTN = $('#searchBtn');
+  if (REQUESTS_COUNTER !== 0 || SEARCH_BTN.hasClass('is-loading')) {
+    console.log("PREVENT!!!")
+    return; // abort
+  }
+
   let values = $('#repo').val().split('/').filter(Boolean);
   let len = values.length;
 
   if (len < 1) {
     $('#' + UF_ID_MSG).html('Please enter a valid query: it should contain two strings separated by a "/"');
-    return; // abort
-  }
-
-  /* Checking if search is allowed. */
-  const SEARCH_BTN = $('#searchBtn');
-  if (SEARCH_BTN.hasClass('is-loading')) {
     return; // abort
   }
 
