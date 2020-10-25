@@ -14,7 +14,7 @@ The project is released as:
 1. A website: great for people that just want to use this tool every now and then.
 2. A Chrome Extension: has the advantage of always performing the search whenever you open a project's GitHub Forks page.
 
-## Website (WIP)
+## Website
 The project is [available online](https://useful-forks.github.io/) thanks to GitHub Pages.
 
 However, it is not in a working state right now. Please use the Chrome Extension in the meantime.
@@ -43,7 +43,6 @@ If you want to help, the structure of the repo is rather simple. In terms of fol
 * `project` contains the Chrome Extension
 
 ### To-do
-* Fix the sorting algo
 * Cache responses for a little while 
   * https://docs.github.com/en/free-pro-team@latest/rest/guides/getting-started-with-the-rest-api#conditional-requests
   * https://docs.github.com/en/free-pro-team@latest/rest/overview/resources-in-the-rest-api#conditional-requests
