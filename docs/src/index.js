@@ -8,6 +8,18 @@ const JQ_TOKEN_BTN   = $('#addTokenBtn');
 const JQ_POPUP       = $('#useful_forks_token_popup');
 
 
+const INIT_MSG = "<br/><b>Introducing:</b><br/><br/>"
+    + "<img src='../media/useful-forks-logo.png' alt='useful forks logo' width='500'/><br/><br/>"
+    + "It aims at increasing the discoverability of <b>useful</b> forks of open-source projects.<br/>"
+    + "Simply type a repository's URL in the Text Field above. Both of those examples are valid entries: <br/>"
+    + "<b><a href='https://useful-forks.github.io/?repository=payne911/PieMenu'>payne911/PieMenu</a></b> and "
+    + "<b><a href='https://useful-forks.github.io/?repository=https://github.com/payne911/PieMenu'>https://github.com/payne911/PieMenu</a></b><br/><br/>"
+    + "The criteria is simple: if a fork was created, but never received any other activity on its master branch, it is filtered out.<br/>"
+    + "The results are sorted by the amount of stars.<br/><br/>"
+    + "For more information, check out <a href='https://github.com/useful-forks/useful-forks.github.io'>the GitHub project</a>.<br/>"
+    + "And while you're there, if you like this project, feel free to ⭐ us."
+
+
 /* Gather the saved Access Token */
 const GITHUB_ACCESS_TOKEN_STORAGE_KEY = "useful-forks-access-token";
 let token = localStorage.getItem(GITHUB_ACCESS_TOKEN_STORAGE_KEY);
@@ -18,7 +30,7 @@ drawAddTokenBtn(token);
 $('#useful_forks_inject').append(
     $('<div>', {id: UF_ID_WRAPPER}).append(
         $('<br>'),
-        $('<div>', {id: UF_ID_MSG}),
+        $('<div>', {id: UF_ID_MSG}).html(INIT_MSG),
         $('<div>', {id: UF_ID_DATA}).append(
             $('<table>', {id: UF_ID_TABLE}).append(
                 $('<tbody>')
