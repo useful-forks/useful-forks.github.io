@@ -14,7 +14,6 @@ const UF_MSG_SCANNING     = "Currently scanning all the forks.";
 const UF_MSG_ERROR        = "There seems to have been an error. (Maybe you had a typo in the provided input?)";
 const UF_MSG_EMPTY_FILTER = "All the forks have been filtered out: you can now rest easy!";
 const UF_MSG_API_RATE     = "<b>Exceeded GitHub API rate-limits.</b> Consider providing an <b>Access Token</b> if you haven't already (click the button at the top-right).<br/>The amount of API calls you are allowed to do will re-accumulate over time: you can try again later on.<br/>It's also possible that the queried repository has so many forks that it's impossible to scan it completely without running out of API calls. :(";
-const UF_TABLE_SEPARATOR  = "&nbsp;|&nbsp;";
 
 const FORKS_PER_PAGE = 100; // enforced by GitHub API
 
@@ -44,13 +43,13 @@ function badge_width(number) {
 
 /** Credits to https://shields.io/ */
 function ahead_badge(amount) {
-  return '<svg xmlns="http://www.w3.org/2000/svg" width="88" height="18" role="img"><title>How far ahead of the original repo\'s master branch this fork\'s master branch is</title><linearGradient id="s" x2="0" y2="100%"><stop offset="0" stop-color="#fff" stop-opacity=".7"/><stop offset=".1" stop-color="#aaa" stop-opacity=".1"/><stop offset=".9" stop-color="#000" stop-opacity=".3"/><stop offset="1" stop-color="#000" stop-opacity=".5"/></linearGradient><clipPath id="r"><rect width="88" height="18" rx="4" fill="#fff"/></clipPath><g clip-path="url(#r)"><rect width="43" height="18" fill="#555"/><rect x="43" width="45" height="18" fill="#007ec6"/><rect width="88" height="18" fill="url(#s)"/></g><g fill="#fff" text-anchor="middle" font-family="Verdana,Geneva,DejaVu Sans,sans-serif" text-rendering="geometricPrecision" font-size="110"><text aria-hidden="true" x="225" y="140" fill="#010101" fill-opacity=".3" transform="scale(.1)" textLength="330">ahead</text><text x="225" y="130" transform="scale(.1)" fill="#fff" textLength="330">ahead</text><text x="645" y="130" transform="scale(.1)" fill="#fff" textLength="' + badge_width(amount) + '">' + amount + '</text></g></svg>';
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="88" height="25" role="img" class="uf_badge"><title>How far ahead of the original repo\'s master branch this fork\'s master branch is</title><linearGradient id="s" x2="0" y2="100%"><stop offset="0" stop-color="#fff" stop-opacity=".7"/><stop offset=".1" stop-color="#aaa" stop-opacity=".1"/><stop offset=".9" stop-color="#000" stop-opacity=".3"/><stop offset="1" stop-color="#000" stop-opacity=".5"/></linearGradient><clipPath id="r"><rect width="88" height="25" rx="4" fill="#fff"/></clipPath><g clip-path="url(#r)"><rect width="43" height="25" fill="#555"/><rect x="43" width="45" height="25" fill="#007ec6"/><rect width="88" height="25" fill="url(#s)"/></g><g fill="#fff" text-anchor="middle" font-family="Verdana,Geneva,DejaVu Sans,sans-serif" text-rendering="geometricPrecision" font-size="110"><text aria-hidden="true" x="225" y="170" fill="#010101" fill-opacity=".3" transform="scale(.1)" textLength="330">ahead</text><text x="225" y="160" transform="scale(.1)" fill="#fff" textLength="330">ahead</text><text x="645" y="160" transform="scale(.1)" fill="#fff" textLength="${badge_width(amount)}">${amount}</text></g></svg>`;
 }
 
 /** Credits to https://shields.io/ */
 function behind_badge(amount) {
   const color = amount === 0 ? '#4c1' : '#007ec6'; // green only when not behind, blue otherwise
-  return '<svg xmlns="http://www.w3.org/2000/svg" width="92" height="18" role="img"><title>How far behind of the original repo\'s master branch this fork\'s master branch is</title><linearGradient id="s" x2="0" y2="100%"><stop offset="0" stop-color="#fff" stop-opacity=".7"/><stop offset=".1" stop-color="#aaa" stop-opacity=".1"/><stop offset=".9" stop-color="#000" stop-opacity=".3"/><stop offset="1" stop-color="#000" stop-opacity=".5"/></linearGradient><clipPath id="r"><rect width="92" height="18" rx="4" fill="#fff"/></clipPath><g clip-path="url(#r)"><rect width="47" height="18" fill="#555"/><rect x="47" width="45" height="18" fill="'+ color +'"/><rect width="92" height="18" fill="url(#s)"/></g><g fill="#fff" text-anchor="middle" font-family="Verdana,Geneva,DejaVu Sans,sans-serif" text-rendering="geometricPrecision" font-size="110"><text aria-hidden="true" x="245" y="140" fill="#010101" fill-opacity=".3" transform="scale(.1)" textLength="370">behind</text><text x="245" y="130" transform="scale(.1)" fill="#fff" textLength="370">behind</text><text x="685" y="130" transform="scale(.1)" fill="#fff" textLength="' + badge_width(amount) + '">' + amount + '</text></g></svg>';
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="92" height="25" role="img" class="uf_badge"><title>How far behind of the original repo\'s master branch this fork\'s master branch is</title><linearGradient id="s" x2="0" y2="100%"><stop offset="0" stop-color="#fff" stop-opacity=".7"/><stop offset=".1" stop-color="#aaa" stop-opacity=".1"/><stop offset=".9" stop-color="#000" stop-opacity=".3"/><stop offset="1" stop-color="#000" stop-opacity=".5"/></linearGradient><clipPath id="r"><rect width="92" height="25" rx="4" fill="#fff"/></clipPath><g clip-path="url(#r)"><rect width="47" height="25" fill="#555"/><rect x="47" width="45" height="25" fill="${color}"/><rect width="92" height="25" fill="url(#s)"/></g><g fill="#fff" text-anchor="middle" font-family="Verdana,Geneva,DejaVu Sans,sans-serif" text-rendering="geometricPrecision" font-size="110"><text aria-hidden="true" x="245" y="170" fill="#010101" fill-opacity=".3" transform="scale(.1)" textLength="370">behind</text><text x="245" y="160" transform="scale(.1)" fill="#fff" textLength="370">behind</text><text x="685" y="160" transform="scale(.1)" fill="#fff" textLength="${badge_width(amount)}">${amount}</text></g></svg>`;
 }
 
 function getElementById_$(id) {
@@ -90,9 +89,7 @@ function commits_count(request, table_body, table_row) {
       }
     } else {
       table_row.append(
-          $('<td>').html(UF_TABLE_SEPARATOR),
           $('<td>').html(ahead_badge(response.ahead_by)),
-          $('<td>').html(UF_TABLE_SEPARATOR),
           $('<td>').html(behind_badge(response.behind_by))
       )
     }
@@ -162,15 +159,19 @@ function onreadystatechangeFactory(xhr, successFn, failureFn) {
   };
 }
 
+function build_single_button(svg_lhs, text_rhs) {
+  return `<div class="uf_value_badge uf_value_left">${svg_lhs}</div><div class="uf_value_badge uf_value_right">${text_rhs}</div>`;
+}
+
 /** Dynamically fills the second part of the rows. */
 function build_fork_element_html(table_body, combined_name, num_stars, num_watches, num_forks) {
   const NEW_ROW = $('<tr>', {id: extract_username_from_fork(combined_name), class: "useful_forks_repo"});
   table_body.append(
       NEW_ROW.append(
-          $('<td>').html(svg_literal_fork + ' <a href=https://github.com/' + combined_name + ' target="_blank" rel="noopener noreferrer">' + combined_name + '</a>'),
-          $('<td>').html(UF_TABLE_SEPARATOR + svg_literal_star + ' x ' + num_stars).attr("value", num_stars),
-          $('<td>').html(UF_TABLE_SEPARATOR + svg_literal_eye + ' x ' + num_watches).attr("value", num_watches),
-          $('<td>').html(UF_TABLE_SEPARATOR + svg_literal_fork + ' x ' + num_forks).attr("value", num_forks)
+          $('<td>', {class: "useful_forks_link"}).html(svg_literal_fork + ` <a href=https://github.com/${combined_name} target="_blank" rel="noopener noreferrer">${combined_name}</a>`),
+          $('<td>').attr("value", num_stars).html(build_single_button(svg_literal_star, num_stars)),
+          $('<td>').attr("value", num_watches).html(build_single_button(svg_literal_eye, num_watches)),
+          $('<td>').attr("value", num_forks).html(build_single_button(svg_literal_fork, num_forks))
       )
   );
   return NEW_ROW;

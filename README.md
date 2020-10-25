@@ -19,7 +19,7 @@ The project is [available online](https://useful-forks.github.io/) thanks to Git
 
 You can query repository directly with the URL. Here is an example: https://useful-forks.github.io/?repository=kotcrab/vis-ui
 
-![website example](media/website_example_1.png)
+![website example](media/website_example_2.png)
 
 ## Chrome Extension (WIP)
 Not published yet. If you want to install it:

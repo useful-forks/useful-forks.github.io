@@ -11,10 +11,6 @@ tr:nth-child(even) {
   background-color: #f5f5f5;
 }
 
-table {
-  margin: 0 auto !important;
-}
-
 #button-group {
   visibility: hidden;
 }
@@ -27,4 +23,51 @@ table {
 
 .allButFooter {
   min-height: calc(100vh - 200px);
+}
+
+table {
+  margin: 0 auto !important;
+}
+table td, table th {
+  vertical-align: middle !important;
+  padding: 0 5px;
+}
+
+#useful_forks_wrapper .useful_forks_repo div {
+  display: inline-block;
+  text-align:left;
+}
+#useful_forks_wrapper .useful_forks_repo {
+  margin: 5px 0;
+}
+#useful_forks_wrapper .useful_forks_repo .useful_forks_link {
+  min-width: 260px;
+}
+#useful_forks_wrapper .uf_value_badge {
+  border: 1px solid #eee;
+  border-radius: 6px;
+  padding: 0 8px;
+  cursor:default;
+  background-color: #eee;
+  border-color: var(--color-btn-border);
+  box-shadow: var(--color-btn-shadow),var(--color-btn-shadow-highlight);
+}
+#useful_forks_wrapper .uf_value_badge.uf_value_left {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+#useful_forks_wrapper .uf_value_badge.uf_value_right {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+  padding: 0 5px;
+  border-left: 0;
+  min-width: 50px;
+  text-align: center;
+  background-color: var(--color-social-count-bg);
+  color: var(--color-text-primary);
+}
+#useful_forks_wrapper .uf_badge {
+  margin-top: 5px;
+  background-color: var(--color-social-count-bg);
+  color: var(--color-text-primary);
 }
