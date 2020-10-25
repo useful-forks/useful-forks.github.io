@@ -191,7 +191,8 @@ function add_fork_elements(forkdata_array, user, repo) {
     const NEW_ROW = build_fork_element_html(table_body, elem_ref.full_name, elem_ref.stargazers_count, elem_ref.watchers_count, elem_ref.forks_count);
 
     /* Commits diff data (ahead/behind). */
-    let request = authenticatedRequestHeaderFactory('https://api.github.com/repos/' + user + '/' + repo + '/compare/master...' + extract_username_from_fork(elem_ref.full_name) + ':master');
+    const API_REQUEST_URL = 'https://api.github.com/repos/' + user + '/' + repo + '/compare/master...' + extract_username_from_fork(elem_ref.full_name) + ':master';
+    let request = authenticatedRequestHeaderFactory(API_REQUEST_URL);
     request.onreadystatechange = onreadystatechangeFactory(request, commits_count(request, table_body, NEW_ROW), commits_count_failure(NEW_ROW));
     request.send();
 
@@ -215,7 +216,8 @@ function request_fork_page(page_number, user, repo, token) {
     getElementById_$(UF_ID_MSG).html(UF_MSG_SCANNING);
   }
 
-  let request = authenticatedRequestHeaderFactory('https://api.github.com/repos/' + user + '/' + repo + '/forks?sort=stargazers&per_page=' + FORKS_PER_PAGE + '&page=' + page_number)
+  const API_REQUEST_URL = 'https://api.github.com/repos/' + user + '/' + repo + '/forks?sort=stargazers&per_page=' + FORKS_PER_PAGE + '&page=' + page_number;
+  let request = authenticatedRequestHeaderFactory(API_REQUEST_URL);
   request.onreadystatechange = onreadystatechangeFactory(request,
       () => {
         const response = JSON.parse(request.responseText);
