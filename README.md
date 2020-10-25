@@ -17,7 +17,9 @@ The project is released as:
 ## Website
 The project is [available online](https://useful-forks.github.io/) thanks to GitHub Pages.
 
-However, it is not in a working state right now. Please use the Chrome Extension in the meantime.
+You can query repository directly with the URL. Here is an example: https://useful-forks.github.io/?repository=kotcrab/vis-ui
+
+![website example](media/website_example_1.png)
 
 ## Chrome Extension (WIP)
 Not published yet. If you want to install it:
