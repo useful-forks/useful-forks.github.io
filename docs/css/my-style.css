@@ -3,11 +3,6 @@
   padding-bottom: 20px;
 }
 
-.uf_badge svg {
-  display: table-cell;
-  padding-top: 3px;
-}
-
 tr:hover {
   background-color: #e2e2e2 !important;
 }
@@ -35,7 +30,7 @@ table {
 }
 table td, table th {
   vertical-align: middle !important;
-  padding: 0 5px;
+  padding: 3px 5px;
 }
 
 #useful_forks_wrapper .useful_forks_repo div {
@@ -72,7 +67,7 @@ table td, table th {
   color: var(--color-text-primary);
 }
 #useful_forks_wrapper .uf_badge {
-  margin-top: 5px;
+  display: table-cell;
   background-color: var(--color-social-count-bg);
   color: var(--color-text-primary);
 }
