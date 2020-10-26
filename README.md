@@ -1,4 +1,4 @@
-![logo](media/useful-forks-logo.png)
+![logo](docs/assets/useful-forks-logo.png)
 
 # Useful Forks
 Adding a sorted list of starred forks to the GitHub forks page.
