@@ -4,11 +4,11 @@
 }
 
 tr:hover {
-  background-color: #e2e2e2 !important;
+  background-color: #e0e0e0 !important;
 }
 
 tr:nth-child(even) {
-  background-color: #f5f5f5;
+  background-color: #efefef;
 }
 
 #button-group {
@@ -44,11 +44,11 @@ table td, table th {
   min-width: 260px;
 }
 #useful_forks_wrapper .uf_value_badge {
-  border: 1px solid #eee;
+  border: 1px solid #ddd;
   border-radius: 6px;
   padding: 0 8px;
   cursor:default;
-  background-color: #eee;
+  background-color: #ddd;
   border-color: var(--color-btn-border);
   box-shadow: var(--color-btn-shadow),var(--color-btn-shadow-highlight);
 }
