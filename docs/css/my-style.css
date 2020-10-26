@@ -25,6 +25,26 @@ table {
   display: inline-block;
 }
 
+.container {
+  display: -webkit-flex; /* Safari */
+  display: flex;
+  -webkit-align-items: center; /* Safari 7.0+ */
+  align-items: center;
+  -webkit-justify-content: center;
+  justify-content: center;
+}
+
+#useful_forks_info {
+  margin-left: 10px;
+}
+
+#tooltip {
+  background: cornsilk;
+  border: 1px solid black;
+  border-radius: 5px;
+  padding: 5px;
+}
+
 .allButFooter {
   min-height: calc(100vh - 200px);
 }

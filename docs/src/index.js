@@ -40,6 +40,17 @@ $('#useful_forks_inject').append(
 );
 
 
+function showTooltip(evt, text) {
+  let tooltip = document.getElementById("tooltip");
+  tooltip.innerHTML = text;
+  tooltip.style.display = "block";
+  tooltip.style.left = evt.pageX + 10 + 'px';
+  tooltip.style.top = evt.pageY + 10 + 'px';
+}
+function hideTooltip() {
+  let tooltip = document.getElementById("tooltip");
+  tooltip.style.display = "none";
+}
 
 /** Extracts 'user' and 'repo' values from potential URL inputs. */
 function initiate_search() {
