@@ -9,11 +9,11 @@ const JQ_POPUP       = $('#useful_forks_token_popup');
 
 
 const INIT_MSG = "<br/><b>Introducing:</b><br/><br/>"
-    + "<img src='../media/useful-forks-logo.png' alt='useful forks logo' width='500'/><br/><br/>"
+    + "<img src='assets/useful-forks-logo.png' alt='useful forks logo' width='500'/><br/><br/>"
     + "It aims at increasing the discoverability of <b>useful</b> forks of open-source projects.<br/>"
     + "Simply type a repository's URL in the Text Field above. Both of those examples are valid entries: <br/>"
-    + "<b><a href='https://useful-forks.github.io/?repository=payne911/PieMenu'>payne911/PieMenu</a></b> and "
-    + "<b><a href='https://useful-forks.github.io/?repository=https://github.com/payne911/PieMenu'>https://github.com/payne911/PieMenu</a></b><br/><br/>"
+    + "<b><a href='https://useful-forks.github.io/?repo=payne911/PieMenu'>payne911/PieMenu</a></b> and "
+    + "<b><a href='https://useful-forks.github.io/?repo=https://github.com/payne911/PieMenu'>https://github.com/payne911/PieMenu</a></b><br/><br/>"
     + "The criteria is simple: if a fork was created, but never received any other activity on its master branch, it is filtered out.<br/>"
     + "The results are sorted by the amount of stars.<br/><br/>"
     + "For more information, check out <a href='https://github.com/useful-forks/useful-forks.github.io'>the GitHub project</a>.<br/>"
@@ -102,9 +102,18 @@ function drawAddTokenBtn(accessToken) {
   JQ_POPUP_TITLE.html(verb + ' GitHub Access Token');
 }
 
-/* Automatically queries when an URL parameter is present. */
-const url = window.location.href.split('?repository=');
-if (url.length === 2) {
-  JQ_REPO_FIELD.val(url[1]);
+function automaticSearch(split_url) {
+  JQ_REPO_FIELD.val(split_url[1]);
   JQ_SEARCH_BTN.click();
+}
+
+/* Automatically queries when an URL parameter is present. */
+let url = window.location.href.split('?repository=');
+if (url.length === 2) {
+  automaticSearch(url);
+} else {
+  url = window.location.href.split('?repo=');
+  if (url.length === 2) {
+    automaticSearch(url);
+  }
 }

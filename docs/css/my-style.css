@@ -3,6 +3,11 @@
   padding-bottom: 20px;
 }
 
+.uf_badge svg {
+  display: table-cell;
+  padding-top: 3px;
+}
+
 tr:hover {
   background-color: #e2e2e2 !important;
 }
