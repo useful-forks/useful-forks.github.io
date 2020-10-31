@@ -10,15 +10,16 @@ const svg_literal_fork = '<svg class="octicon octicon-repo-forked v-align-text-b
 const svg_literal_star = '<svg aria-label="star" height="16" class="octicon octicon-star v-align-text-bottom" viewBox="0 0 14 16" version="1.1" width="14" role="img"><path fill-rule="evenodd" d="M14 6l-4.9-.64L7 1 4.9 5.36 0 6l3.6 3.26L2.67 14 7 11.67 11.33 14l-.93-4.74L14 6z"></path></svg>';
 const svg_literal_eye  = '<svg class="octicon octicon-eye v-align-text-bottom" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"><path fill-rule="evenodd" d="M8.06 2C3 2 0 8 0 8s3 6 8.06 6C13 14 16 8 16 8s-3-6-7.94-6zM8 12c-2.2 0-4-1.78-4-4 0-2.2 1.8-4 4-4 2.22 0 4 1.8 4 4 0 2.22-1.78 4-4 4zm2-4c0 1.11-.89 2-2 2-1.11 0-2-.89-2-2 0-1.11.89-2 2-2 1.11 0 2 .89 2 2z"></path></svg>';
 
-function toHtmlId(tag) {
-  return '#' + tag;
+const additional_css_literal = `
+.uf_badge svg {
+  display: table-cell;
+  padding-top: 3px;
 }
-function addCss(id, content) {
-  return toHtmlId(id) + ' ' + content + ' ';
-}
-const additional_css_literal =
-    addCss(UF_ID_WRAPPER, '{padding-bottom: 50px;}')
-    + addCss(UF_ID_MSG, '{color: red}');
+tr:hover {background-color: #e2e2e2 !important;}
+tr:nth-child(even) {background-color: #f5f5f5;}
+#${UF_ID_WRAPPER} {padding-bottom: 50px;}
+#${UF_ID_MSG} {color: red}
+`;
 
 const UF_MSG_HEADER       = "<b>Useful forks</b>";
 const UF_MSG_NO_FORKS     = "No one forked this specific repository.";
@@ -47,22 +48,22 @@ function extract_username_from_fork(combined_name) {
 }
 
 function badge_width(number) {
-  return 70 * number.toString().length; // magic number 70 extracted from querying 'shields.io'
+  return 70 * number.toString().length; // magic number 70 extracted from analyzing 'shields.io'
 }
 
 /** Credits to https://shields.io/ */
 function ahead_badge(amount) {
-  return '<svg xmlns="http://www.w3.org/2000/svg" width="88" height="18" role="img"><title>How far ahead of the original repo\'s master branch this fork\'s master branch is</title><linearGradient id="s" x2="0" y2="100%"><stop offset="0" stop-color="#fff" stop-opacity=".7"/><stop offset=".1" stop-color="#aaa" stop-opacity=".1"/><stop offset=".9" stop-color="#000" stop-opacity=".3"/><stop offset="1" stop-color="#000" stop-opacity=".5"/></linearGradient><clipPath id="r"><rect width="88" height="18" rx="4" fill="#fff"/></clipPath><g clip-path="url(#r)"><rect width="43" height="18" fill="#555"/><rect x="43" width="45" height="18" fill="#007ec6"/><rect width="88" height="18" fill="url(#s)"/></g><g fill="#fff" text-anchor="middle" font-family="Verdana,Geneva,DejaVu Sans,sans-serif" text-rendering="geometricPrecision" font-size="110"><text aria-hidden="true" x="225" y="140" fill="#010101" fill-opacity=".3" transform="scale(.1)" textLength="330">ahead</text><text x="225" y="130" transform="scale(.1)" fill="#fff" textLength="330">ahead</text><text x="645" y="130" transform="scale(.1)" fill="#fff" textLength="' + badge_width(amount) + '">' + amount + '</text></g></svg>';
+  return '<svg xmlns="http://www.w3.org/2000/svg" width="88" height="24" role="img"><title>How far ahead of the original repo\'s master branch this fork\'s master branch is</title><linearGradient id="s" x2="0" y2="100%"><stop offset="0" stop-color="#fff" stop-opacity=".7"/><stop offset=".1" stop-color="#aaa" stop-opacity=".1"/><stop offset=".9" stop-color="#000" stop-opacity=".3"/><stop offset="1" stop-color="#000" stop-opacity=".5"/></linearGradient><clipPath id="r"><rect width="88" height="18" rx="4" fill="#fff"/></clipPath><g clip-path="url(#r)"><rect width="43" height="18" fill="#555"/><rect x="43" width="45" height="18" fill="#007ec6"/><rect width="88" height="18" fill="url(#s)"/></g><g fill="#fff" text-anchor="middle" font-family="Verdana,Geneva,DejaVu Sans,sans-serif" text-rendering="geometricPrecision" font-size="110"><text aria-hidden="true" x="225" y="140" fill="#010101" fill-opacity=".3" transform="scale(.1)" textLength="330">ahead</text><text x="225" y="130" transform="scale(.1)" fill="#fff" textLength="330">ahead</text><text x="645" y="130" transform="scale(.1)" fill="#fff" textLength="' + badge_width(amount) + '">' + amount + '</text></g></svg>';
 }
 
 /** Credits to https://shields.io/ */
 function behind_badge(amount) {
   const color = amount === 0 ? '#4c1' : '#007ec6'; // green only when not behind, blue otherwise
-  return '<svg xmlns="http://www.w3.org/2000/svg" width="92" height="18" role="img"><title>How far behind of the original repo\'s master branch this fork\'s master branch is</title><linearGradient id="s" x2="0" y2="100%"><stop offset="0" stop-color="#fff" stop-opacity=".7"/><stop offset=".1" stop-color="#aaa" stop-opacity=".1"/><stop offset=".9" stop-color="#000" stop-opacity=".3"/><stop offset="1" stop-color="#000" stop-opacity=".5"/></linearGradient><clipPath id="r"><rect width="92" height="18" rx="4" fill="#fff"/></clipPath><g clip-path="url(#r)"><rect width="47" height="18" fill="#555"/><rect x="47" width="45" height="18" fill="'+ color +'"/><rect width="92" height="18" fill="url(#s)"/></g><g fill="#fff" text-anchor="middle" font-family="Verdana,Geneva,DejaVu Sans,sans-serif" text-rendering="geometricPrecision" font-size="110"><text aria-hidden="true" x="245" y="140" fill="#010101" fill-opacity=".3" transform="scale(.1)" textLength="370">behind</text><text x="245" y="130" transform="scale(.1)" fill="#fff" textLength="370">behind</text><text x="685" y="130" transform="scale(.1)" fill="#fff" textLength="' + badge_width(amount) + '">' + amount + '</text></g></svg>';
+  return '<svg xmlns="http://www.w3.org/2000/svg" width="92" height="24" role="img"><title>How far behind of the original repo\'s master branch this fork\'s master branch is</title><linearGradient id="s" x2="0" y2="100%"><stop offset="0" stop-color="#fff" stop-opacity=".7"/><stop offset=".1" stop-color="#aaa" stop-opacity=".1"/><stop offset=".9" stop-color="#000" stop-opacity=".3"/><stop offset="1" stop-color="#000" stop-opacity=".5"/></linearGradient><clipPath id="r"><rect width="92" height="18" rx="4" fill="#fff"/></clipPath><g clip-path="url(#r)"><rect width="47" height="18" fill="#555"/><rect x="47" width="45" height="18" fill="'+ color +'"/><rect width="92" height="18" fill="url(#s)"/></g><g fill="#fff" text-anchor="middle" font-family="Verdana,Geneva,DejaVu Sans,sans-serif" text-rendering="geometricPrecision" font-size="110"><text aria-hidden="true" x="245" y="140" fill="#010101" fill-opacity=".3" transform="scale(.1)" textLength="370">behind</text><text x="245" y="130" transform="scale(.1)" fill="#fff" textLength="370">behind</text><text x="685" y="130" transform="scale(.1)" fill="#fff" textLength="' + badge_width(amount) + '">' + amount + '</text></g></svg>';
 }
 
 function getElementById_$(id) {
-  return $(toHtmlId(id));
+  return $('#' + id);
 }
 
 function getTdValue(rows, index, col) {
@@ -99,9 +100,9 @@ function commits_count(request, table_body, table_row) {
     } else {
       table_row.append(
           $('<td>').html(UF_TABLE_SEPARATOR),
-          $('<td>').html(ahead_badge(response.ahead_by)),
+          $('<td>', {class: "uf_badge"}).html(ahead_badge(response.ahead_by)),
           $('<td>').html(UF_TABLE_SEPARATOR),
-          $('<td>').html(behind_badge(response.behind_by))
+          $('<td>', {class: "uf_badge"}).html(behind_badge(response.behind_by))
       )
     }
 
