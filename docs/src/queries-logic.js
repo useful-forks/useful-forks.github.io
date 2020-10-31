@@ -19,8 +19,8 @@ const UF_TABLE_SEPARATOR  = "&nbsp;|&nbsp;";
 const FORKS_PER_PAGE = 100; // enforced by GitHub API
 
 /* Variables that should be cleared for every new query. */
-let INITIAL_QUERY_USER = ""
-let REQUESTS_COUNTER   = 0
+let INITIAL_QUERY_USER = "";
+let REQUESTS_COUNTER   = 0;
 
 
 function allRequestsAreDone() {
