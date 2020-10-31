@@ -29,6 +29,18 @@ const UF_TABLE_SEPARATOR  = "&nbsp;|&nbsp;";
 
 const FORKS_PER_PAGE = 100; // enforced by GitHub API
 
+let REQUESTS_COUNTER = 0; // to know when it's over
+
+
+function allRequestsAreDone() {
+  return REQUESTS_COUNTER <= 0;
+}
+
+function checkIfAllRequestsAreDone() {
+  if (allRequestsAreDone()) {
+    sortTable();
+  }
+}
 
 function extract_username_from_fork(combined_name) {
   return combined_name.split('/')[0];
@@ -54,11 +66,15 @@ function getElementById_$(id) {
 }
 
 function getTdValue(rows, index, col) {
-  return rows.item(index).getElementsByTagName('td').item(col).getAttribute("value");
+  return Number(rows.item(index).getElementsByTagName('td').item(col).getAttribute("value"));
+}
+
+function sortTable() {
+  sortTableColumn(UF_ID_TABLE, 1);
 }
 
 /** 'sortColumn' index starts at 0.   https://stackoverflow.com/a/37814596/9768291 */
-function sortTable(table_id, sortColumn){
+function sortTableColumn(table_id, sortColumn){
   let tableData = document.getElementById(table_id).getElementsByTagName('tbody').item(0);
   let rows = tableData.getElementsByTagName('tr');
   for(let i = 0; i < rows.length - 1; i++) {
@@ -88,6 +104,10 @@ function commits_count(request, table_body, table_row) {
           $('<td>').html(behind_badge(response.behind_by))
       )
     }
+
+    /* Detection of final request. */
+    REQUESTS_COUNTER--;
+    checkIfAllRequestsAreDone();
   }
 }
 
@@ -95,7 +115,19 @@ function commits_count(request, table_body, table_row) {
 function commits_count_failure(table_row) {
   return () => {
     table_row.remove();
+
+    /* Detection of final request. */
+    REQUESTS_COUNTER--;
+    checkIfAllRequestsAreDone();
   }
+}
+
+function clearMsg() {
+  getElementById_$(UF_ID_MSG).html("");
+}
+
+function getTableBody() {
+  return getElementById_$(UF_ID_TABLE).find($("tbody"));
 }
 
 /** To use the Access Token with a request. */
@@ -131,7 +163,7 @@ function build_fork_element_html(table_body, combined_name, num_stars, num_watch
   const NEW_ROW = $('<tr>', {id: extract_username_from_fork(combined_name), class: "useful_forks_repo"});
   table_body.append(
       NEW_ROW.append(
-          $('<td>').html(svg_literal_fork + ' <a href=https://github.com/' + combined_name + '>' + combined_name + '</a>'),
+          $('<td>').html(svg_literal_fork + ' <a href=https://github.com/' + combined_name + ' target="_blank" rel="noopener noreferrer">' + combined_name + '</a>'),
           $('<td>').html(UF_TABLE_SEPARATOR + svg_literal_star + ' x ' + num_stars).attr("value", num_stars),
           $('<td>').html(UF_TABLE_SEPARATOR + svg_literal_eye + ' x ' + num_watches).attr("value", num_watches),
           $('<td>').html(UF_TABLE_SEPARATOR + svg_literal_fork + ' x ' + num_forks).attr("value", num_forks)
@@ -145,17 +177,18 @@ function add_fork_elements(forkdata_array, user, repo) {
   if (!forkdata_array || forkdata_array.length === 0)
     return;
 
-  getElementById_$(UF_ID_MSG).html("");
-  let table_body = getElementById_$(UF_ID_TABLE).find("tbody");
+  clearMsg();
 
-  for (let i = 0; i < Math.min(FORKS_PER_PAGE, forkdata_array.length); ++i) {
+  let table_body = getTableBody();
+  for (let i = 0; i < forkdata_array.length; ++i) {
     const elem_ref = forkdata_array[i];
 
     /* Basic data (stars, watchers, forks). */
     const NEW_ROW = build_fork_element_html(table_body, elem_ref.full_name, elem_ref.stargazers_count, elem_ref.watchers_count, elem_ref.forks_count);
 
     /* Commits diff data (ahead/behind). */
-    let request = authenticatedRequestHeaderFactory('https://api.github.com/repos/' + user + '/' + repo + '/compare/master...' + extract_username_from_fork(elem_ref.full_name) + ':master');
+    const API_REQUEST_URL = 'https://api.github.com/repos/' + user + '/' + repo + '/compare/master...' + extract_username_from_fork(elem_ref.full_name) + ':master';
+    let request = authenticatedRequestHeaderFactory(API_REQUEST_URL);
     request.onreadystatechange = onreadystatechangeFactory(request, commits_count(request, table_body, NEW_ROW), commits_count_failure(NEW_ROW));
     request.send();
 
@@ -168,16 +201,21 @@ function add_fork_elements(forkdata_array, user, repo) {
 
 /** Paginated request. Pages index start at 1. */
 function request_fork_page(page_number, user, repo) {
-  let request = authenticatedRequestHeaderFactory('https://api.github.com/repos/' + user + '/' + repo + '/forks?sort=stargazers&per_page=' + FORKS_PER_PAGE + '&page=' + page_number)
+  const API_REQUEST_URL = 'https://api.github.com/repos/' + user + '/' + repo + '/forks?sort=stargazers&per_page=' + FORKS_PER_PAGE + '&page=' + page_number;
+  let request = authenticatedRequestHeaderFactory(API_REQUEST_URL);
   request.onreadystatechange = onreadystatechangeFactory(request,
       () => {
         const response = JSON.parse(request.responseText);
+
+        /* On empty response (repo has not been forked). */
         if (!response || response.length === 0) {
           if (page_number === 1) {
             getElementById_$(UF_ID_MSG).html(UF_MSG_NO_FORKS);
           }
           return;
         }
+
+        REQUESTS_COUNTER += response.length; // to keep track of when the query ends
 
         /* Pagination (beyond 100 forks). */
         const link_header = request.getResponseHeader("link");
@@ -188,13 +226,14 @@ function request_fork_page(page_number, user, repo) {
           }
         }
 
-        /* Half-assed sort. (todo: redo this) */
-        $( () => {
-          sortTable(UF_ID_TABLE, 1);
-        });
+        sortTable();
 
         /* Populate the table. */
         add_fork_elements(response, user, repo);
+      },
+      () => {
+        getElementById_$(UF_ID_MSG).html(UF_MSG_ERROR);
+        checkIfAllRequestsAreDone();
       });
   request.send();
 }
