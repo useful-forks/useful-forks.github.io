@@ -24,7 +24,7 @@ You can query repository directly with the URL. Here is an example: https://usef
 ## Chrome Extension (WIP)
 Not published yet. If you want to install it:
 1. Clone this repository
-2. Change the [script file](project/useful-forks.js) so that it includes an [Access Token](https://github.com/settings/tokens/new?scopes=repo&description=UsefulForks).
+2. Change the [script file](project/useful-forks.js) so that it includes an [Access Token](https://github.com/settings/tokens/new?scopes=public_repo&description=UsefulForks).
 3. Go to the `chrome://extensions` URL
 4. Enable `Developer mode` (switch at the top-right)
 5. Click `Load unpacked` (button at the top-left)
