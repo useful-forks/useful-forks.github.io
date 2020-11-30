@@ -23,6 +23,7 @@ tr:nth-child(even) {background-color: #f5f5f5;}
 const UF_MSG_HEADER       = "<b>Useful forks</b>";
 const UF_MSG_NO_FORKS     = "No one forked this specific repository.";
 const UF_MSG_SCANNING     = "Currently scanning all the forks.";
+const UF_MSG_ERROR        = "There seems to have been an error while scanning forks.";
 const UF_MSG_EMPTY_FILTER = "All the forks have been filtered out: you can now rest easy!";
 const UF_MSG_API_RATE     = "<b>Exceeded GitHub API rate-limits.</b>";
 const UF_TABLE_SEPARATOR  = "&nbsp;|&nbsp;";
