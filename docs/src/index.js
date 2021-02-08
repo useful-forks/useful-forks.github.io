@@ -102,18 +102,21 @@ function drawAddTokenBtn(accessToken) {
   JQ_POPUP_TITLE.html(verb + ' GitHub Access Token');
 }
 
-function automaticSearch(split_url) {
-  JQ_REPO_FIELD.val(split_url[1]);
+function automaticSearch(searchValue) {
+  JQ_REPO_FIELD.val(searchValue);
   JQ_SEARCH_BTN.click();
 }
 
-/* Automatically queries when an URL parameter is present. */
-let url = window.location.href.split('?repository=');
-if (url.length === 2) {
-  automaticSearch(url);
-} else {
-  url = window.location.href.split('?repo=');
-  if (url.length === 2) {
-    automaticSearch(url);
+function getRepoNameFromUrl() {
+  let repo = new URLSearchParams(location.search).get('repo');
+  if (!repo) {
+    repo = new URLSearchParams(location.search).get('repository');
   }
+  return repo;
+}
+
+/* Automatically queries when an URL parameter is present. */
+const query = getRepoNameFromUrl();
+if (query) {
+  automaticSearch(query);
 }
