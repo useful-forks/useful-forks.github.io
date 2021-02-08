@@ -52,7 +52,7 @@ function initiate_search() {
   let values = JQ_REPO_FIELD.val().split('/').filter(Boolean);
   let len = values.length;
 
-  if (len < 1) {
+  if (len < 2) {
     getElementById_$(UF_ID_MSG).html('Please enter a valid query: it should contain two strings separated by a "/"');
     return; // abort
   }
@@ -94,7 +94,7 @@ JQ_TOKEN_SAVE.click(event => {
 function drawAddTokenBtn(accessToken) {
   let verb = 'Add';
   if (accessToken) {
-    verb = 'Edit'
+    verb = 'Edit';
     JQ_TOKEN_FIELD.val(accessToken);
   }
   JQ_TOKEN_BTN.html('<img src="assets/settings-icon.png" alt="settings" />'
