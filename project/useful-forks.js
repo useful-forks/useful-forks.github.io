@@ -239,7 +239,7 @@ function request_fork_page(page_number, user, repo) {
 
 function prepare_display() {
   $('#network').prepend(
-      $('<div>', {id: UF_ID_WRAPPER}, {class: "float-right"}).append(
+      $('<div>', {id: UF_ID_WRAPPER, class: "float-right"}).append(
           $('<h4>',  {id: UF_ID_TITLE, html: UF_MSG_HEADER}),
           $('<div>', {id: UF_ID_MSG, html: UF_MSG_SCANNING}),
           $('<div>', {id: UF_ID_DATA}).append(
