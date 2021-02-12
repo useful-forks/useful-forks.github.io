@@ -1,6 +1,9 @@
-![logo](docs/assets/useful-forks-logo.png)
+![useful-forks logo](docs/assets/useful-forks-logo.png "useful-forks logo")
 
 # Useful Forks
+[![License](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/useful-forks/useful-forks.github.io/blob/master/LICENSE)
+[![Issues](https://img.shields.io/github/issues/useful-forks/useful-forks.github.io?logo=github&color=brightgreen&label=issues%20%28help%20appreciated%29)](https://github.com/useful-forks/useful-forks.github.io/issues)
+
 Adding a sorted list of starred forks to the GitHub forks page.
 Results are filtered out if there were never any commits pushed since the fork was created.
 
@@ -13,6 +16,7 @@ And when you go looking for those interesting forks, you find yourself searching
 The project is released as:
 1. A website: great for people that just want to use this tool every now and then.
 2. A Chrome Extension: has the advantage of always performing the search whenever you open a project's GitHub Forks page.
+3. A feature in [`refined-github`](https://github.com/sindresorhus/refined-github)
 
 ## Website
 The project is [available online](https://useful-forks.github.io/) thanks to GitHub Pages.
@@ -39,12 +43,20 @@ Once it's activated, the extension will automatically trigger itself whenever yo
 
 This Activity Diagram (UML) should clarify a bit the inner-workings of the algorithm, and why it may some times require so many API calls.
 
+## `refined-github`
+[`refined-github`](https://github.com/sindresorhus/refined-github) is an ensemble of tools and tweaks aimed at improving your GitHub experience.
+
+`useful-forks` is part of the dozens of features provided. In that context, it appears as a button which redirects you to the [`useful-forks` website](https://useful-forks.github.io/):
+
+![screenshot](https://user-images.githubusercontent.com/38117856/107463541-542e8500-6b2c-11eb-8b25-082f344c1587.png)
+
 ## For contributors
 If you want to help, the structure of the repo is rather simple. In terms of folders:
 * `docs` contains the website
 * `project` contains the Chrome Extension
 
 ### To-do
+* Fix the [Issues](https://github.com/useful-forks/useful-forks.github.io/issues) (if there are any)
 * Cache responses for a little while 
   * https://docs.github.com/en/free-pro-team@latest/rest/guides/getting-started-with-the-rest-api#conditional-requests
   * https://docs.github.com/en/free-pro-team@latest/rest/overview/resources-in-the-rest-api#conditional-requests
