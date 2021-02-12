@@ -3,6 +3,10 @@
   padding-bottom: 20px;
 }
 
+#useful_forks_inject {
+  margin-top: 20px;
+}
+
 .uf_badge svg {
   display: table-cell;
   padding-top: 3px;

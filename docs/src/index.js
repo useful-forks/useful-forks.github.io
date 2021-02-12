@@ -29,7 +29,6 @@ drawAddTokenBtn(token);
 /* Initialize the structure used by the 'queries-logic.js' */
 $('#useful_forks_inject').append(
     $('<div>', {id: UF_ID_WRAPPER}).append(
-        $('<br>'),
         $('<div>', {id: UF_ID_MSG}).html(INIT_MSG),
         $('<div>', {id: UF_ID_DATA}).append(
             $('<table>', {id: UF_ID_TABLE}).append(
