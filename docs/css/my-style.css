@@ -1,6 +1,12 @@
 #useful_forks_msg {
   text-align: center;
+  padding-top: 20px;
   padding-bottom: 20px;
+}
+
+#useful_forks_header {
+  text-align: center;
+  margin-bottom: 35px;
 }
 
 #useful_forks_inject {

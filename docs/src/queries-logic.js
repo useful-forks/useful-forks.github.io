@@ -1,12 +1,14 @@
 let GITHUB_ACCESS_TOKEN = ""
 
 const UF_ID_WRAPPER = 'useful_forks_wrapper';
+const UF_ID_HEADER  = 'useful_forks_header';
 const UF_ID_MSG     = 'useful_forks_msg';
 const UF_ID_DATA    = 'useful_forks_data';
 const UF_ID_TABLE   = 'useful_forks_table';
 
 const svg_literal_fork = '<svg class="octicon octicon-repo-forked v-align-text-bottom" viewBox="0 0 10 16" version="1.1" width="10" height="16" aria-hidden="true"><path fill-rule="evenodd" d="M8 1a1.993 1.993 0 00-1 3.72V6L5 8 3 6V4.72A1.993 1.993 0 002 1a1.993 1.993 0 00-1 3.72V6.5l3 3v1.78A1.993 1.993 0 005 15a1.993 1.993 0 001-3.72V9.5l3-3V4.72A1.993 1.993 0 008 1zM2 4.2C1.34 4.2.8 3.65.8 3c0-.65.55-1.2 1.2-1.2.65 0 1.2.55 1.2 1.2 0 .65-.55 1.2-1.2 1.2zm3 10c-.66 0-1.2-.55-1.2-1.2 0-.65.55-1.2 1.2-1.2.65 0 1.2.55 1.2 1.2 0 .65-.55 1.2-1.2 1.2zm3-10c-.66 0-1.2-.55-1.2-1.2 0-.65.55-1.2 1.2-1.2.65 0 1.2.55 1.2 1.2 0 .65-.55 1.2-1.2 1.2z"></path></svg>';
 const svg_literal_star = '<svg aria-label="star" height="16" class="octicon octicon-star v-align-text-bottom" viewBox="0 0 14 16" version="1.1" width="14" role="img"><path fill-rule="evenodd" d="M14 6l-4.9-.64L7 1 4.9 5.36 0 6l3.6 3.26L2.67 14 7 11.67 11.33 14l-.93-4.74L14 6z"></path></svg>';
+const svg_literal_eye  = '<svg class="octicon octicon-eye v-align-text-bottom" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"><path fill-rule="evenodd" d="M8.06 2C3 2 0 8 0 8s3 6 8.06 6C13 14 16 8 16 8s-3-6-7.94-6zM8 12c-2.2 0-4-1.78-4-4 0-2.2 1.8-4 4-4 2.22 0 4 1.8 4 4 0 2.22-1.78 4-4 4zm2-4c0 1.11-.89 2-2 2-1.11 0-2-.89-2-2 0-1.11.89-2 2-2 1.11 0 2 .89 2 2z"></path></svg>';
 
 const UF_MSG_NO_FORKS     = "No one forked this specific repository.";
 const UF_MSG_SCANNING     = "Currently scanning all the forks.";
@@ -26,10 +28,20 @@ function allRequestsAreDone() {
   return REQUESTS_COUNTER <= 0;
 }
 
+function enableQueryFields() {
+  JQ_SEARCH_BTN.removeClass('is-loading');
+  JQ_REPO_FIELD.prop('disabled', false);
+}
+
+function disableQueryFields() {
+  JQ_REPO_FIELD.prop('disabled', true);
+  JQ_SEARCH_BTN.addClass('is-loading');
+}
+
 function checkIfAllRequestsAreDone() {
   if (allRequestsAreDone()) {
     sortTable();
-    getElementById_$("searchBtn").removeClass('is-loading');
+    enableQueryFields();
   }
 }
 
@@ -113,18 +125,31 @@ function commits_count_failure(table_row) {
   }
 }
 
-function clearMsg() {
-  getElementById_$(UF_ID_MSG).html("");
+function isEmpty(aList) {
+  return (!aList || aList.length === 0);
 }
 
 function getTableBody() {
   return getElementById_$(UF_ID_TABLE).find($("tbody"));
 }
 
+function clearMsg() {
+  getElementById_$(UF_ID_MSG).html("");
+}
+
+function clearHeader() {
+  getElementById_$(UF_ID_HEADER).html("");
+}
+
+function clearTable() {
+  getTableBody().empty();
+}
+
 /** Used to reset the state for a brand new request. */
 function clear_old_data() {
-  getTableBody().empty();
+  clearHeader();
   clearMsg();
+  clearTable();
   INITIAL_QUERY_USER = "";
   REQUESTS_COUNTER = 0;
 }
@@ -148,6 +173,7 @@ function onreadystatechangeFactory(xhr, successFn, failureFn) {
       } else if (xhr.status === 403) {
         console.warn('Looks like the rate-limit was exceeded.');
         getElementById_$(UF_ID_MSG).html(UF_MSG_API_RATE);
+        checkIfAllRequestsAreDone();
         if (!GITHUB_ACCESS_TOKEN) {
           getElementById_$("useful_forks_token_popup").addClass('is-active'); // opens the Token dialog
         }
@@ -161,14 +187,30 @@ function onreadystatechangeFactory(xhr, successFn, failureFn) {
   };
 }
 
+function getRepoCol(full_name) {
+  return svg_literal_fork + ' <a href=https://github.com/' + full_name + ' target="_blank" rel="noopener noreferrer">' + full_name + '</a>';
+}
+
+function getStarCol(num_stars) {
+  return svg_literal_star + ' x ' + num_stars;
+}
+
+function getForkCol(num_forks) {
+  return svg_literal_fork + ' x ' + num_forks;
+}
+
+function getWatchCol(num_watchers) {
+  return svg_literal_eye + ' x ' + num_watchers;
+}
+
 /** Dynamically fills the second part of the rows. */
 function build_fork_element_html(table_body, combined_name, num_stars, num_forks) {
   const NEW_ROW = $('<tr>', {id: extract_username_from_fork(combined_name), class: "useful_forks_repo"});
   table_body.append(
       NEW_ROW.append(
-          $('<td>').html(svg_literal_fork + ' <a href=https://github.com/' + combined_name + ' target="_blank" rel="noopener noreferrer">' + combined_name + '</a>'),
-          $('<td>').html(UF_TABLE_SEPARATOR + svg_literal_star + ' x ' + num_stars).attr("value", num_stars),
-          $('<td>').html(UF_TABLE_SEPARATOR + svg_literal_fork + ' x ' + num_forks).attr("value", num_forks)
+          $('<td>').html(getRepoCol(combined_name)),
+          $('<td>').html(UF_TABLE_SEPARATOR + getStarCol(num_stars)).attr("value", num_stars),
+          $('<td>').html(UF_TABLE_SEPARATOR + getForkCol(num_forks)).attr("value", num_forks)
       )
   );
   return NEW_ROW;
@@ -176,7 +218,7 @@ function build_fork_element_html(table_body, combined_name, num_stars, num_forks
 
 /** Prepares, appends, and updates dynamically a table row. */
 function add_fork_elements(forkdata_array, user, repo) {
-  if (!forkdata_array || forkdata_array.length === 0)
+  if (isEmpty(forkdata_array))
     return;
 
   clearMsg();
@@ -201,8 +243,7 @@ function add_fork_elements(forkdata_array, user, repo) {
   }
 }
 
-/** Paginated request. Pages index start at 1. */
-function request_fork_page(page_number, user, repo, token) {
+function initiateRequest(user, repo, token) {
   if (token) {
     GITHUB_ACCESS_TOKEN = token;
   }
@@ -210,23 +251,51 @@ function request_fork_page(page_number, user, repo, token) {
     INITIAL_QUERY_USER = user;
   }
 
-  if (page_number === 1 && INITIAL_QUERY_USER === user) {
-    getElementById_$(UF_ID_MSG).html(UF_MSG_SCANNING);
-  }
+  disableQueryFields();
 
+  getElementById_$(UF_ID_MSG).html(UF_MSG_SCANNING);
+  initial_request(user, repo);
+}
+
+/** Updates header with Queried Repo info, and initiates recursive forks search */
+function initial_request(user, repo) {
+  const API_REQUEST_URL = 'https://api.github.com/repos/' + user + '/' + repo;
+  let request = authenticatedRequestHeaderFactory(API_REQUEST_URL);
+  request.onreadystatechange = onreadystatechangeFactory(request,
+      () => {
+        const response = JSON.parse(request.responseText);
+
+        if (isEmpty(response))
+          return;
+
+        let html_txt = getRepoCol(response.full_name);
+        html_txt += UF_TABLE_SEPARATOR + getStarCol(response.stargazers_count);
+        html_txt += UF_TABLE_SEPARATOR + getWatchCol(response.subscribers_count);
+        html_txt += UF_TABLE_SEPARATOR + getForkCol(response.forks_count);
+        getElementById_$(UF_ID_HEADER).html('<b>Queried repository</b>:   ' + html_txt);
+
+        if (response.forks_count > 0) {
+          request_fork_page(1, user, repo);
+        } else {
+          getElementById_$(UF_ID_MSG).html(UF_MSG_NO_FORKS);
+          enableQueryFields();
+        }
+      },
+      () => getElementById_$(UF_ID_MSG).html(UF_MSG_ERROR)
+  );
+  request.send();
+}
+
+/** Paginated request. Pages index start at 1. */
+function request_fork_page(page_number, user, repo) {
   const API_REQUEST_URL = 'https://api.github.com/repos/' + user + '/' + repo + '/forks?sort=stargazers&per_page=' + FORKS_PER_PAGE + '&page=' + page_number;
   let request = authenticatedRequestHeaderFactory(API_REQUEST_URL);
   request.onreadystatechange = onreadystatechangeFactory(request,
       () => {
         const response = JSON.parse(request.responseText);
 
-        /* On empty response (repo has not been forked). */
-        if (!response || response.length === 0) {
-          if (page_number === 1) {
-            getElementById_$(UF_ID_MSG).html(UF_MSG_NO_FORKS);
-          }
+        if (isEmpty(response)) // repo has not been forked
           return;
-        }
 
         REQUESTS_COUNTER += response.length; // to keep track of when the query ends
 
@@ -247,6 +316,6 @@ function request_fork_page(page_number, user, repo, token) {
       () => {
         getElementById_$(UF_ID_MSG).html(UF_MSG_ERROR);
         checkIfAllRequestsAreDone();
-      });
+  });
   request.send();
 }

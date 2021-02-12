@@ -8,7 +8,7 @@ const JQ_TOKEN_BTN   = $('#addTokenBtn');
 const JQ_POPUP       = $('#useful_forks_token_popup');
 
 
-const INIT_MSG = "<br/><b>Introducing:</b><br/><br/>"
+const INIT_MSG = "<b>Introducing:</b><br/><br/>"
     + "<img src='assets/useful-forks-logo.png' alt='useful forks logo' width='500'/><br/><br/>"
     + "It aims at increasing the discoverability of <b>useful</b> forks of open-source projects.<br/>"
     + "Simply type a repository's URL in the Text Field above. Both of those examples are valid entries: <br/>"
@@ -29,6 +29,7 @@ drawAddTokenBtn(token);
 /* Initialize the structure used by the 'queries-logic.js' */
 $('#useful_forks_inject').append(
     $('<div>', {id: UF_ID_WRAPPER}).append(
+        $('<div>', {id: UF_ID_HEADER}),
         $('<div>', {id: UF_ID_MSG}).html(INIT_MSG),
         $('<div>', {id: UF_ID_DATA}).append(
             $('<table>', {id: UF_ID_TABLE}).append(
@@ -62,9 +63,8 @@ function initiate_search() {
     return; // abort
   }
 
-  JQ_SEARCH_BTN.addClass('is-loading');
   clear_old_data();
-  request_fork_page(1, values[len-2], values[len-1], token);
+  initiateRequest(queryValues[len - 2], queryValues[len - 1], token);
 }
 
 JQ_SEARCH_BTN.click(event => {
