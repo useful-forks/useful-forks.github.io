@@ -7,6 +7,10 @@
   margin-top: 20px;
 }
 
+.modal-card-foot {
+  justify-content: flex-end !important;
+}
+
 .uf_badge svg {
   display: table-cell;
   padding-top: 3px;
