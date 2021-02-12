@@ -16,7 +16,7 @@ And when you go looking for those interesting forks, you find yourself searching
 ## Table of Content
 * [Releases](#releases)
   * [Website](#website)
-  * [Chrome Extension](#chrome-extension) (WIP)
+  * [Chrome Extension](#chrome-extension-wip) (WIP)
   * [`refined-github`](#refined-github)
 * [How it works](#how-it-works)
 * [Contributing](#contributing)
