@@ -24,20 +24,20 @@ And when you go looking for those interesting forks, you find yourself searching
 
 ---
 
-# Releases
+## Releases
 The project is released as:
 1. A website: great for people that just want to use this tool every now and then.
 2. A Chrome Extension: has the advantage of always performing the search whenever you open a project's GitHub Forks page.
 3. A feature in [`refined-github`](https://github.com/sindresorhus/refined-github)
 
-## Website
+### Website
 The project is [available online](https://useful-forks.github.io/) thanks to GitHub Pages.
 
 You can query repository directly with the URL. Here is an example: https://useful-forks.github.io/?repository=kotcrab/vis-ui
 
 ![website example](media/website_example_1.png)
 
-## Chrome Extension (WIP)
+### Chrome Extension (WIP)
 Not published yet. If you want to install it:
 1. Clone this repository
 2. Change the [script file](project/useful-forks.js) so that it includes an [Access Token](https://github.com/settings/tokens/new?scopes=public_repo&description=UsefulForks).
@@ -50,19 +50,19 @@ Once it's activated, the extension will automatically trigger itself whenever yo
 
 ![example](media/demo.gif)
 
-## `refined-github`
+### `refined-github`
 [`refined-github`](https://github.com/sindresorhus/refined-github) is an ensemble of tools and tweaks aimed at improving your GitHub experience.
 
 `useful-forks` is part of the dozens of features provided. In that context, it appears as a button which redirects you to the [`useful-forks` website](https://useful-forks.github.io/):
 
 ![screenshot](https://user-images.githubusercontent.com/38117856/107463541-542e8500-6b2c-11eb-8b25-082f344c1587.png)
 
-# How it works
+## How it works
 ![Activity_Diagram](media/query-diagram.png)
 
 This Activity Diagram (UML) should clarify a bit the inner-workings of the algorithm, and why it may some times require so many API calls.
 
-# Contributing
+## Contributing
 If you want to help, the structure of the repo is rather simple. In terms of folders:
 * `docs` contains the website
 * `project` contains the Chrome Extension
@@ -79,7 +79,7 @@ If you want to help, the structure of the repo is rather simple. In terms of fol
     * https://developer.chrome.com/extensions/examples/tutorials/getstarted.zip
   * Allow people to input their Access Token to increase API limits (from Extension's settings rather than through script)
 
-# Credits
+## Credits
 * Thanks to [raeleus](https://github.com/raeleus) for his design of the logo!
 * Thanks to [jkunstwald](https://github.com/jkunstwald/) for allowing me to apply the MIT license to what has been expanded from [his own initial work](https://github.com/jkunstwald/useful-forks). Here is a list of the improvements that were made made:
   * Recursive search of all sub-forks
