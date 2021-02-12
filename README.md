@@ -88,3 +88,4 @@ If you want to help, the structure of the repo is rather simple. In terms of fol
   * Added some minimal feedback for certain edge-cases
   * Created an actual website for the feature
   * Position the chrome extension's results where they won't move the other links of the page
+* Thanks to [`star-history`](https://github.com/timqian/star-history/tree/master/website)'s open-source website which I adapted for this project
