@@ -40,13 +40,13 @@ You can query repository directly with the URL. Here is an example: https://usef
 ### Chrome Extension (WIP)
 Not published yet. If you want to install it:
 1. Clone this repository
-2. Change the [script file](project/useful-forks.js) so that it includes an [Access Token](https://github.com/settings/tokens/new?scopes=public_repo&description=UsefulForks).
+2. Change the [script file](project/useful-forks.js) so that `GITHUB_ACCESS_TOKEN`'s value is that of an [Access Token](https://github.com/settings/tokens/new?scopes=public_repo&description=UsefulForks)
 3. Go to the `chrome://extensions` URL
 4. Enable `Developer mode` (switch at the top-right)
 5. Click `Load unpacked` (button at the top-left)
 6. Select the [`project` folder](project)
 
-Once it's activated, the extension will automatically trigger itself whenever you open a Fork page, as shown by the GIF below:
+Once it's activated, the extension will automatically trigger itself whenever you open a Fork page, as shown by the (outdated) GIF below:
 
 ![example](media/demo.gif)
 
