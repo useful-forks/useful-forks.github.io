@@ -48,7 +48,9 @@ function initiate_search() {
     return; // abort
   }
 
-  let values = JQ_REPO_FIELD.val().split('/').filter(Boolean);
+  let inputValue = JQ_REPO_FIELD.val();
+  let queried = inputValue ? inputValue : "payne911/PieMenu";
+  let values = queried.split('/').filter(Boolean);
   let len = values.length;
 
   if (len < 2) {
