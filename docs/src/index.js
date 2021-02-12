@@ -73,25 +73,32 @@ JQ_SEARCH_BTN.click(event => {
 });
 
 JQ_REPO_FIELD.keyup(event => {
-  if (event.keyCode === 13) { // only when pressing 'ENTER'
+  if (event.keyCode === 13) { // 'ENTER'
     initiate_search();
+  }
+  if (event.keyCode === 27) { // 'ESC'
+    closeTokenDialog();
   }
 });
 
-JQ_TOKEN_BTN.click(event => {
-  event.preventDefault();
-  JQ_POPUP.addClass('is-active');
-  JQ_TOKEN_FIELD.focus();
-});
-
-function tokenFocusReset() {
+function closeTokenDialog() {
   JQ_POPUP.removeClass('is-active');
   JQ_REPO_FIELD.focus();
 }
 
+function openTokenDialog() {
+  JQ_POPUP.addClass('is-active');
+  JQ_TOKEN_FIELD.focus();
+}
+
+JQ_TOKEN_BTN.click(event => {
+  event.preventDefault();
+  openTokenDialog();
+});
+
 JQ_TOKEN_CLOSE.click(event => {
   event.preventDefault();
-  tokenFocusReset();
+  closeTokenDialog();
 });
 
 JQ_TOKEN_SAVE.click(event => {
@@ -99,7 +106,7 @@ JQ_TOKEN_SAVE.click(event => {
   const INPUT_TOKEN = JQ_TOKEN_FIELD.val();
   localStorage.setItem(GITHUB_ACCESS_TOKEN_STORAGE_KEY, INPUT_TOKEN);
   drawAddTokenBtn(INPUT_TOKEN);
-  tokenFocusReset();
+  closeTokenDialog();
 });
 
 JQ_TOKEN_FIELD.keyup(event => {
