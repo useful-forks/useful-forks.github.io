@@ -38,7 +38,12 @@ $('#useful_forks_inject').append(
     )
 );
 
-
+function getQueryOrDefault(defaultVal) {
+  if (!JQ_REPO_FIELD.val()) {
+    JQ_REPO_FIELD.val(defaultVal);
+  }
+  return JQ_REPO_FIELD.val();
+}
 
 /** Extracts 'user' and 'repo' values from potential URL inputs. */
 function initiate_search() {
@@ -48,11 +53,10 @@ function initiate_search() {
     return; // abort
   }
 
-  let inputValue = JQ_REPO_FIELD.val();
-  let queried = inputValue ? inputValue : "payne911/PieMenu";
-  let values = queried.split('/').filter(Boolean);
-  let len = values.length;
+  let queryString = getQueryOrDefault("payne911/PieMenu");
+  let queryValues = queryString.split('/').filter(Boolean);
 
+  let len = queryValues.length;
   if (len < 2) {
     getElementById_$(UF_ID_MSG).html('Please enter a valid query: it should contain two strings separated by a "/"');
     return; // abort
