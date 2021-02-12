@@ -81,19 +81,31 @@ JQ_REPO_FIELD.keyup(event => {
 JQ_TOKEN_BTN.click(event => {
   event.preventDefault();
   JQ_POPUP.addClass('is-active');
+  JQ_TOKEN_FIELD.focus();
 });
+
+function tokenFocusReset() {
+  JQ_POPUP.removeClass('is-active');
+  JQ_REPO_FIELD.focus();
+}
 
 JQ_TOKEN_CLOSE.click(event => {
   event.preventDefault();
-  JQ_POPUP.removeClass('is-active');
+  tokenFocusReset();
 });
 
 JQ_TOKEN_SAVE.click(event => {
   event.preventDefault();
   const INPUT_TOKEN = JQ_TOKEN_FIELD.val();
   localStorage.setItem(GITHUB_ACCESS_TOKEN_STORAGE_KEY, INPUT_TOKEN);
-  JQ_POPUP.removeClass('is-active');
   drawAddTokenBtn(INPUT_TOKEN);
+  tokenFocusReset();
+});
+
+JQ_TOKEN_FIELD.keyup(event => {
+  if (event.keyCode === 13) { // only when pressing 'ENTER'
+    JQ_TOKEN_SAVE.click();
+  }
 });
 
 function drawAddTokenBtn(accessToken) {
