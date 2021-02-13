@@ -176,14 +176,14 @@ function onreadystatechangeFactory(xhr, successFn, failureFn) {
       if (xhr.status === 200) {
         successFn();
       } else if (xhr.status === 403) {
-        console.warn('Looks like the rate-limit was exceeded.');
+        console.warn('[useful-forks] Looks like the rate-limit was exceeded.');
         getElementById_$(UF_ID_MSG).html(UF_MSG_API_RATE);
         checkIfAllRequestsAreDone();
         if (!GITHUB_ACCESS_TOKEN) {
           openTokenDialog(); // opens the Token dialog
         }
       } else {
-        console.warn('GitHub API returned status:', xhr.status);
+        console.warn('[useful-forks] GitHub API returned status:', xhr.status);
         failureFn();
       }
     } else {
