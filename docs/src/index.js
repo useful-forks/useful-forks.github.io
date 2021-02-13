@@ -76,9 +76,6 @@ JQ_REPO_FIELD.keyup(event => {
   if (event.keyCode === 13) { // 'ENTER'
     initiate_search();
   }
-  if (event.keyCode === 27) { // 'ESC'
-    closeTokenDialog();
-  }
 });
 
 function closeTokenDialog() {
@@ -110,8 +107,11 @@ JQ_TOKEN_SAVE.click(event => {
 });
 
 JQ_TOKEN_FIELD.keyup(event => {
-  if (event.keyCode === 13) { // only when pressing 'ENTER'
+  if (event.keyCode === 13) { // 'ENTER'
     JQ_TOKEN_SAVE.click();
+  }
+  if (event.keyCode === 27) { // 'ESC'
+    closeTokenDialog();
   }
 });
 
