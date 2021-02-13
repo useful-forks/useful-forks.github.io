@@ -263,7 +263,7 @@ function initiateProcess(user, repo, token) {
 
 /** Updates header with Queried Repo info, and initiates recursive forks search */
 function initial_request(user, repo) {
-  const API_REQUEST_URL = 'https://api.github.com/repos/' + user + '/' + repo;
+  const API_REQUEST_URL = `https://api.github.com/repos/${user}/${repo}`;
   let request = authenticatedRequestHeaderFactory(API_REQUEST_URL);
   request.onreadystatechange = onreadystatechangeFactory(request,
       () => {
