@@ -193,7 +193,7 @@ function onreadystatechangeFactory(xhr, successFn, failureFn) {
 }
 
 function getRepoCol(full_name) {
-  return svg_literal_fork + ' <a href=https://github.com/' + full_name + ' target="_blank" rel="noopener noreferrer">' + full_name + '</a>';
+  return svg_literal_fork + ` <a href="https://github.com/${full_name}" target="_blank" rel="noopener noreferrer">${full_name}</a>`;
 }
 
 function getStarCol(num_stars) {
@@ -236,7 +236,7 @@ function add_fork_elements(forkdata_array, user, repo) {
     const NEW_ROW = build_fork_element_html(table_body, elem_ref.full_name, elem_ref.stargazers_count, elem_ref.forks_count);
 
     /* Commits diff data (ahead/behind). */
-    const API_REQUEST_URL = 'https://api.github.com/repos/' + user + '/' + repo + '/compare/master...' + extract_username_from_fork(elem_ref.full_name) + ':master';
+    const API_REQUEST_URL = `https://api.github.com/repos/${user}/${repo}/compare/master...${extract_username_from_fork(elem_ref.full_name)}:master`;
     let request = authenticatedRequestHeaderFactory(API_REQUEST_URL);
     request.onreadystatechange = onreadystatechangeFactory(request, commits_count(request, table_body, NEW_ROW), commits_count_failure(NEW_ROW));
     request.send();
@@ -248,7 +248,7 @@ function add_fork_elements(forkdata_array, user, repo) {
   }
 }
 
-function initiateRequest(user, repo, token) {
+function initiateProcess(user, repo, token) {
   if (token) {
     GITHUB_ACCESS_TOKEN = token;
   }
@@ -295,7 +295,7 @@ function initial_request(user, repo) {
 
 /** Paginated request. Pages index start at 1. */
 function request_fork_page(page_number, user, repo) {
-  const API_REQUEST_URL = 'https://api.github.com/repos/' + user + '/' + repo + '/forks?sort=stargazers&per_page=' + FORKS_PER_PAGE + '&page=' + page_number;
+  const API_REQUEST_URL = `https://api.github.com/repos/${user}/${repo}/forks?sort=stargazers&per_page=${FORKS_PER_PAGE}&page=${page_number}`;
   let request = authenticatedRequestHeaderFactory(API_REQUEST_URL);
   request.onreadystatechange = onreadystatechangeFactory(request,
       () => {

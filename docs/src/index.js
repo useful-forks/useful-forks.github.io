@@ -64,7 +64,7 @@ function initiate_search() {
   }
 
   clear_old_data();
-  initiateRequest(queryValues[len - 2], queryValues[len - 1], token);
+  initiateProcess(queryValues[len - 2], queryValues[len - 1], token);
 }
 
 JQ_SEARCH_BTN.click(event => {
