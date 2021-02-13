@@ -22,7 +22,7 @@ const FORKS_PER_PAGE = 100; // enforced by GitHub API
 /* Variables that should be cleared for every new query. */
 let TOTAL_FORKS                = 0;
 let INITIAL_QUERY_USER         = "";
-let RATE_LIMIT_EXCEEDED       = false;
+let RATE_LIMIT_EXCEEDED        = false;
 let TOTAL_API_CALLS_COUNTER    = 0;
 let ONGOING_REQUESTS_COUNTER   = 0;
 
