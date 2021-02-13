@@ -20,12 +20,14 @@ const UF_TABLE_SEPARATOR  = "&nbsp;|&nbsp;";
 const FORKS_PER_PAGE = 100; // enforced by GitHub API
 
 /* Variables that should be cleared for every new query. */
-let INITIAL_QUERY_USER = "";
-let REQUESTS_COUNTER   = 0;
+let TOTAL_FORKS                = 0;
+let INITIAL_QUERY_USER         = "";
+let TOTAL_API_CALLS_COUNTER    = 0;
+let ONGOING_REQUESTS_COUNTER   = 0;
 
 
 function allRequestsAreDone() {
-  return REQUESTS_COUNTER <= 0;
+  return ONGOING_REQUESTS_COUNTER <= 0 && TOTAL_API_CALLS_COUNTER >= TOTAL_FORKS;
 }
 
 function enableQueryFields() {
@@ -109,7 +111,7 @@ function commits_count(request, table_body, table_row) {
     }
 
     /* Detection of final request. */
-    REQUESTS_COUNTER--;
+    ONGOING_REQUESTS_COUNTER--;
     checkIfAllRequestsAreDone();
   }
 }
@@ -120,7 +122,7 @@ function commits_count_failure(table_row) {
     table_row.remove();
 
     /* Detection of final request. */
-    REQUESTS_COUNTER--;
+    ONGOING_REQUESTS_COUNTER--;
     checkIfAllRequestsAreDone();
   }
 }
@@ -150,8 +152,10 @@ function clear_old_data() {
   clearHeader();
   clearMsg();
   clearTable();
+  TOTAL_FORKS = 0;
   INITIAL_QUERY_USER = "";
-  REQUESTS_COUNTER = 0;
+  TOTAL_API_CALLS_COUNTER = 0;
+  ONGOING_REQUESTS_COUNTER = 0;
 }
 
 /** To use the Access Token with a request. */
@@ -162,6 +166,7 @@ function authenticatedRequestHeaderFactory(url) {
   if (GITHUB_ACCESS_TOKEN) {
     request.setRequestHeader("Authorization", "token " + GITHUB_ACCESS_TOKEN);
   }
+  TOTAL_API_CALLS_COUNTER++;
   return request;
 }
 
@@ -175,7 +180,7 @@ function onreadystatechangeFactory(xhr, successFn, failureFn) {
         getElementById_$(UF_ID_MSG).html(UF_MSG_API_RATE);
         checkIfAllRequestsAreDone();
         if (!GITHUB_ACCESS_TOKEN) {
-          getElementById_$("useful_forks_token_popup").addClass('is-active'); // opens the Token dialog
+          openTokenDialog(); // opens the Token dialog
         }
       } else {
         console.warn('GitHub API returned status:', xhr.status);
@@ -268,13 +273,15 @@ function initial_request(user, repo) {
         if (isEmpty(response))
           return;
 
+        TOTAL_FORKS = response.forks_count;
+
         let html_txt = getRepoCol(response.full_name);
         html_txt += UF_TABLE_SEPARATOR + getStarCol(response.stargazers_count);
         html_txt += UF_TABLE_SEPARATOR + getWatchCol(response.subscribers_count);
-        html_txt += UF_TABLE_SEPARATOR + getForkCol(response.forks_count);
+        html_txt += UF_TABLE_SEPARATOR + getForkCol(TOTAL_FORKS);
         getElementById_$(UF_ID_HEADER).html('<b>Queried repository</b>:   ' + html_txt);
 
-        if (response.forks_count > 0) {
+        if (TOTAL_FORKS > 0) {
           request_fork_page(1, user, repo);
         } else {
           getElementById_$(UF_ID_MSG).html(UF_MSG_NO_FORKS);
@@ -297,7 +304,7 @@ function request_fork_page(page_number, user, repo) {
         if (isEmpty(response)) // repo has not been forked
           return;
 
-        REQUESTS_COUNTER += response.length; // to keep track of when the query ends
+        ONGOING_REQUESTS_COUNTER += response.length; // to keep track of when the query ends
 
         /* Pagination (beyond 100 forks). */
         const link_header = request.getResponseHeader("link");

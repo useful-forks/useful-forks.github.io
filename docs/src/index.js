@@ -50,7 +50,7 @@ function getQueryOrDefault(defaultVal) {
 function initiate_search() {
 
   /* Checking if search is allowed. */
-  if (REQUESTS_COUNTER !== 0 || JQ_SEARCH_BTN.hasClass('is-loading')) {
+  if (ONGOING_REQUESTS_COUNTER !== 0 || JQ_SEARCH_BTN.hasClass('is-loading')) {
     return; // abort
   }
 
