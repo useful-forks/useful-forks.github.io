@@ -14,7 +14,7 @@ const UF_MSG_NO_FORKS     = "No one forked this specific repository.";
 const UF_MSG_SCANNING     = "Currently scanning all the forks.";
 const UF_MSG_ERROR        = "There seems to have been an error. (Maybe you had a typo in the provided input?)";
 const UF_MSG_EMPTY_FILTER = "All the forks have been filtered out: you can now rest easy!";
-const UF_MSG_API_RATE     = "<b>Exceeded GitHub API rate-limits.</b> Consider providing an <b>Access Token</b> if you haven't already (click the button at the top-right).<br/>The amount of API calls you are allowed to do will re-accumulate over time: you can try again later on.<br/>It's also possible that the queried repository has so many forks that it's impossible to scan it completely without running out of API calls. :(";
+const UF_MSG_API_RATE     = "<b>GitHub API rate-limits exceeded.</b> Consider providing an <b>Access Token</b> if you haven't already (click the button at the top-right).<br/>The amount of API calls you are allowed to do will re-accumulate over time: you can try again later on.<br/>It's also possible that the queried repository has so many forks that it's impossible to scan it completely without running out of API calls. :(";
 const UF_TABLE_SEPARATOR  = "&nbsp;|&nbsp;";
 
 const FORKS_PER_PAGE = 100; // enforced by GitHub API
@@ -22,30 +22,10 @@ const FORKS_PER_PAGE = 100; // enforced by GitHub API
 /* Variables that should be cleared for every new query. */
 let TOTAL_FORKS                = 0;
 let INITIAL_QUERY_USER         = "";
+let RATE_LIMIT_EXCEEDED       = false;
 let TOTAL_API_CALLS_COUNTER    = 0;
 let ONGOING_REQUESTS_COUNTER   = 0;
 
-
-function allRequestsAreDone() {
-  return ONGOING_REQUESTS_COUNTER <= 0 && TOTAL_API_CALLS_COUNTER >= TOTAL_FORKS;
-}
-
-function enableQueryFields() {
-  JQ_SEARCH_BTN.removeClass('is-loading');
-  JQ_REPO_FIELD.prop('disabled', false);
-}
-
-function disableQueryFields() {
-  JQ_REPO_FIELD.prop('disabled', true);
-  JQ_SEARCH_BTN.addClass('is-loading');
-}
-
-function checkIfAllRequestsAreDone() {
-  if (allRequestsAreDone()) {
-    sortTable();
-    enableQueryFields();
-  }
-}
 
 function extract_username_from_fork(combined_name) {
   return combined_name.split('/')[0];
@@ -91,42 +71,6 @@ function sortTableColumn(table_id, sortColumn){
   }
 }
 
-/** The secondary request which appends the badges. */
-function commits_count(request, table_body, table_row) {
-  return () => {
-    const response = JSON.parse(request.responseText);
-
-    if (response.total_commits === 0) {
-      table_row.remove();
-      if (table_body.children().length === 0) {
-        getElementById_$(UF_ID_MSG).html(UF_MSG_EMPTY_FILTER);
-      }
-    } else {
-      table_row.append(
-          $('<td>').html(UF_TABLE_SEPARATOR),
-          $('<td>', {class: "uf_badge"}).html(ahead_badge(response.ahead_by)),
-          $('<td>').html(UF_TABLE_SEPARATOR),
-          $('<td>', {class: "uf_badge"}).html(behind_badge(response.behind_by))
-      )
-    }
-
-    /* Detection of final request. */
-    ONGOING_REQUESTS_COUNTER--;
-    checkIfAllRequestsAreDone();
-  }
-}
-
-/** To remove erroneous repos. */
-function commits_count_failure(table_row) {
-  return () => {
-    table_row.remove();
-
-    /* Detection of final request. */
-    ONGOING_REQUESTS_COUNTER--;
-    checkIfAllRequestsAreDone();
-  }
-}
-
 function isEmpty(aList) {
   return (!aList || aList.length === 0);
 }
@@ -135,8 +79,12 @@ function getTableBody() {
   return getElementById_$(UF_ID_TABLE).find($("tbody"));
 }
 
+function setMsg(msg) {
+  getElementById_$(UF_ID_MSG).html(msg);
+}
+
 function clearMsg() {
-  getElementById_$(UF_ID_MSG).html("");
+  setMsg("");
 }
 
 function clearHeader() {
@@ -154,8 +102,15 @@ function clear_old_data() {
   clearTable();
   TOTAL_FORKS = 0;
   INITIAL_QUERY_USER = "";
+  RATE_LIMIT_EXCEEDED = false;
   TOTAL_API_CALLS_COUNTER = 0;
   ONGOING_REQUESTS_COUNTER = 0;
+}
+
+function send(request) {
+  ONGOING_REQUESTS_COUNTER++;
+  TOTAL_API_CALLS_COUNTER++;
+  request.send();
 }
 
 /** To use the Access Token with a request. */
@@ -166,26 +121,46 @@ function authenticatedRequestHeaderFactory(url) {
   if (GITHUB_ACCESS_TOKEN) {
     request.setRequestHeader("Authorization", "token " + GITHUB_ACCESS_TOKEN);
   }
-  TOTAL_API_CALLS_COUNTER++;
   return request;
+}
+
+function allRequestsAreDone() {
+  return ONGOING_REQUESTS_COUNTER <= 0 && TOTAL_API_CALLS_COUNTER >= TOTAL_FORKS;
+}
+
+function onRateLimitExceeded() {
+  if (!RATE_LIMIT_EXCEEDED) {
+    console.warn('[useful-forks] GitHub API rate-limit exceeded. (Since useful-forks sends many requests at once, you might have a lot of `Code 403` error logs from the browser.)');
+    RATE_LIMIT_EXCEEDED = true;
+    setMsg(UF_MSG_API_RATE);
+    if (!GITHUB_ACCESS_TOKEN) {
+      openTokenDialog();
+    }
+    disableQueryBtn();
+  }
 }
 
 function onreadystatechangeFactory(xhr, successFn, failureFn) {
   return () => {
     if (xhr.readyState === 4) {
+
+      /* Managing the different Status Codes. */
       if (xhr.status === 200) {
         successFn();
       } else if (xhr.status === 403) {
-        console.warn('[useful-forks] Looks like the rate-limit was exceeded.');
-        getElementById_$(UF_ID_MSG).html(UF_MSG_API_RATE);
-        checkIfAllRequestsAreDone();
-        if (!GITHUB_ACCESS_TOKEN) {
-          openTokenDialog(); // opens the Token dialog
-        }
+        onRateLimitExceeded();
       } else {
         console.warn('[useful-forks] GitHub API returned status:', xhr.status);
         failureFn();
       }
+
+      /* Detection of final request. */
+      ONGOING_REQUESTS_COUNTER--;
+      if (allRequestsAreDone()) {
+        sortTable();
+        enableQueryFields();
+      }
+
     } else {
       // Request is still in progress
     }
@@ -226,7 +201,8 @@ function add_fork_elements(forkdata_array, user, repo) {
   if (isEmpty(forkdata_array))
     return;
 
-  clearMsg();
+  if (!RATE_LIMIT_EXCEEDED) // because this some times gets called after 403 is received
+    clearMsg();
 
   let table_body = getTableBody();
   for (let i = 0; i < forkdata_array.length; i++) {
@@ -235,11 +211,34 @@ function add_fork_elements(forkdata_array, user, repo) {
     /* Basic data (name/stars/forks). */
     const NEW_ROW = build_fork_element_html(table_body, elem_ref.full_name, elem_ref.stargazers_count, elem_ref.forks_count);
 
+    if (RATE_LIMIT_EXCEEDED) // we can skip everything below because they are only requests
+      continue;
+
     /* Commits diff data (ahead/behind). */
     const API_REQUEST_URL = `https://api.github.com/repos/${user}/${repo}/compare/master...${extract_username_from_fork(elem_ref.full_name)}:master`;
     let request = authenticatedRequestHeaderFactory(API_REQUEST_URL);
-    request.onreadystatechange = onreadystatechangeFactory(request, commits_count(request, table_body, NEW_ROW), commits_count_failure(NEW_ROW));
-    request.send();
+    request.onreadystatechange = onreadystatechangeFactory(request,
+        () => {
+          const response = JSON.parse(request.responseText);
+
+          if (response.total_commits === 0) {
+            NEW_ROW.remove();
+            if (table_body.children().length === 0) {
+              setMsg(UF_MSG_EMPTY_FILTER);
+            }
+          } else {
+            /* Appending the commit badges to the new row. */
+            NEW_ROW.append(
+                $('<td>').html(UF_TABLE_SEPARATOR),
+                $('<td>', {class: "uf_badge"}).html(ahead_badge(response.ahead_by)),
+                $('<td>').html(UF_TABLE_SEPARATOR),
+                $('<td>', {class: "uf_badge"}).html(behind_badge(response.behind_by))
+            )
+          }
+        },
+        () => NEW_ROW.remove()
+    );
+    send(request);
 
     /* Forks of forks. */
     if (elem_ref.forks_count > 0) {
@@ -258,7 +257,7 @@ function initiateProcess(user, repo, token) {
 
   disableQueryFields();
 
-  getElementById_$(UF_ID_MSG).html(UF_MSG_SCANNING);
+  setMsg(UF_MSG_SCANNING);
   initial_request(user, repo);
 }
 
@@ -284,17 +283,20 @@ function initial_request(user, repo) {
         if (TOTAL_FORKS > 0) {
           request_fork_page(1, user, repo);
         } else {
-          getElementById_$(UF_ID_MSG).html(UF_MSG_NO_FORKS);
+          setMsg(UF_MSG_NO_FORKS);
           enableQueryFields();
         }
       },
-      () => getElementById_$(UF_ID_MSG).html(UF_MSG_ERROR)
+      () => setMsg(UF_MSG_ERROR)
   );
-  request.send();
+  send(request);
 }
 
 /** Paginated request. Pages index start at 1. */
 function request_fork_page(page_number, user, repo) {
+  if (RATE_LIMIT_EXCEEDED)
+    return;
+
   const API_REQUEST_URL = `https://api.github.com/repos/${user}/${repo}/forks?sort=stargazers&per_page=${FORKS_PER_PAGE}&page=${page_number}`;
   let request = authenticatedRequestHeaderFactory(API_REQUEST_URL);
   request.onreadystatechange = onreadystatechangeFactory(request,
@@ -303,8 +305,6 @@ function request_fork_page(page_number, user, repo) {
 
         if (isEmpty(response)) // repo has not been forked
           return;
-
-        ONGOING_REQUESTS_COUNTER += response.length; // to keep track of when the query ends
 
         /* Pagination (beyond 100 forks). */
         const link_header = request.getResponseHeader("link");
@@ -320,9 +320,7 @@ function request_fork_page(page_number, user, repo) {
         /* Populate the table. */
         add_fork_elements(response, user, repo);
       },
-      () => {
-        getElementById_$(UF_ID_MSG).html(UF_MSG_ERROR);
-        checkIfAllRequestsAreDone();
-  });
-  request.send();
+      () => setMsg(UF_MSG_ERROR)
+  );
+  send(request);
 }

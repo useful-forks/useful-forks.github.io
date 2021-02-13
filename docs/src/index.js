@@ -39,6 +39,31 @@ $('#useful_forks_inject').append(
     )
 );
 
+function closeTokenDialog() {
+  JQ_POPUP.removeClass('is-active');
+  JQ_REPO_FIELD.focus();
+}
+
+function openTokenDialog() {
+  JQ_POPUP.addClass('is-active');
+  JQ_TOKEN_FIELD.focus();
+}
+
+function enableQueryFields() {
+  JQ_REPO_FIELD.prop('disabled', false);
+  JQ_SEARCH_BTN.removeClass('is-loading');
+}
+
+function disableQueryFields() {
+  JQ_REPO_FIELD.prop('disabled', true);
+  JQ_SEARCH_BTN.addClass('is-loading');
+}
+
+function disableQueryBtn() {
+  JQ_SEARCH_BTN.prop('disabled', true);
+  JQ_SEARCH_BTN.removeClass('is-loading');
+}
+
 function getQueryOrDefault(defaultVal) {
   if (!JQ_REPO_FIELD.val()) {
     JQ_REPO_FIELD.val(defaultVal);
@@ -77,16 +102,6 @@ JQ_REPO_FIELD.keyup(event => {
     initiate_search();
   }
 });
-
-function closeTokenDialog() {
-  JQ_POPUP.removeClass('is-active');
-  JQ_REPO_FIELD.focus();
-}
-
-function openTokenDialog() {
-  JQ_POPUP.addClass('is-active');
-  JQ_TOKEN_FIELD.focus();
-}
 
 JQ_TOKEN_BTN.click(event => {
   event.preventDefault();
