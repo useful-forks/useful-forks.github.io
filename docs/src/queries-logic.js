@@ -232,7 +232,7 @@ function add_fork_elements(forkdata_array, user, repo) {
   for (let i = 0; i < forkdata_array.length; i++) {
     const elem_ref = forkdata_array[i];
 
-    /* Basic data (stars, watchers, forks). */
+    /* Basic data (name/stars/forks). */
     const NEW_ROW = build_fork_element_html(table_body, elem_ref.full_name, elem_ref.stargazers_count, elem_ref.forks_count);
 
     /* Commits diff data (ahead/behind). */
