@@ -278,7 +278,7 @@ function initial_request(user, repo) {
         html_txt += UF_TABLE_SEPARATOR + getStarCol(response.stargazers_count);
         html_txt += UF_TABLE_SEPARATOR + getWatchCol(response.subscribers_count);
         html_txt += UF_TABLE_SEPARATOR + getForkCol(TOTAL_FORKS);
-        getElementById_$(UF_ID_HEADER).html('<b>Queried repository</b>:   ' + html_txt);
+        getElementById_$(UF_ID_HEADER).html('<b>Queried repository</b>:&nbsp;&nbsp;&nbsp;' + html_txt);
 
         if (TOTAL_FORKS > 0) {
           request_fork_page(1, user, repo);
