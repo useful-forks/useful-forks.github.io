@@ -1,4 +1,4 @@
-![useful-forks logo](docs/assets/useful-forks-banner.png "useful-forks banner")
+![useful-forks banner](docs/assets/useful-forks-banner.png "useful-forks banner")
 
 # Useful Forks
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/useful-forks/useful-forks.github.io/blob/master/LICENSE)
@@ -35,7 +35,7 @@ The project is [available online](https://useful-forks.github.io/) thanks to Git
 
 You can query repository directly with the URL. Here is an example: https://useful-forks.github.io/?repository=kotcrab/vis-ui
 
-![website example](media/website_example_1.png)
+![website example](media/website_demo.gif)
 
 ### Chrome Extension (WIP)
 Not published yet. If you want to install it:
@@ -48,7 +48,7 @@ Not published yet. If you want to install it:
 
 Once it's activated, the extension will automatically trigger itself whenever you open a Fork page, as shown by the (outdated) GIF below:
 
-![example](media/demo.gif)
+![example](media/chrome_extension_demo.gif)
 
 ### `refined-github`
 [`refined-github`](https://github.com/sindresorhus/refined-github) is an ensemble of tools and tweaks aimed at improving your GitHub experience.
