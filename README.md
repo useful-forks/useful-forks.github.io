@@ -46,7 +46,7 @@ Not published yet. If you want to install it:
 5. Click `Load unpacked` (button at the top-left)
 6. Select the [`project` folder](project)
 
-Once it's activated, the extension will automatically trigger itself whenever you open a Fork page, as shown by the (outdated) GIF below:
+Once it's activated, the extension will automatically trigger itself whenever you open a Fork page, as shown by the GIF below:
 
 ![example](media/chrome_extension_demo.gif)
 
