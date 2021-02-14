@@ -1,4 +1,4 @@
-![useful-forks logo](docs/assets/useful-forks-logo.png "useful-forks logo")
+![useful-forks logo](docs/assets/useful-forks-banner.png "useful-forks banner")
 
 # Useful Forks
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/useful-forks/useful-forks.github.io/blob/master/LICENSE)

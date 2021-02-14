@@ -9,7 +9,7 @@ const JQ_POPUP       = $('#useful_forks_token_popup');
 
 
 const INIT_MSG = "<b>Introducing:</b><br/><br/>"
-    + "<img src='assets/useful-forks-logo.png' alt='useful forks logo' width='500'/><br/><br/>"
+    + "<img src='assets/useful-forks-banner.png' alt='useful-forks banner' width='500'/><br/><br/>"
     + "It aims at increasing the discoverability of <b>useful</b> forks of open-source projects.<br/>"
     + "Simply type a repository's URL in the Text Field above. Both of those examples are valid entries: <br/>"
     + "<b><a href='https://useful-forks.github.io/?repo=payne911/PieMenu'>payne911/PieMenu</a></b> and "
