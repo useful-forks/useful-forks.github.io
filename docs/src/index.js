@@ -103,9 +103,8 @@ function initiate_search() {
     getElementById_$(UF_ID_MSG).html('Please enter a valid query: it should contain two strings separated by a "/"');
 
     gtag('event', 'query', {
-      'event_category': 'input',
-      'event_label': 'Raw-Search-Query-Fault',
-      'value': queryString
+      'event_category': 'Raw-Search-Query-Fault',
+      'event_label': queryString
     });
 
     return; // abort
@@ -115,9 +114,8 @@ function initiate_search() {
   let repo = queryValues[len - 1];
 
   gtag('event', 'query', {
-    'event_category': 'input',
-    'event_label': 'Search-Query',
-    'value': `${user}/${repo}`
+    'event_category': 'Search-Query',
+    'event_label': `${user}/${repo}`
   });
 
   initiateProcess(user, repo, token);

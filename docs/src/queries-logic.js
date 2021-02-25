@@ -169,10 +169,9 @@ function onreadystatechangeFactory(xhr, successFn, failureFn) {
 
 function getRepoCol(full_name, isInitialRepo) {
   return svg_literal_fork + ` <a href="https://github.com/${full_name}" target="_blank" rel="noopener noreferrer"
-                                 onclick="gtag('event', 'discovery', {
-                                   'event_category': 'query-results',
-                                   'event_label': 'isInitialRepo=${isInitialRepo}',
-                                   'value': ${full_name}
+                                 onclick="gtag('event', 'query', {
+                                   'event_category': 'Query-Results: isInitialRepo=${isInitialRepo}',
+                                   'event_label': ${full_name}
                                  });">${full_name}</a>`;
 }
 
