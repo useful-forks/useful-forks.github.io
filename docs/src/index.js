@@ -93,6 +93,8 @@ function initiate_search() {
     return; // abort
   }
 
+  clear_old_data();
+
   let queryString = getQueryOrDefault("payne911/PieMenu");
   let queryValues = queryString.split('/').filter(Boolean);
 
@@ -118,7 +120,6 @@ function initiate_search() {
     'value': `${user}/${repo}`
   });
 
-  clear_old_data();
   initiateProcess(user, repo, token);
 }
 
