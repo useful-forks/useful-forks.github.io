@@ -42,15 +42,27 @@
   <nav class="navbar is-dark" style="z-index: 1">
     <div class="container">
       <div class="navbar-brand">
-        <a class="navbar-item" href="https://useful-forks.github.io/">
+        <a class="navbar-item" href="https://useful-forks.github.io/"
+           onclick="gtag('event', 'click', {
+             'event_category': 'left-header-button',
+             'event_label': 'Home'
+           });">
           <img src="assets/useful-forks-logo.png" alt="UsefulForks_logo" />
           <strong>&nbsp;&nbsp;Home</strong>
         </a>
-        <a class="navbar-item" href="https://github.com/useful-forks/useful-forks.github.io" target="_blank" rel="noopener noreferrer">
+        <a class="navbar-item" href="https://github.com/useful-forks/useful-forks.github.io" target="_blank" rel="noopener noreferrer"
+           onclick="gtag('event', 'click', {
+             'event_category': 'left-header-button',
+             'event_label': 'GitHub-Project'
+           });">
           <img src="assets/github-white-icon.png" alt="GitHub_logo" />
           <strong>&nbsp;&nbsp;Open-Source Project</strong>
         </a>
-        <a class="navbar-item" href="https://github.com/useful-forks/useful-forks#chrome-extension-wip" target="_blank" rel="noopener noreferrer">
+        <a class="navbar-item" href="https://github.com/useful-forks/useful-forks#chrome-extension-wip" target="_blank" rel="noopener noreferrer"
+           onclick="gtag('event', 'click', {
+             'event_category': 'left-header-button',
+             'event_label': 'Chrome-Extension'
+           });">
           <img src="assets/chrome-icon.png" alt="Chrome_logo" />
           <strong>&nbsp;&nbsp;Chrome Extension (WIP)</strong>
         </a>
@@ -58,7 +70,11 @@
 
       <div id="navbarExampleTransparentExample" class="navbar-menu">
         <div class="navbar-end">
-          <a id="addTokenBtn" class="navbar-item">
+          <a id="addTokenBtn" class="navbar-item"
+             onclick="gtag('event', 'click', {
+               'event_category': 'access-token',
+               'event_label': 'Open-Dialog'
+             });">
             <img src="assets/settings-icon.png" alt="settings" />
             <strong>&nbsp;&nbsp;Add an Access Token</strong>
           </a>
@@ -73,7 +89,12 @@
     <div class="modal-card">
       <header class="modal-card-head">
         <p id="modalCardTitle" class="modal-card-title">Add a GitHub Access Token</p>
-        <button id="closeModalBtn" class="delete is-large" aria-label="close"></button>
+        <button id="closeModalBtn" class="delete is-large" aria-label="close"
+                onclick="gtag('event', 'click', {
+                  'event_category': 'access-token',
+                  'event_label': 'Open-Dialog'
+                });">
+        </button>
       </header>
       <section class="modal-card-body">
         <p>Useful-Forks uses the GitHub API to retrieve repository metadata. You may see this page because you have hit the
@@ -90,7 +111,11 @@
         <input class="input" id="tokenInput" placeholder="90c6b8218dae4122b07b4a0fae252c619a08941b" />
       </section>
       <footer class="modal-card-foot">
-        <button id="saveTokenBtn" class="button is-success is-large is-fullwidth">Save</button>
+        <button id="saveTokenBtn" class="button is-success is-large is-fullwidth"
+                onclick="gtag('event', 'click', {
+                  'event_category': 'access-token',
+                  'event_label': 'Save-Token'
+                });">Save</button>
       </footer>
     </div>
   </div>

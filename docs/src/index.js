@@ -8,15 +8,29 @@ const JQ_TOKEN_BTN   = $('#addTokenBtn');
 const JQ_POPUP       = $('#useful_forks_token_popup');
 
 
+const EXAMPLE_LINK_1 = `<a href='https://useful-forks.github.io/?repo=payne911/PieMenu'
+                           onclick="gtag('event', 'discovery', {
+                             'event_category': 'landing-intro',
+                             'event_label': 'short-example-link'
+                           });">payne911/PieMenu</a>`;
+const EXAMPLE_LINK_2 = `<a href='https://useful-forks.github.io/?repo=https://github.com/payne911/PieMenu'
+                           onclick="gtag('event', 'discovery', {
+                             'event_category': 'landing-intro',
+                             'event_label': 'full-example-link'
+                           });">https://github.com/payne911/PieMenu</a>`;
+const BODY_REPO_LINK = `<a href='https://github.com/useful-forks/useful-forks.github.io'
+                           onclick="gtag('event', 'discovery', {
+                             'event_category': 'landing-intro',
+                             'event_label': 'repo-link'
+                           });">the GitHub project</a>`;
 const INIT_MSG = "<b>Introducing:</b><br/><br/>"
     + "<img src='assets/useful-forks-banner.png' alt='useful-forks banner' width='500'/><br/><br/>"
     + "It aims at increasing the discoverability of <b>useful</b> forks of open-source projects.<br/>"
     + "Simply type a repository's URL in the Text Field above. Both of those examples are valid entries: <br/>"
-    + "<b><a href='https://useful-forks.github.io/?repo=payne911/PieMenu'>payne911/PieMenu</a></b> and "
-    + "<b><a href='https://useful-forks.github.io/?repo=https://github.com/payne911/PieMenu'>https://github.com/payne911/PieMenu</a></b><br/><br/>"
+    + "<b>" + EXAMPLE_LINK_1 + "</b> and <b>" + EXAMPLE_LINK_2 + "</b><br/><br/>"
     + "The criteria is simple: <b>if a fork was created, but never received any other activity on its master branch, it is filtered out.</b><br/>"
     + "The results are sorted by the amount of stars.<br/><br/>"
-    + "For more information, check out <a href='https://github.com/useful-forks/useful-forks.github.io'>the GitHub project</a>.<br/>"
+    + "For more information, check out " + BODY_REPO_LINK + ".<br/>"
     + "And while you're there, if you like this project, feel free to ⭐ us."
 
 
@@ -85,11 +99,27 @@ function initiate_search() {
   let len = queryValues.length;
   if (len < 2) {
     getElementById_$(UF_ID_MSG).html('Please enter a valid query: it should contain two strings separated by a "/"');
+
+    gtag('event', 'query', {
+      'event_category': 'input',
+      'event_label': 'Raw-Search-Query-Fault',
+      'value': queryString
+    });
+
     return; // abort
   }
 
+  let user = queryValues[len - 2];
+  let repo = queryValues[len - 1];
+
+  gtag('event', 'query', {
+    'event_category': 'input',
+    'event_label': 'Search-Query',
+    'value': `${user}/${repo}`
+  });
+
   clear_old_data();
-  initiateProcess(queryValues[len - 2], queryValues[len - 1], token);
+  initiateProcess(user, repo, token);
 }
 
 JQ_SEARCH_BTN.click(event => {

@@ -167,8 +167,13 @@ function onreadystatechangeFactory(xhr, successFn, failureFn) {
   };
 }
 
-function getRepoCol(full_name) {
-  return svg_literal_fork + ` <a href="https://github.com/${full_name}" target="_blank" rel="noopener noreferrer">${full_name}</a>`;
+function getRepoCol(full_name, isInitialRepo) {
+  return svg_literal_fork + ` <a href="https://github.com/${full_name}" target="_blank" rel="noopener noreferrer"
+                                 onclick="gtag('event', 'discovery', {
+                                   'event_category': 'query-results',
+                                   'event_label': 'isInitialRepo=${isInitialRepo}',
+                                   'value': ${full_name}
+                                 });">${full_name}</a>`;
 }
 
 function getStarCol(num_stars) {
@@ -188,7 +193,7 @@ function build_fork_element_html(table_body, combined_name, num_stars, num_forks
   const NEW_ROW = $('<tr>', {id: extract_username_from_fork(combined_name), class: "useful_forks_repo"});
   table_body.append(
       NEW_ROW.append(
-          $('<td>').html(getRepoCol(combined_name)),
+          $('<td>').html(getRepoCol(combined_name, false)),
           $('<td>').html(UF_TABLE_SEPARATOR + getStarCol(num_stars)).attr("value", num_stars),
           $('<td>').html(UF_TABLE_SEPARATOR + getForkCol(num_forks)).attr("value", num_forks)
       )
@@ -274,7 +279,7 @@ function initial_request(user, repo) {
 
         TOTAL_FORKS = response.forks_count;
 
-        let html_txt = getRepoCol(response.full_name);
+        let html_txt = getRepoCol(response.full_name, true);
         html_txt += UF_TABLE_SEPARATOR + getStarCol(response.stargazers_count);
         html_txt += UF_TABLE_SEPARATOR + getWatchCol(response.subscribers_count);
         html_txt += UF_TABLE_SEPARATOR + getForkCol(TOTAL_FORKS);
