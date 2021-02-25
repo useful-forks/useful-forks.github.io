@@ -52,17 +52,33 @@ function badge_width(number) {
 
 /** Credits to https://shields.io/ */
 function ahead_badge(amount) {
-  return '<svg xmlns="http://www.w3.org/2000/svg" width="88" height="24" role="img"><title>How far ahead this fork\'s master branch is compared to its parent\'s master branch</title><linearGradient id="s" x2="0" y2="100%"><stop offset="0" stop-color="#fff" stop-opacity=".7"/><stop offset=".1" stop-color="#aaa" stop-opacity=".1"/><stop offset=".9" stop-color="#000" stop-opacity=".3"/><stop offset="1" stop-color="#000" stop-opacity=".5"/></linearGradient><clipPath id="r"><rect width="88" height="18" rx="4" fill="#fff"/></clipPath><g clip-path="url(#r)"><rect width="43" height="18" fill="#555"/><rect x="43" width="45" height="18" fill="#007ec6"/><rect width="88" height="18" fill="url(#s)"/></g><g fill="#fff" text-anchor="middle" font-family="Verdana,Geneva,DejaVu Sans,sans-serif" text-rendering="geometricPrecision" font-size="110"><text aria-hidden="true" x="225" y="140" fill="#010101" fill-opacity=".3" transform="scale(.1)" textLength="330">ahead</text><text x="225" y="130" transform="scale(.1)" fill="#fff" textLength="330">ahead</text><text x="645" y="130" transform="scale(.1)" fill="#fff" textLength="' + badge_width(amount) + '">' + amount + '</text></g></svg>';
+  return '<svg xmlns="http://www.w3.org/2000/svg" width="88" height="24" role="img"><title>How far ahead this fork\'s default branch is compared to its parent\'s default branch</title><linearGradient id="s" x2="0" y2="100%"><stop offset="0" stop-color="#fff" stop-opacity=".7"/><stop offset=".1" stop-color="#aaa" stop-opacity=".1"/><stop offset=".9" stop-color="#000" stop-opacity=".3"/><stop offset="1" stop-color="#000" stop-opacity=".5"/></linearGradient><clipPath id="r"><rect width="88" height="18" rx="4" fill="#fff"/></clipPath><g clip-path="url(#r)"><rect width="43" height="18" fill="#555"/><rect x="43" width="45" height="18" fill="#007ec6"/><rect width="88" height="18" fill="url(#s)"/></g><g fill="#fff" text-anchor="middle" font-family="Verdana,Geneva,DejaVu Sans,sans-serif" text-rendering="geometricPrecision" font-size="110"><text aria-hidden="true" x="225" y="140" fill="#010101" fill-opacity=".3" transform="scale(.1)" textLength="330">ahead</text><text x="225" y="130" transform="scale(.1)" fill="#fff" textLength="330">ahead</text><text x="645" y="130" transform="scale(.1)" fill="#fff" textLength="' + badge_width(amount) + '">' + amount + '</text></g></svg>';
 }
 
 /** Credits to https://shields.io/ */
 function behind_badge(amount) {
   const color = amount === 0 ? '#4c1' : '#007ec6'; // green only when not behind, blue otherwise
-  return '<svg xmlns="http://www.w3.org/2000/svg" width="92" height="24" role="img"><title>How far behind this fork\'s master branch is compared to its parent\'s master branch</title><linearGradient id="s" x2="0" y2="100%"><stop offset="0" stop-color="#fff" stop-opacity=".7"/><stop offset=".1" stop-color="#aaa" stop-opacity=".1"/><stop offset=".9" stop-color="#000" stop-opacity=".3"/><stop offset="1" stop-color="#000" stop-opacity=".5"/></linearGradient><clipPath id="r"><rect width="92" height="18" rx="4" fill="#fff"/></clipPath><g clip-path="url(#r)"><rect width="47" height="18" fill="#555"/><rect x="47" width="45" height="18" fill="'+ color +'"/><rect width="92" height="18" fill="url(#s)"/></g><g fill="#fff" text-anchor="middle" font-family="Verdana,Geneva,DejaVu Sans,sans-serif" text-rendering="geometricPrecision" font-size="110"><text aria-hidden="true" x="245" y="140" fill="#010101" fill-opacity=".3" transform="scale(.1)" textLength="370">behind</text><text x="245" y="130" transform="scale(.1)" fill="#fff" textLength="370">behind</text><text x="685" y="130" transform="scale(.1)" fill="#fff" textLength="' + badge_width(amount) + '">' + amount + '</text></g></svg>';
+  return '<svg xmlns="http://www.w3.org/2000/svg" width="92" height="24" role="img"><title>How far behind this fork\'s default branch is compared to its parent\'s default branch</title><linearGradient id="s" x2="0" y2="100%"><stop offset="0" stop-color="#fff" stop-opacity=".7"/><stop offset=".1" stop-color="#aaa" stop-opacity=".1"/><stop offset=".9" stop-color="#000" stop-opacity=".3"/><stop offset="1" stop-color="#000" stop-opacity=".5"/></linearGradient><clipPath id="r"><rect width="92" height="18" rx="4" fill="#fff"/></clipPath><g clip-path="url(#r)"><rect width="47" height="18" fill="#555"/><rect x="47" width="45" height="18" fill="'+ color +'"/><rect width="92" height="18" fill="url(#s)"/></g><g fill="#fff" text-anchor="middle" font-family="Verdana,Geneva,DejaVu Sans,sans-serif" text-rendering="geometricPrecision" font-size="110"><text aria-hidden="true" x="245" y="140" fill="#010101" fill-opacity=".3" transform="scale(.1)" textLength="370">behind</text><text x="245" y="130" transform="scale(.1)" fill="#fff" textLength="370">behind</text><text x="685" y="130" transform="scale(.1)" fill="#fff" textLength="' + badge_width(amount) + '">' + amount + '</text></g></svg>';
 }
 
 function getElementById_$(id) {
   return $('#' + id);
+}
+
+function isEmpty(aList) {
+  return (!aList || aList.length === 0);
+}
+
+function setMsg(msg) {
+  getElementById_$(UF_ID_MSG).html(msg);
+}
+
+function clearMsg() {
+  setMsg("");
+}
+
+function getTableBody() {
+  return getElementById_$(UF_ID_TABLE).find($("tbody"));
 }
 
 function getTdValue(rows, index, col) {
@@ -94,7 +110,7 @@ function commits_count(request, table_body, table_row) {
     if (response.total_commits === 0) {
       table_row.remove();
       if (table_body.children().length === 0) {
-        getElementById_$(UF_ID_MSG).html(UF_MSG_EMPTY_FILTER);
+        setMsg(UF_MSG_EMPTY_FILTER);
       }
     } else {
       table_row.append(
@@ -122,14 +138,6 @@ function commits_count_failure(table_row) {
   }
 }
 
-function clearMsg() {
-  getElementById_$(UF_ID_MSG).html("");
-}
-
-function getTableBody() {
-  return getElementById_$(UF_ID_TABLE).find($("tbody"));
-}
-
 /** To use the Access Token with a request. */
 function authenticatedRequestHeaderFactory(url) {
   let request = new XMLHttpRequest();
@@ -147,7 +155,7 @@ function onreadystatechangeFactory(xhr, successFn, failureFn) {
         successFn();
       } else if (xhr.status === 403) {
         console.warn('Looks like the rate-limit was exceeded.');
-        getElementById_$(UF_ID_MSG).html(UF_MSG_API_RATE);
+        setMsg(UF_MSG_API_RATE);
       } else {
         console.warn('GitHub API returned status:', xhr.status);
         failureFn();
@@ -163,7 +171,7 @@ function build_fork_element_html(table_body, combined_name, num_stars, num_forks
   const NEW_ROW = $('<tr>', {id: extract_username_from_fork(combined_name), class: "useful_forks_repo"});
   table_body.append(
       NEW_ROW.append(
-          $('<td>').html(svg_literal_fork + ' <a href=https://github.com/' + combined_name + ' target="_blank" rel="noopener noreferrer">' + combined_name + '</a>'),
+          $('<td>').html(svg_literal_fork + ` <a href="https://github.com/${combined_name}" target="_blank" rel="noopener noreferrer">${combined_name}</a>`),
           $('<td>').html(UF_TABLE_SEPARATOR + svg_literal_star + ' x ' + num_stars).attr("value", num_stars),
           $('<td>').html(UF_TABLE_SEPARATOR + svg_literal_fork + ' x ' + num_forks).attr("value", num_forks)
       )
@@ -172,47 +180,43 @@ function build_fork_element_html(table_body, combined_name, num_stars, num_forks
 }
 
 /** Prepares, appends, and updates dynamically a table row. */
-function add_fork_elements(forkdata_array, user, repo) {
-  if (!forkdata_array || forkdata_array.length === 0)
+function add_fork_elements(forkdata_array, user, repo, parentDefaultBranch) {
+  if (isEmpty(forkdata_array))
     return;
 
   clearMsg();
 
   let table_body = getTableBody();
   for (let i = 0; i < forkdata_array.length; ++i) {
-    const elem_ref = forkdata_array[i];
+    const currFork = forkdata_array[i];
 
     /* Basic data (stars, watchers, forks). */
-    const NEW_ROW = build_fork_element_html(table_body, elem_ref.full_name, elem_ref.stargazers_count, elem_ref.forks_count);
+    const NEW_ROW = build_fork_element_html(table_body, currFork.full_name, currFork.stargazers_count, currFork.forks_count);
 
     /* Commits diff data (ahead/behind). */
-    const API_REQUEST_URL = 'https://api.github.com/repos/' + user + '/' + repo + '/compare/master...' + extract_username_from_fork(elem_ref.full_name) + ':master';
+    const API_REQUEST_URL = `https://api.github.com/repos/${user}/${repo}/compare/${parentDefaultBranch}...${extract_username_from_fork(currFork.full_name)}:${currFork.default_branch}`;
     let request = authenticatedRequestHeaderFactory(API_REQUEST_URL);
     request.onreadystatechange = onreadystatechangeFactory(request, commits_count(request, table_body, NEW_ROW), commits_count_failure(NEW_ROW));
     request.send();
 
     /* Forks of forks. */
-    if (elem_ref.forks_count > 0) {
-      request_fork_page(1, elem_ref.owner.login, elem_ref.name);
+    if (currFork.forks_count > 0) {
+      request_fork_page(1, currFork.owner.login, currFork.name, currFork.default_branch);
     }
   }
 }
 
 /** Paginated request. Pages index start at 1. */
-function request_fork_page(page_number, user, repo) {
-  const API_REQUEST_URL = 'https://api.github.com/repos/' + user + '/' + repo + '/forks?sort=stargazers&per_page=' + FORKS_PER_PAGE + '&page=' + page_number;
+function request_fork_page(page_number, user, repo, defaultBranch) {
+  const API_REQUEST_URL = `https://api.github.com/repos/${user}/${repo}/forks?sort=stargazers&per_page=${FORKS_PER_PAGE}&page=${page_number}`;
   let request = authenticatedRequestHeaderFactory(API_REQUEST_URL);
   request.onreadystatechange = onreadystatechangeFactory(request,
       () => {
         const response = JSON.parse(request.responseText);
 
         /* On empty response (repo has not been forked). */
-        if (!response || response.length === 0) {
-          if (page_number === 1) {
-            getElementById_$(UF_ID_MSG).html(UF_MSG_NO_FORKS);
-          }
+        if (isEmpty(response))
           return;
-        }
 
         REQUESTS_COUNTER += response.length; // to keep track of when the query ends
 
@@ -221,19 +225,42 @@ function request_fork_page(page_number, user, repo) {
         if (link_header) {
           let contains_next_page = link_header.indexOf('>; rel="next"');
           if (contains_next_page !== -1) {
-            request_fork_page(++page_number, user, repo);
+            request_fork_page(++page_number, user, repo, defaultBranch);
           }
         }
 
         sortTable();
 
         /* Populate the table. */
-        add_fork_elements(response, user, repo);
+        add_fork_elements(response, user, repo, defaultBranch);
       },
       () => {
-        getElementById_$(UF_ID_MSG).html(UF_MSG_ERROR);
+        setMsg(UF_MSG_ERROR);
         checkIfAllRequestsAreDone();
       });
+  request.send();
+}
+
+/** Updates header with Queried Repo info, and initiates recursive forks search */
+function initial_request(user, repo) {
+  const API_REQUEST_URL = `https://api.github.com/repos/${user}/${repo}`;
+  let request = authenticatedRequestHeaderFactory(API_REQUEST_URL);
+  request.onreadystatechange = onreadystatechangeFactory(request,
+      () => {
+        const response = JSON.parse(request.responseText);
+
+        if (isEmpty(response))
+          return;
+
+        if (response.forks_count > 0) {
+          request_fork_page(1, user, repo, response.default_branch);
+        } else {
+          setMsg(UF_MSG_NO_FORKS);
+          enableQueryFields();
+        }
+      },
+      () => setMsg(UF_MSG_ERROR)
+  );
   request.send();
 }
 
@@ -264,5 +291,5 @@ if (pathComponents.length >= 3) {
   const user = pathComponents[1], repo = pathComponents[2];
   add_css();
   prepare_display();
-  request_fork_page(1, user, repo);
+  initial_request(user, repo);
 }

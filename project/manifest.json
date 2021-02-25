@@ -1,6 +1,6 @@
 {
   "name": "Useful Forks",
-  "version": "1.4",
+  "version": "1.5",
   "description": "Displays GitHub forks ordered by stars, and with additional information and automatic filters.",
   "permissions": [
     "*://github.com/*",
