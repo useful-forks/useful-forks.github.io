@@ -100,6 +100,7 @@ function clear_old_data() {
   clearHeader();
   clearMsg();
   clearTable();
+  setApiCallsLabel(0);
   TOTAL_FORKS = 0;
   INITIAL_QUERY_USER = "";
   RATE_LIMIT_EXCEEDED = false;
@@ -110,6 +111,7 @@ function clear_old_data() {
 function send(request) {
   ONGOING_REQUESTS_COUNTER++;
   TOTAL_API_CALLS_COUNTER++;
+  setApiCallsLabel(TOTAL_API_CALLS_COUNTER);
   request.send();
 }
 

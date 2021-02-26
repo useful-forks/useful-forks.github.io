@@ -1,5 +1,6 @@
 const JQ_REPO_FIELD  = $('#repo');
 const JQ_SEARCH_BTN  = $('#searchBtn');
+const JQ_TOTAL_CALLS = $('#totalApiCalls');
 const JQ_POPUP_TITLE = $('#modalCardTitle');
 const JQ_TOKEN_CLOSE = $('#closeModalBtn');
 const JQ_TOKEN_FIELD = $('#tokenInput');
@@ -83,6 +84,10 @@ function getQueryOrDefault(defaultVal) {
     JQ_REPO_FIELD.val(defaultVal);
   }
   return JQ_REPO_FIELD.val();
+}
+
+function setApiCallsLabel(total) {
+  JQ_TOTAL_CALLS.html(total + " calls");
 }
 
 /** Extracts 'user' and 'repo' values from potential URL inputs. */
