@@ -64,8 +64,8 @@ This Activity Diagram (UML) should clarify a bit the inner-workings of the algor
 
 ## Contributing
 If you want to help, the structure of the repo is rather simple. In terms of folders:
-* `docs` contains the website
-* `project` contains the Chrome Extension
+* [`docs`](/docs) contains the website
+* [`project`](/project) contains the Chrome Extension
 
 ### To-do
 * Fix the [Issues](https://github.com/useful-forks/useful-forks.github.io/issues) (if there are any)
