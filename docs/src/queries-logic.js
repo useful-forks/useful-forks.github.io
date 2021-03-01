@@ -280,14 +280,3 @@ function initiate_search() {
   ga_searchQuery(user, repo);
   initial_request(user, repo);
 }
-
-/* Setting up query triggers. */
-JQ_SEARCH_BTN.click(event => {
-  event.preventDefault();
-  initiate_search();
-});
-JQ_REPO_FIELD.keyup(event => {
-  if (event.keyCode === 13) { // 'ENTER'
-    initiate_search();
-  }
-});

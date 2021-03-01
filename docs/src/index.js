@@ -162,6 +162,15 @@ JQ_TOKEN_FIELD.keyup(event => {
     closeTokenDialog();
   }
 });
+JQ_SEARCH_BTN.click(event => {
+  event.preventDefault();
+  initiate_search();
+});
+JQ_REPO_FIELD.keyup(event => {
+  if (event.keyCode === 13) { // 'ENTER'
+    initiate_search();
+  }
+});
 
 
 /* Gather the saved Access Token. */
