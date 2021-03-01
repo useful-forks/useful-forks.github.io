@@ -1,10 +1,13 @@
-const FORKS_PER_PAGE = 100; // enforced by GitHub API
+import { Octokit } from "https://cdn.skypack.dev/@octokit/rest";
+import { throttling } from "https://cdn.skypack.dev/@octokit/plugin-throttling";
+
+const SLOW_DOWN_MSG_THRESHOLD = 800;
 
 /* Variables that should be cleared for every new query. */
-let TOTAL_FORKS                = 0;
-let RATE_LIMIT_EXCEEDED        = false;
-let TOTAL_API_CALLS_COUNTER    = 0;
-let ONGOING_REQUESTS_COUNTER   = 0;
+let TOTAL_FORKS              = 0;
+let RATE_LIMIT_EXCEEDED      = false;
+let TOTAL_API_CALLS_COUNTER  = 0;
+let ONGOING_REQUESTS_COUNTER = 0;
 
 
 function extract_username_from_fork(combined_name) {
@@ -51,6 +54,11 @@ function isEmpty(aList) {
   return (!aList || aList.length === 0);
 }
 
+function displayConditionalErrorMsg() {
+  if (!RATE_LIMIT_EXCEEDED)
+    setMsg(UF_MSG_ERROR);
+}
+
 /** Used to reset the state for a brand new request. */
 function clear_old_data() {
   clearHeader();
@@ -63,22 +71,14 @@ function clear_old_data() {
   ONGOING_REQUESTS_COUNTER = 0;
 }
 
-function send(request) {
+function incrementCounters() {
   ONGOING_REQUESTS_COUNTER++;
   TOTAL_API_CALLS_COUNTER++;
   setApiCallsLabel(TOTAL_API_CALLS_COUNTER);
-  request.send();
-}
 
-/** To use the Access Token with a request. */
-function authenticatedRequestHeaderFactory(url) {
-  let request = new XMLHttpRequest();
-  request.open('GET', url);
-  request.setRequestHeader("Accept", "application/vnd.github.v3+json");
-  if (LOCAL_STORAGE_GITHUB_ACCESS_TOKEN) {
-    request.setRequestHeader("Authorization", "token " + LOCAL_STORAGE_GITHUB_ACCESS_TOKEN);
+  if (TOTAL_API_CALLS_COUNTER === SLOW_DOWN_MSG_THRESHOLD) {
+    setMsg(UF_MSG_SLOWER);
   }
-  return request;
 }
 
 function allRequestsAreDone() {
@@ -87,41 +87,35 @@ function allRequestsAreDone() {
 
 function onRateLimitExceeded() {
   if (!RATE_LIMIT_EXCEEDED) {
-    console.warn('[useful-forks] GitHub API rate-limit exceeded. (Since useful-forks sends many requests at once, you might have a lot of `Code 403` error logs from the browser.)');
+    console.warn('[useful-forks] GitHub API rate-limit exceeded. (Since useful-forks sends many requests at once, you might have a lot of `Error Code 403` in your browser Console Logs.)');
     RATE_LIMIT_EXCEEDED = true;
     setMsg(UF_MSG_API_RATE);
     if (!LOCAL_STORAGE_GITHUB_ACCESS_TOKEN) {
       openTokenDialog();
     }
-    disableQueryBtn();
+    disableQueryFields();
   }
 }
 
-function onreadystatechangeFactory(xhr, successFn, failureFn) {
-  return () => {
-    if (xhr.readyState === 4) {
+/** Detection of final request. */
+function decrementCounters() {
+  ONGOING_REQUESTS_COUNTER--;
+  if (allRequestsAreDone()) {
+    clearMsg();
+    sortTable();
+    enableQueryFields();
+  }
+}
 
-      /* Managing the different Status Codes. */
-      if (xhr.status === 200) {
-        successFn();
-      } else if (xhr.status === 403) {
-        onRateLimitExceeded();
-      } else {
-        console.warn('[useful-forks] GitHub API returned status:', xhr.status);
-        failureFn();
-      }
-
-      /* Detection of final request. */
-      ONGOING_REQUESTS_COUNTER--;
-      if (allRequestsAreDone()) {
-        sortTable();
-        enableQueryFields();
-      }
-
-    } else {
-      // Request is still in progress
-    }
-  };
+function send(requestPromise, successFn, failureFn) {
+  incrementCounters();
+  requestPromise()
+  .then(
+      response => successFn(response.headers, response.data)) // wrapped in a { data, headers, status, url } object
+  .catch(
+      () => failureFn())
+  .finally(
+      () => decrementCounters());
 }
 
 /** Dynamically fills the second part of a row. */
@@ -142,7 +136,7 @@ function add_fork_elements(forkdata_array, user, repo, parentDefaultBranch) {
   if (isEmpty(forkdata_array))
     return;
 
-  if (!RATE_LIMIT_EXCEEDED) // because this some times gets called after 403 is received
+  if (!RATE_LIMIT_EXCEEDED && TOTAL_API_CALLS_COUNTER < SLOW_DOWN_MSG_THRESHOLD) // because some times gets called after some other msgs are displayed
     clearMsg();
 
   let table_body = getTableBody();
@@ -156,30 +150,30 @@ function add_fork_elements(forkdata_array, user, repo, parentDefaultBranch) {
       continue;
 
     /* Commits diff data (ahead/behind). */
-    const API_REQUEST_URL = `https://api.github.com/repos/${user}/${repo}/compare/${parentDefaultBranch}...${extract_username_from_fork(currFork.full_name)}:${currFork.default_branch}`;
-    let request = authenticatedRequestHeaderFactory(API_REQUEST_URL);
-    request.onreadystatechange = onreadystatechangeFactory(request,
-        () => {
-          const response = JSON.parse(request.responseText);
-
-          if (response.total_commits === 0) {
-            NEW_ROW.remove();
-            if (table_body.children().length === 0) {
-              setMsg(UF_MSG_EMPTY_FILTER);
-            }
-          } else {
-            /* Appending the commit badges to the new row. */
-            NEW_ROW.append(
-                $('<td>').html(UF_TABLE_SEPARATOR),
-                $('<td>', {class: "uf_badge"}).html(ahead_badge(response.ahead_by)),
-                $('<td>').html(UF_TABLE_SEPARATOR),
-                $('<td>', {class: "uf_badge"}).html(behind_badge(response.behind_by))
-            )
-          }
-        },
-        () => NEW_ROW.remove()
-    );
-    send(request);
+    const requestPromise = () => octokit.repos.compareCommits({
+      owner: user,
+      repo: repo,
+      base: parentDefaultBranch,
+      head: `${extract_username_from_fork(currFork.full_name)}:${currFork.default_branch}`
+    });
+    const onSuccess = (responseHeaders, responseData) => {
+      if (responseData.total_commits === 0) {
+        NEW_ROW.remove();
+        if (table_body.children().length === 0) {
+          setMsg(UF_MSG_EMPTY_FILTER);
+        }
+      } else {
+        /* Appending the commit badges to the new row. */
+        NEW_ROW.append(
+            $('<td>').html(UF_TABLE_SEPARATOR),
+            $('<td>', {class: "uf_badge"}).html(ahead_badge(responseData.ahead_by)),
+            $('<td>').html(UF_TABLE_SEPARATOR),
+            $('<td>', {class: "uf_badge"}).html(behind_badge(responseData.behind_by))
+        );
+      }
+    };
+    const onFailure = () => NEW_ROW.remove();
+    send(requestPromise, onSuccess, onFailure);
 
     /* Forks of forks. */
     if (currFork.forks_count > 0) {
@@ -193,63 +187,62 @@ function request_fork_page(page_number, user, repo, defaultBranch) {
   if (RATE_LIMIT_EXCEEDED)
     return;
 
-  const API_REQUEST_URL = `https://api.github.com/repos/${user}/${repo}/forks?sort=stargazers&per_page=${FORKS_PER_PAGE}&page=${page_number}`;
-  let request = authenticatedRequestHeaderFactory(API_REQUEST_URL);
-  request.onreadystatechange = onreadystatechangeFactory(request,
-      () => {
-        const response = JSON.parse(request.responseText);
+  const requestPromise = () => octokit.repos.listForks({
+    owner: user,
+    repo: repo,
+    sort: "stargazers",
+    per_page: 100, // maximum allowed by GitHub
+    page: page_number
+  });
+  const onSuccess = (responseHeaders, responseData) => {
+    if (isEmpty(responseData)) // repo has not been forked
+      return;
 
-        if (isEmpty(response)) // repo has not been forked
-          return;
+    sortTable();
 
-        /* Pagination (beyond 100 forks). */
-        const link_header = request.getResponseHeader("link");
-        if (link_header) {
-          let contains_next_page = link_header.indexOf('>; rel="next"');
-          if (contains_next_page !== -1) {
-            request_fork_page(++page_number, user, repo, defaultBranch);
-          }
-        }
+    /* Pagination (beyond 100 forks). */
+    const link_header = responseHeaders["link"];
+    if (link_header) {
+      let contains_next_page = link_header.indexOf('>; rel="next"');
+      if (contains_next_page !== -1) {
+        request_fork_page(++page_number, user, repo, defaultBranch);
+      }
+    }
 
-        sortTable();
-
-        /* Populate the table. */
-        add_fork_elements(response, user, repo, defaultBranch);
-      },
-      () => setMsg(UF_MSG_ERROR)
-  );
-  send(request);
+    /* Populate the table. */
+    add_fork_elements(responseData, user, repo, defaultBranch);
+  };
+  const onFailure = () => displayConditionalErrorMsg();
+  send(requestPromise, onSuccess, onFailure);
 }
 
 /** Updates header with Queried Repo info, and initiates forks scan. */
 function initial_request(user, repo) {
-  const API_REQUEST_URL = `https://api.github.com/repos/${user}/${repo}`;
-  let request = authenticatedRequestHeaderFactory(API_REQUEST_URL);
-  request.onreadystatechange = onreadystatechangeFactory(request,
-      () => {
-        const response = JSON.parse(request.responseText);
+  const requestPromise = () => octokit.repos.get({
+    owner: user,
+    repo: repo
+  });
+  const onSuccess = (responseHeaders, responseData) => {
+    if (isEmpty(responseData))
+      return;
 
-        if (isEmpty(response))
-          return;
+    TOTAL_FORKS = responseData.forks_count;
 
-        TOTAL_FORKS = response.forks_count;
+    let html_txt = getRepoCol(responseData.full_name, true);
+    html_txt += UF_TABLE_SEPARATOR + getStarCol(responseData.stargazers_count);
+    html_txt += UF_TABLE_SEPARATOR + getWatchCol(responseData.subscribers_count);
+    html_txt += UF_TABLE_SEPARATOR + getForkCol(TOTAL_FORKS);
+    setHeader('<b>Queried repository</b>:&nbsp;&nbsp;&nbsp;' + html_txt);
 
-        let html_txt = getRepoCol(response.full_name, true);
-        html_txt += UF_TABLE_SEPARATOR + getStarCol(response.stargazers_count);
-        html_txt += UF_TABLE_SEPARATOR + getWatchCol(response.subscribers_count);
-        html_txt += UF_TABLE_SEPARATOR + getForkCol(TOTAL_FORKS);
-        setHeader('<b>Queried repository</b>:&nbsp;&nbsp;&nbsp;' + html_txt);
-
-        if (TOTAL_FORKS > 0) {
-          request_fork_page(1, user, repo, response.default_branch);
-        } else {
-          setMsg(UF_MSG_NO_FORKS);
-          enableQueryFields();
-        }
-      },
-      () => setMsg(UF_MSG_ERROR)
-  );
-  send(request);
+    if (TOTAL_FORKS > 0) {
+      request_fork_page(1, user, repo, responseData.default_branch);
+    } else {
+      setMsg(UF_MSG_NO_FORKS);
+      enableQueryFields();
+    }
+  };
+  const onFailure = () => displayConditionalErrorMsg();
+  send(requestPromise, onSuccess, onFailure);
 }
 
 /** Extracts and sanitizes 'user' and 'repo' values from potential inputs. */
@@ -272,7 +265,7 @@ function initiate_search() {
     return; // abort
   }
 
-  disableQueryFields();
+  setQueryFieldsAsLoading();
   setMsg(UF_MSG_SCANNING);
 
   const user = queryValues[len - 2];
@@ -281,7 +274,26 @@ function initiate_search() {
   initial_request(user, repo);
 }
 
-/* Initiates query triggers. */
+/* Object used for REST calls. */
+const MyOctokit = Octokit.plugin(throttling);
+const octokit = new MyOctokit({
+  auth: LOCAL_STORAGE_GITHUB_ACCESS_TOKEN,
+  userAgent: 'useful-forks',
+  throttle: {
+    onRateLimit: (retryAfter, options) => {
+      onRateLimitExceeded();
+      if (options.request.retryCount === 0) { // only retries once
+        return true; // true = retry
+      }
+    },
+    onAbuseLimit: (retryAfter, options) => {
+      return true; // true = automatically retry after given amount of seconds
+    }
+  }
+});
+
+
+/* Setting up query triggers. */
 JQ_SEARCH_BTN.click(event => {
   event.preventDefault();
   initiate_search();
