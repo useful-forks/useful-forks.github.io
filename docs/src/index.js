@@ -18,8 +18,13 @@ const UF_MSG_NO_FORKS     = "No one forked this specific repository.";
 const UF_MSG_SCANNING     = "Currently scanning all the forks.";
 const UF_MSG_ERROR        = "There seems to have been an error. (Maybe you had a typo in the provided input?)";
 const UF_MSG_EMPTY_FILTER = "All the forks have been filtered out: you can now rest easy!";
-const UF_MSG_API_RATE     = "<b>GitHub API rate-limits exceeded.</b> Consider providing an <b>Access Token</b> if you haven't already (click the button at the top-right).<br/>The amount of API calls you are allowed to do will re-accumulate over time: you can try again later on.<br/>It's also possible that the queried repository has so many forks that it's impossible to scan it completely without running out of API calls. :(";
 const UF_TABLE_SEPARATOR  = "&nbsp;|&nbsp;";
+const UF_MSG_SLOWER       = "The scan will be slowing down due to the high amount of requests.<br/>"
+    + "(That is to prevent GitHub API from refusing to respond due to thinking those requests are malicious.)";
+const UF_MSG_API_RATE     = "<b>GitHub API rate-limits exceeded.</b> Consider providing an <b>Access Token</b> if you haven't already (click the button at the top-right).<br/>"
+    + "The amount of API calls you are allowed to do will re-accumulate over time: you can try again later on.<br/>"
+    + "It's also possible that the queried repository has so many forks that it's impossible to scan it completely without running out of API calls.<br/>"
+    + ":(";
 
 
 const EXAMPLE_LINK_1 = `<a href='https://useful-forks.github.io/?repo=payne911/PieMenu'
@@ -88,11 +93,12 @@ function enableQueryFields() {
   JQ_REPO_FIELD.prop('disabled', false);
   JQ_SEARCH_BTN.removeClass('is-loading');
 }
-function disableQueryFields() {
+function setQueryFieldsAsLoading() {
   JQ_REPO_FIELD.prop('disabled', true);
   JQ_SEARCH_BTN.addClass('is-loading');
 }
-function disableQueryBtn() {
+function disableQueryFields() {
+  JQ_REPO_FIELD.prop('disabled', true);
   JQ_SEARCH_BTN.prop('disabled', true);
   JQ_SEARCH_BTN.removeClass('is-loading');
 }
