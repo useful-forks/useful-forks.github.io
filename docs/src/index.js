@@ -119,19 +119,6 @@ function drawAddTokenBtn(accessToken) {
   JQ_POPUP_TITLE.html(verb + ' GitHub Access Token');
 }
 
-function automaticSearch(searchValue) {
-  JQ_REPO_FIELD.val(searchValue);
-  JQ_SEARCH_BTN.click();
-}
-
-function getRepoNameFromUrl() {
-  let repo = new URLSearchParams(location.search).get('repo');
-  if (!repo) {
-    repo = new URLSearchParams(location.search).get('repository');
-  }
-  return repo;
-}
-
 function getJqId_$(id) {
   return $('#' + id);
 }
@@ -162,15 +149,6 @@ JQ_TOKEN_FIELD.keyup(event => {
     closeTokenDialog();
   }
 });
-JQ_SEARCH_BTN.click(event => {
-  event.preventDefault();
-  initiate_search();
-});
-JQ_REPO_FIELD.keyup(event => {
-  if (event.keyCode === 13) { // 'ENTER'
-    initiate_search();
-  }
-});
 
 
 /* Gather the saved Access Token. */
@@ -193,10 +171,3 @@ $('#useful_forks_inject').append(
 const JQ_ID_HEADER  = getJqId_$(UF_ID_HEADER);
 const JQ_ID_MSG     = getJqId_$(UF_ID_MSG);
 const JQ_ID_TABLE   = getJqId_$(UF_ID_TABLE);
-
-
-/* Automatically queries when an URL parameter is present. */
-const query = getRepoNameFromUrl();
-if (query) {
-  automaticSearch(query);
-}

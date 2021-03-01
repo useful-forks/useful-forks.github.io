@@ -280,3 +280,33 @@ function initiate_search() {
   ga_searchQuery(user, repo);
   initial_request(user, repo);
 }
+
+/* Initiates query triggers. */
+JQ_SEARCH_BTN.click(event => {
+  event.preventDefault();
+  initiate_search();
+});
+JQ_REPO_FIELD.keyup(event => {
+  if (event.keyCode === 13) { // 'ENTER'
+    initiate_search();
+  }
+});
+
+function automaticSearch(searchValue) {
+  JQ_REPO_FIELD.val(searchValue);
+  JQ_SEARCH_BTN.click();
+}
+
+function getRepoNameFromUrl() {
+  let repo = new URLSearchParams(location.search).get('repo');
+  if (!repo) {
+    repo = new URLSearchParams(location.search).get('repository');
+  }
+  return repo;
+}
+
+/* Automatically queries when an URL parameter is present. */
+const query = getRepoNameFromUrl();
+if (query) {
+  automaticSearch(query);
+}
