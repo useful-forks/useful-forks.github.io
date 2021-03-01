@@ -81,10 +81,6 @@ function incrementCounters() {
   }
 }
 
-function allRequestsAreDone() {
-  return ONGOING_REQUESTS_COUNTER <= 0 && TOTAL_API_CALLS_COUNTER >= TOTAL_FORKS;
-}
-
 function onRateLimitExceeded() {
   if (!RATE_LIMIT_EXCEEDED) {
     console.warn('[useful-forks] GitHub API rate-limit exceeded. (Since useful-forks sends many requests at once, you might have a lot of `Error Code 403` in your browser Console Logs.)');
@@ -97,11 +93,15 @@ function onRateLimitExceeded() {
   }
 }
 
+function allRequestsAreDone() {
+  return ONGOING_REQUESTS_COUNTER <= 0 && TOTAL_API_CALLS_COUNTER >= TOTAL_FORKS;
+}
+
 /** Detection of final request. */
 function decrementCounters() {
   ONGOING_REQUESTS_COUNTER--;
   if (allRequestsAreDone()) {
-    clearMsg();
+    clearNonErrorMsg();
     sortTable();
     enableQueryFields();
   }
@@ -137,7 +137,7 @@ function add_fork_elements(forkdata_array, user, repo, parentDefaultBranch) {
     return;
 
   if (!RATE_LIMIT_EXCEEDED && TOTAL_API_CALLS_COUNTER < SLOW_DOWN_MSG_THRESHOLD) // because some times gets called after some other msgs are displayed
-    clearMsg();
+    clearNonErrorMsg();
 
   let table_body = getTableBody();
   for (let i = 0; i < forkdata_array.length; i++) {

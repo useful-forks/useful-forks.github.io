@@ -72,13 +72,17 @@ function setMsg(msg) {
   JQ_ID_MSG.html(msg);
 }
 function clearMsg() {
-  setMsg("");
+  JQ_ID_MSG.empty();
+}
+function clearNonErrorMsg() {
+  if (JQ_ID_MSG.html() !== UF_MSG_ERROR)
+    clearMsg();
 }
 function setHeader(msg) {
   JQ_ID_HEADER.html(msg);
 }
 function clearHeader() {
-  setHeader("");
+  JQ_ID_HEADER.empty();
 }
 
 function closeTokenDialog() {
