@@ -27,7 +27,7 @@ And when you go looking for those interesting forks, you find yourself searching
 ## Releases
 The project is released as:
 1. A website: great for people that just want to use this tool every now and then.
-2. A Chrome Extension: has the advantage of always performing the search whenever you open a project's GitHub Forks page.
+2. A Chrome extension: has the advantage of always performing the search whenever you open a project's GitHub Forks page.
 3. A feature in [`refined-github`](https://github.com/sindresorhus/refined-github)
 
 ### Website
