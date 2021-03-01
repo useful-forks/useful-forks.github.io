@@ -16,7 +16,7 @@ And when you go looking for those interesting forks, you find yourself searching
 ## Table of Content
 * [Releases](#releases)
   * [Website](#website)
-  * [Chrome Extension](#chrome-extension-wip) (WIP)
+  * [Chrome extension](#chrome-extension-wip) (WIP)
   * [`refined-github`](#refined-github)
 * [How it works](#how-it-works)
 * [Contributing](#contributing)
@@ -37,7 +37,7 @@ You can query repository directly with the URL. Here is an example: https://usef
 
 ![website example](media/website_demo.gif)
 
-### Chrome Extension (WIP)
+### Chrome extension (WIP)
 Not published yet. If you want to install it:
 1. Clone this repository
 2. Change the [script file](project/useful-forks.js) so that `GITHUB_ACCESS_TOKEN`'s value is that of an [Access Token](https://github.com/settings/tokens/new?scopes=public_repo&description=UsefulForks)
