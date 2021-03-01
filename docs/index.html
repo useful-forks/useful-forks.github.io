@@ -85,22 +85,21 @@
         </button>
       </header>
       <section class="modal-card-body">
-        <p>Useful-Forks uses the GitHub API to retrieve repository metadata. You may see this page because you have hit the
+        <p>Useful Forks uses the GitHub API to retrieve repository metadata. You may see this page because you have hit the
           <a href="https://developer.github.com/v3/#rate-limiting" target="_blank" rel="noopener noreferrer">
             GitHub API rate limit</a>.
         </p><br/>
-        <p>Useful-Forks will need a personal Access Token to increase that limit (it increases it by almost 5000 calls per hour).
-          If you don't already have one, you can
-          <b><a href="https://github.com/settings/tokens/new?scopes=public_repo&description=UsefulForks" target="_blank" rel="noopener noreferrer">
-            create one</a></b>
-          and paste it into the text-box below. The required scope is already defined by the link above.
-        </p><br/>
+        <p>To raise that limit (it increases it by almost 5000 calls per hour), you should provide a personal Access Token.</p><br/>
+        <p>If you don't already have one, you can create one and paste its ID into the text-box below. The required scope is pre-configured by the "Create" button's link below.</p><br/>
         <label class="label">Access Token (will be stored in your browser's local storage):</label>
         <input class="input" id="tokenInput" placeholder="90c6b8218dae4122b07b4a0fae252c619a08941b" />
       </section>
       <footer class="modal-card-foot">
-        <button id="saveTokenBtn" class="button is-success is-large is-fullwidth"
-                onclick="ga_saveToken();">Save</button>
+        <a href="https://github.com/settings/tokens/new?scopes=public_repo&description=UsefulForks" target="_blank" rel="noopener noreferrer"
+           class="button is-link is-large is-fullwidth"
+           onclick="ga_createToken();">Create</a>
+        <a id="saveTokenBtn" class="button is-success is-large is-fullwidth"
+           onclick="ga_saveToken();">Save</a>
       </footer>
     </div>
   </div>

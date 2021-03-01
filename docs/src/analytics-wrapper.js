@@ -53,3 +53,6 @@ function ga_closeToken() {
 function ga_saveToken() {
   dispatch('click', 'access-token', 'Save-Token');
 }
+function ga_createToken() {
+  dispatch('click', 'access-token', 'Create-Token');
+}
