@@ -9,6 +9,17 @@ let RATE_LIMIT_EXCEEDED      = false;
 let TOTAL_API_CALLS_COUNTER  = 0;
 let ONGOING_REQUESTS_COUNTER = 0;
 
+/** Used to reset the state for a brand new query. */
+function clear_old_data() {
+  clearHeader();
+  clearMsg();
+  clearTable();
+  setApiCallsLabel(0);
+  TOTAL_FORKS = 0;
+  RATE_LIMIT_EXCEEDED = false;
+  TOTAL_API_CALLS_COUNTER = 0;
+  ONGOING_REQUESTS_COUNTER = 0;
+}
 
 function extract_username_from_fork(combined_name) {
   return combined_name.split('/')[0];
@@ -57,18 +68,6 @@ function isEmpty(aList) {
 function displayConditionalErrorMsg() {
   if (!RATE_LIMIT_EXCEEDED)
     setMsg(UF_MSG_ERROR);
-}
-
-/** Used to reset the state for a brand new request. */
-function clear_old_data() {
-  clearHeader();
-  clearMsg();
-  clearTable();
-  setApiCallsLabel(0);
-  TOTAL_FORKS = 0;
-  RATE_LIMIT_EXCEEDED = false;
-  TOTAL_API_CALLS_COUNTER = 0;
-  ONGOING_REQUESTS_COUNTER = 0;
 }
 
 function incrementCounters() {
