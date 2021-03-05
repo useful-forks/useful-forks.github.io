@@ -303,21 +303,7 @@ JQ_REPO_FIELD.keyup(event => {
   }
 });
 
-function automaticSearch(searchValue) {
-  JQ_REPO_FIELD.val(searchValue);
+/* Trigger an automatic query is a value was extracted from the URL Param. */
+if (JQ_REPO_FIELD.val()) {
   JQ_SEARCH_BTN.click();
-}
-
-function getRepoNameFromUrl() {
-  let repo = new URLSearchParams(location.search).get('repo');
-  if (!repo) {
-    repo = new URLSearchParams(location.search).get('repository');
-  }
-  return repo;
-}
-
-/* Automatically queries when an URL parameter is present. */
-const query = getRepoNameFromUrl();
-if (query) {
-  automaticSearch(query);
 }

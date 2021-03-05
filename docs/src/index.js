@@ -166,11 +166,31 @@ const GITHUB_ACCESS_TOKEN_STORAGE_KEY = "useful-forks-access-token";
 let LOCAL_STORAGE_GITHUB_ACCESS_TOKEN = localStorage.getItem(GITHUB_ACCESS_TOKEN_STORAGE_KEY);
 drawAddTokenBtn(LOCAL_STORAGE_GITHUB_ACCESS_TOKEN);
 
+/** Grabs the URL Param used for automatic queries. */
+function getRepoNameFromUrl() {
+  let repo = new URLSearchParams(location.search).get('repo');
+  if (!repo) {
+    repo = new URLSearchParams(location.search).get('repository');
+  }
+  return repo;
+}
+
+/** Only displays the landing page message if no automatic-query param is found in the URL. */
+function landingPageTrigger() {
+  const query = getRepoNameFromUrl();
+  if (query) {
+    JQ_REPO_FIELD.val(query);
+    return "";
+  } else {
+    return LANDING_PAGE_INIT_MSG;
+  }
+}
+
 /* Initialize the structure used by the 'queries-logic.js' */
 $('#useful_forks_inject').append(
     $('<div>', {id: UF_ID_WRAPPER}).append(
         $('<div>', {id: UF_ID_HEADER}),
-        $('<div>', {id: UF_ID_MSG}).html(LANDING_PAGE_INIT_MSG),
+        $('<div>', {id: UF_ID_MSG}).html(landingPageTrigger()),
         $('<div>', {id: UF_ID_DATA}).append(
             $('<table>', {id: UF_ID_TABLE}).append(
                 $('<tbody>')
