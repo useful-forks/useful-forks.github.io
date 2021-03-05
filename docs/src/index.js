@@ -1,3 +1,5 @@
+const SELF_URL = "https://useful-forks.github.io/";
+
 const UF_ID_WRAPPER = 'useful_forks_wrapper';
 const UF_ID_DATA    = 'useful_forks_data';
 const UF_ID_HEADER  = 'useful_forks_header';
@@ -27,11 +29,11 @@ const UF_MSG_API_RATE     = "<b>GitHub API rate-limits exceeded.</b> Consider pr
     + ":(";
 
 
-const EXAMPLE_LINK_1 = `<a href='https://useful-forks.github.io/?repo=payne911/PieMenu'
+const EXAMPLE_LINK_1 = `<a href="${buildAutoQueryURL('payne911/PieMenu')}"
                            onclick="ga_shortExampleLink();">payne911/PieMenu</a>`;
-const EXAMPLE_LINK_2 = `<a href='https://useful-forks.github.io/?repo=https://github.com/payne911/PieMenu'
+const EXAMPLE_LINK_2 = `<a href="${buildAutoQueryURL('https://github.com/payne911/PieMenu')}"
                            onclick="ga_fullExampleLink();">https://github.com/payne911/PieMenu</a>`;
-const BODY_REPO_LINK = `<a href='https://github.com/useful-forks/useful-forks.github.io'
+const BODY_REPO_LINK = `<a href="${buildGithubRepoURL('useful-forks/useful-forks.github.io')}"
                            onclick="ga_bodyRepoLink();">the GitHub project</a>`;
 const LANDING_PAGE_INIT_MSG = "<b>Introducing:</b><br/><br/>"
     + "<img src='assets/useful-forks-banner.png' alt='useful-forks banner' width='500'/><br/><br/>"
@@ -49,8 +51,8 @@ const SVG_STAR = '<svg aria-label="star" height="16" class="octicon octicon-star
 const SVG_EYE  = '<svg class="octicon octicon-eye v-align-text-bottom" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"><path fill-rule="evenodd" d="M8.06 2C3 2 0 8 0 8s3 6 8.06 6C13 14 16 8 16 8s-3-6-7.94-6zM8 12c-2.2 0-4-1.78-4-4 0-2.2 1.8-4 4-4 2.22 0 4 1.8 4 4 0 2.22-1.78 4-4 4zm2-4c0 1.11-.89 2-2 2-1.11 0-2-.89-2-2 0-1.11.89-2 2-2 1.11 0 2 .89 2 2z"></path></svg>';
 
 function getRepoCol(full_name, isInitialRepo) {
-  return SVG_FORK + ` <a href="https://github.com/${full_name}" target="_blank" rel="noopener noreferrer"
-                                 onclick="ga_queryResultClick('${full_name}', ${isInitialRepo});">${full_name}</a>`;
+  return SVG_FORK + ` <a href="${buildGithubRepoURL(full_name)}" target="_blank" rel="noopener noreferrer"
+                         onclick="ga_queryResultClick('${full_name}', ${isInitialRepo});">${full_name}</a>`;
 }
 function getStarCol(num_stars) {
   return SVG_STAR + ' x ' + num_stars;
@@ -60,6 +62,13 @@ function getForkCol(num_forks) {
 }
 function getWatchCol(num_watchers) {
   return SVG_EYE + ' x ' + num_watchers;
+}
+
+function buildAutoQueryURL(repo) {
+  return `${SELF_URL}?repo=${repo}`;
+}
+function buildGithubRepoURL(repo) {
+  return `https://github.com/${repo}`;
 }
 
 function getTableBody() {
