@@ -227,11 +227,30 @@ function initial_request(user, repo) {
 
     TOTAL_FORKS = responseData.forks_count;
 
-    let html_txt = getRepoCol(responseData.full_name, true);
+    let html_txt = '<b>Queried repository</b>:&nbsp;&nbsp;&nbsp;';
+    html_txt += getRepoCol(responseData.full_name, true);
     html_txt += UF_TABLE_SEPARATOR + getStarCol(responseData.stargazers_count);
     html_txt += UF_TABLE_SEPARATOR + getWatchCol(responseData.subscribers_count);
     html_txt += UF_TABLE_SEPARATOR + getForkCol(TOTAL_FORKS);
-    setHeader('<b>Queried repository</b>:&nbsp;&nbsp;&nbsp;' + html_txt);
+
+    /* Warning the user if he's not scanning from the root. */
+    if (responseData.source) { // guarantees both 'source' and 'parent' are present
+      html_txt += `<p class="mt-2">`;
+
+      const source = responseData.source.full_name;
+      html_txt += getForkButtonLink("Source", source);
+
+      /* If at least 2nd level fork from source. */
+      const parent = responseData.parent.full_name;
+      if (parent !== source) {
+        html_txt += UF_TABLE_SEPARATOR;
+        html_txt += getForkButtonLink("Parent", parent);
+      }
+
+      html_txt += "</p>"
+    }
+
+    setHeader(html_txt);
 
     if (TOTAL_FORKS > 0) {
       request_fork_page(1, user, repo, responseData.default_branch);
