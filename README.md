@@ -6,12 +6,11 @@
 
 ---
 
-Adding a sorted list of starred forks to the GitHub forks page.
-Results are filtered out if there were never any commits pushed since the fork was created.
+Adding a sorted list of starred forks to the GitHub forks page. Results are filtered out if there were never any commits pushed on the main branch since the fork was created.
 
-This is meant to help with increasing the discoverability of useful forks of open-source projects.
-Some times, a project might be abandoned, or someone had a different idea of how it should be implemented...
-And when you go looking for those interesting forks, you find yourself searching through potentially hundreds of forks.
+This is meant to help increase the discoverability of useful forks of open-source projects.
+
+Some times, a project might be abandoned, or someone had a different idea of how it should be implemented... and when you go looking for those interesting forks, you find yourself searching through potentially hundreds of them. This tool is here to help you discover the hidden jewels you were looking for!
 
 ## Table of Content
 * [Releases](#releases)
