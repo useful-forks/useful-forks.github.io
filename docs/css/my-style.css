@@ -43,3 +43,23 @@ table {
 .allButFooter {
   min-height: calc(100vh - 200px);
 }
+
+.navbar-item > img {
+  margin-right: 8px;
+}
+
+.navbar-item {
+  display: flex !important;
+  align-items: center !important;
+}
+
+@media screen and (max-width: 1023px) {
+  .navbar-menu {
+    background-color: #f5f5f5 !important; /* dropdown background */
+    padding: 0 !important;
+  }
+  .navbar-menu .navbar-item:hover {
+    background-color: #4a4a4a !important; /* dropdown hovered row */
+    color: #f8f8f8 !important; /* hovered text color */
+  }
+}

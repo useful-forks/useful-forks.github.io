@@ -142,8 +142,8 @@ function drawAddTokenBtn(accessToken) {
     verb = 'Edit';
     JQ_TOKEN_FIELD.val(accessToken);
   }
-  JQ_TOKEN_BTN.html('<img src="assets/settings-icon.png" alt="settings" />'
-      + '<strong>&nbsp;&nbsp;' + verb + ' Access Token</strong>');
+  JQ_TOKEN_BTN.html('<img src="assets/settings-icon.png" alt="Settings" />'
+      + verb + ' Access Token');
   JQ_POPUP_TITLE.html(verb + ' GitHub Access Token');
 }
 
@@ -151,6 +151,12 @@ function getJqId_$(id) {
   return $('#' + id);
 }
 
+
+/* Burger-menu toggling */
+$(".navbar-burger").click(function() {
+  $(".navbar-burger").toggleClass("is-active");
+  $(".navbar-menu").toggleClass("is-active");
+});
 
 /* Initializing callbacks. */
 JQ_TOKEN_BTN.click(event => {

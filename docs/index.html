@@ -38,36 +38,56 @@
 </head>
 
 <body>
-<!-- CSS trick to force footer at bottom. -->
+
+<!-- CSS trick to force footer at bottom -->
 <div class="allButFooter">
 
   <!-- Navigation bar -->
   <nav class="navbar is-dark" style="z-index: 1">
     <div class="container">
       <div class="navbar-brand">
-        <a class="navbar-item" href="https://useful-forks.github.io/"
+
+        <!-- Left-side buttons which are always displayed -->
+        <a class="navbar-item has-text-weight-bold"
+           href="https://useful-forks.github.io/"
            onclick="ga_homeHeader();">
           <img src="assets/useful-forks-logo.png" alt="UsefulForks_logo" />
-          <strong>&nbsp;&nbsp;Home</strong>
+          Home
         </a>
-        <a class="navbar-item" href="https://github.com/useful-forks/useful-forks.github.io" target="_blank" rel="noopener noreferrer"
+        <a class="navbar-item has-text-weight-bold"
+           href="https://github.com/useful-forks/useful-forks.github.io" target="_blank" rel="noopener noreferrer"
            onclick="ga_githubHeader();">
           <img src="assets/github-white-icon.png" alt="GitHub_logo" />
-          <strong>&nbsp;&nbsp;Open-Source Project</strong>
+          Open-Source Project
         </a>
-        <a class="navbar-item" href="https://github.com/useful-forks/useful-forks#chrome-extension-wip" target="_blank" rel="noopener noreferrer"
-           onclick="ga_chromeHeader();">
-          <img src="assets/chrome-icon.png" alt="Chrome_logo" />
-          <strong>&nbsp;&nbsp;Chrome Extension (WIP)</strong>
-        </a>
+
+        <!-- Dropdown button for smaller screens -->
+        <div class="navbar-burger burger" data-target="uf-burger">
+          <!-- Each `<span>` is a line in the burger icon -->
+          <span></span>
+          <span></span>
+          <span></span>
+        </div>
       </div>
 
-      <div id="navbarExampleTransparentExample" class="navbar-menu">
+      <div id="uf-burger" class="navbar-menu">
+
+        <!-- Left-side buttons which will populate the Burger -->
+        <div class="navbar-start">
+          <a class="navbar-item has-text-weight-bold"
+             href="https://github.com/useful-forks/useful-forks#chrome-extension-wip" target="_blank" rel="noopener noreferrer"
+             onclick="ga_chromeHeader();">
+            <img src="assets/chrome-icon.png" alt="Chrome_logo" />
+            Chrome Extension (WIP)
+          </a>
+        </div>
+
+        <!-- Right-side buttons which will populate the Burger -->
         <div class="navbar-end">
-          <a id="addTokenBtn" class="navbar-item"
+          <a id="addTokenBtn" class="navbar-item has-text-weight-bold"
              onclick="ga_openTokenHeader();">
-            <img src="assets/settings-icon.png" alt="settings" />
-            <strong>&nbsp;&nbsp;Add an Access Token</strong>
+            <img src="assets/settings-icon.png" alt="Settings" />
+            Add an Access Token
           </a>
         </div>
       </div>
