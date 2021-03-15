@@ -85,8 +85,8 @@
         <!-- Right-side buttons which will populate the Burger -->
         <div class="navbar-end">
           <a id="addTokenBtn" class="navbar-item has-text-weight-bold"
-             onclick="ga_openTokenHeader();">
-            <img src="assets/settings-icon.png" alt="Settings" />
+             onclick="openTokenDialog();">
+            <img src="assets/settings-icon.png" alt="Access Token" />
             Add an Access Token
           </a>
         </div>
@@ -99,10 +99,9 @@
     <div class="modal-background"></div>
     <div class="modal-card">
       <header class="modal-card-head">
-        <p id="modalCardTitle" class="modal-card-title">Add a GitHub Access Token</p>
-        <button id="closeModalBtn" class="delete is-large" aria-label="close"
-                onclick="ga_closeToken();">
-        </button>
+        <p id="modalTokenCardTitle" class="modal-card-title">Add a GitHub Access Token</p>
+        <button class="delete is-large" aria-label="close"
+                onclick="closeTokenDialog();"></button>
       </header>
       <section class="modal-card-body">
         <p><em>Useful Forks</em> uses the GitHub API to retrieve repository metadata. You may see this dialog because you have hit the
@@ -117,9 +116,34 @@
       <footer class="modal-card-foot">
         <a href="https://github.com/settings/tokens/new?scopes=public_repo&description=UsefulForks" target="_blank" rel="noopener noreferrer"
            class="button is-link is-large is-fullwidth"
-           onclick="ga_createToken();">Create</a>
-        <a id="saveTokenBtn" class="button is-success is-large is-fullwidth"
-           onclick="ga_saveToken();">Save</a>
+           onclick="ga_createToken();">
+          Create
+        </a>
+        <a class="button is-success is-large is-fullwidth"
+           onclick="saveTokenBtnClicked();">
+          Save
+        </a>
+      </footer>
+    </div>
+  </div>
+
+  <!-- Query Settings popup -->
+  <div class="modal" id="useful_forks_settings_popup">
+    <div class="modal-background"></div>
+    <div class="modal-card">
+      <header class="modal-card-head">
+        <p class="modal-card-title">Customize query settings</p>
+        <button class="delete is-large" aria-label="close"
+                onclick="closeSettingsDialog();"></button>
+      </header>
+      <section class="modal-card-body">
+        <p>Those settings will be saved on your local browser and will apply the next time you visit.</p><br/>
+      </section>
+      <footer class="modal-card-foot">
+        <a class="button is-success is-large is-fullwidth"
+           onclick="saveSettingsBtnClicked();">
+          Save
+        </a>
       </footer>
     </div>
   </div>
@@ -129,6 +153,12 @@
     <div class="container has-text-centered">
       <div class="search-container">
         <div class="field has-addons">
+          <p class="control">
+            <a class="button is-dark is-outlined px-2"
+               onclick="openSettingsDialog();">
+              <img src="assets/settings-icon_big.png" alt="Settings" width="26" height="26"/>
+            </a>
+          </p>
           <div class="control is-expanded">
             <input class="input is-dark" type="text" id="repo" name="repo" placeholder="payne911/PieMenu" autofocus />
           </div>

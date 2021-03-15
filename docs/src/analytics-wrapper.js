@@ -44,7 +44,7 @@ function ga_chromeHeader() {
 
 
 /* Access Token. */
-function ga_openTokenHeader() {
+function ga_openToken() {
   dispatch('click', 'access-token', 'Open-Dialog');
 }
 function ga_closeToken() {
@@ -55,4 +55,10 @@ function ga_saveToken() {
 }
 function ga_createToken() {
   dispatch('click', 'access-token', 'Create-Token');
+}
+
+
+/* Settings. */
+function ga_openSettings() {
+  dispatch('query', 'Query-Settings', 'Open');
 }

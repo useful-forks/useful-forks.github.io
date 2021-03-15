@@ -1,5 +1,6 @@
 const SELF_URL = "https://useful-forks.github.io/";
 
+/* Those elements (UF_ID) are dynamically created on page-load. */
 const UF_ID_WRAPPER = 'useful_forks_wrapper';
 const UF_ID_DATA    = 'useful_forks_data';
 const UF_ID_HEADER  = 'useful_forks_header';
@@ -9,12 +10,13 @@ const UF_ID_TABLE   = 'useful_forks_table';
 const JQ_REPO_FIELD  = $('#repo');
 const JQ_SEARCH_BTN  = $('#searchBtn');
 const JQ_TOTAL_CALLS = $('#totalApiCalls');
-const JQ_POPUP_TITLE = $('#modalCardTitle');
-const JQ_TOKEN_CLOSE = $('#closeModalBtn');
+
+const JQ_TOKEN_TITLE = $('#modalTokenCardTitle');
 const JQ_TOKEN_FIELD = $('#tokenInput');
-const JQ_TOKEN_SAVE  = $('#saveTokenBtn');
 const JQ_TOKEN_BTN   = $('#addTokenBtn');
-const JQ_POPUP       = $('#useful_forks_token_popup');
+const JQ_TOKEN_POPUP = $('#useful_forks_token_popup');
+
+const JQ_SETTINGS_POPUP = $('#useful_forks_settings_popup');
 
 const UF_MSG_NO_FORKS     = "No one forked this specific repository.";
 const UF_MSG_SCANNING     = "Currently scanning all the forks.";
@@ -103,14 +105,63 @@ function clearHeader() {
   JQ_ID_HEADER.empty();
 }
 
-function closeTokenDialog() {
-  JQ_POPUP.removeClass('is-active');
-  JQ_REPO_FIELD.focus();
+/* Settings Dialog */
+function openSettingsDialog() {
+  ga_openSettings();
+  JQ_SETTINGS_POPUP.addClass('is-active');
 }
+function closeSettingsDialog() {
+  JQ_SETTINGS_POPUP.removeClass('is-active');
+}
+function saveSettingsBtnClicked() {
+  // const INPUT_TOKEN = JQ_TOKEN_FIELD.val();
+  // localStorage.setItem(GITHUB_ACCESS_TOKEN_STORAGE_KEY, INPUT_TOKEN);
+  // LOCAL_STORAGE_GITHUB_ACCESS_TOKEN = INPUT_TOKEN;
+  // drawAddTokenBtn(INPUT_TOKEN);
+  closeSettingsDialog();
+}
+
+/* Token Dialog */
 function openTokenDialog() {
-  JQ_POPUP.addClass('is-active');
+  ga_openToken();
+  JQ_TOKEN_POPUP.addClass('is-active');
   JQ_TOKEN_FIELD.focus();
 }
+function closeTokenDialog() {
+  ga_closeToken();
+  JQ_TOKEN_POPUP.removeClass('is-active');
+  JQ_REPO_FIELD.focus();
+}
+function saveTokenBtnClicked() {
+  ga_saveToken();
+  const INPUT_TOKEN = JQ_TOKEN_FIELD.val();
+  localStorage.setItem(GITHUB_ACCESS_TOKEN_STORAGE_KEY, INPUT_TOKEN);
+  LOCAL_STORAGE_GITHUB_ACCESS_TOKEN = INPUT_TOKEN;
+  drawAddTokenBtn(INPUT_TOKEN);
+  closeTokenDialog();
+}
+
+function drawAddTokenBtn(accessToken) {
+  let verb = 'Add';
+  if (accessToken) {
+    verb = 'Edit';
+    JQ_TOKEN_FIELD.val(accessToken);
+  }
+  JQ_TOKEN_BTN.html('<img src="assets/settings-icon.png" alt="Settings" />'
+      + verb + ' Access Token');
+  JQ_TOKEN_TITLE.html(verb + ' GitHub Access Token');
+}
+
+JQ_TOKEN_FIELD.keyup(event => {
+  if (event.keyCode === 13) { // 'ENTER'
+    saveTokenBtnClicked();
+  }
+  if (event.keyCode === 27) { // 'ESC'
+    closeTokenDialog();
+  }
+});
+
+/* Search Query Fields */
 function enableQueryFields() {
   JQ_REPO_FIELD.prop('disabled', false);
   JQ_SEARCH_BTN.removeClass('is-loading');
@@ -136,17 +187,6 @@ function setApiCallsLabel(total) {
   JQ_TOTAL_CALLS.html(total + " calls");
 }
 
-function drawAddTokenBtn(accessToken) {
-  let verb = 'Add';
-  if (accessToken) {
-    verb = 'Edit';
-    JQ_TOKEN_FIELD.val(accessToken);
-  }
-  JQ_TOKEN_BTN.html('<img src="assets/settings-icon.png" alt="Settings" />'
-      + verb + ' Access Token');
-  JQ_POPUP_TITLE.html(verb + ' GitHub Access Token');
-}
-
 function getJqId_$(id) {
   return $('#' + id);
 }
@@ -156,32 +196,6 @@ function getJqId_$(id) {
 $(".navbar-burger").click(function() {
   $(".navbar-burger").toggleClass("is-active");
   $(".navbar-menu").toggleClass("is-active");
-});
-
-/* Initializing callbacks. */
-JQ_TOKEN_BTN.click(event => {
-  event.preventDefault();
-  openTokenDialog();
-});
-JQ_TOKEN_CLOSE.click(event => {
-  event.preventDefault();
-  closeTokenDialog();
-});
-JQ_TOKEN_SAVE.click(event => {
-  event.preventDefault();
-  const INPUT_TOKEN = JQ_TOKEN_FIELD.val();
-  localStorage.setItem(GITHUB_ACCESS_TOKEN_STORAGE_KEY, INPUT_TOKEN);
-  LOCAL_STORAGE_GITHUB_ACCESS_TOKEN = INPUT_TOKEN;
-  drawAddTokenBtn(INPUT_TOKEN);
-  closeTokenDialog();
-});
-JQ_TOKEN_FIELD.keyup(event => {
-  if (event.keyCode === 13) { // 'ENTER'
-    JQ_TOKEN_SAVE.click();
-  }
-  if (event.keyCode === 27) { // 'ESC'
-    closeTokenDialog();
-  }
 });
 
 

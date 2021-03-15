@@ -63,3 +63,9 @@ table {
     color: #f8f8f8 !important; /* hovered text color */
   }
 }
+
+@media screen and (min-width: 769px) {
+  .modal-card, .modal-content {
+    width: 660px !important; /* dialogs width */
+  }
+}
