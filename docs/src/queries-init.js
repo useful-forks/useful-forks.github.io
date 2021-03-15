@@ -1,22 +1,8 @@
 const SELF_URL = "https://useful-forks.github.io/";
 
-/* Those elements (UF_ID) are dynamically created on page-load. */
-const UF_ID_WRAPPER = 'useful_forks_wrapper';
-const UF_ID_DATA    = 'useful_forks_data';
-const UF_ID_HEADER  = 'useful_forks_header';
-const UF_ID_MSG     = 'useful_forks_msg';
-const UF_ID_TABLE   = 'useful_forks_table';
-
 const JQ_REPO_FIELD  = $('#repo');
 const JQ_SEARCH_BTN  = $('#searchBtn');
 const JQ_TOTAL_CALLS = $('#totalApiCalls');
-
-const JQ_TOKEN_TITLE = $('#modalTokenCardTitle');
-const JQ_TOKEN_FIELD = $('#tokenInput');
-const JQ_TOKEN_BTN   = $('#addTokenBtn');
-const JQ_TOKEN_POPUP = $('#useful_forks_token_popup');
-
-const JQ_SETTINGS_POPUP = $('#useful_forks_settings_popup');
 
 const UF_MSG_NO_FORKS     = "No one forked this specific repository.";
 const UF_MSG_SCANNING     = "Currently scanning all the forks.";
@@ -105,62 +91,6 @@ function clearHeader() {
   JQ_ID_HEADER.empty();
 }
 
-/* Settings Dialog */
-function openSettingsDialog() {
-  ga_openSettings();
-  JQ_SETTINGS_POPUP.addClass('is-active');
-}
-function closeSettingsDialog() {
-  JQ_SETTINGS_POPUP.removeClass('is-active');
-}
-function saveSettingsBtnClicked() {
-  // const INPUT_TOKEN = JQ_TOKEN_FIELD.val();
-  // localStorage.setItem(GITHUB_ACCESS_TOKEN_STORAGE_KEY, INPUT_TOKEN);
-  // LOCAL_STORAGE_GITHUB_ACCESS_TOKEN = INPUT_TOKEN;
-  // drawAddTokenBtn(INPUT_TOKEN);
-  closeSettingsDialog();
-}
-
-/* Token Dialog */
-function openTokenDialog() {
-  ga_openToken();
-  JQ_TOKEN_POPUP.addClass('is-active');
-  JQ_TOKEN_FIELD.focus();
-}
-function closeTokenDialog() {
-  ga_closeToken();
-  JQ_TOKEN_POPUP.removeClass('is-active');
-  JQ_REPO_FIELD.focus();
-}
-function saveTokenBtnClicked() {
-  ga_saveToken();
-  const INPUT_TOKEN = JQ_TOKEN_FIELD.val();
-  localStorage.setItem(GITHUB_ACCESS_TOKEN_STORAGE_KEY, INPUT_TOKEN);
-  LOCAL_STORAGE_GITHUB_ACCESS_TOKEN = INPUT_TOKEN;
-  drawAddTokenBtn(INPUT_TOKEN);
-  closeTokenDialog();
-}
-
-function drawAddTokenBtn(accessToken) {
-  let verb = 'Add';
-  if (accessToken) {
-    verb = 'Edit';
-    JQ_TOKEN_FIELD.val(accessToken);
-  }
-  JQ_TOKEN_BTN.html('<img src="assets/settings-icon.png" alt="Settings" />'
-      + verb + ' Access Token');
-  JQ_TOKEN_TITLE.html(verb + ' GitHub Access Token');
-}
-
-JQ_TOKEN_FIELD.keyup(event => {
-  if (event.keyCode === 13) { // 'ENTER'
-    saveTokenBtnClicked();
-  }
-  if (event.keyCode === 27) { // 'ESC'
-    closeTokenDialog();
-  }
-});
-
 /* Search Query Fields */
 function enableQueryFields() {
   JQ_REPO_FIELD.prop('disabled', false);
@@ -187,22 +117,6 @@ function setApiCallsLabel(total) {
   JQ_TOTAL_CALLS.html(total + " calls");
 }
 
-function getJqId_$(id) {
-  return $('#' + id);
-}
-
-
-/* Burger-menu toggling */
-$(".navbar-burger").click(function() {
-  $(".navbar-burger").toggleClass("is-active");
-  $(".navbar-menu").toggleClass("is-active");
-});
-
-
-/* Gather the saved Access Token. */
-const GITHUB_ACCESS_TOKEN_STORAGE_KEY = "useful-forks-access-token";
-let LOCAL_STORAGE_GITHUB_ACCESS_TOKEN = localStorage.getItem(GITHUB_ACCESS_TOKEN_STORAGE_KEY);
-drawAddTokenBtn(LOCAL_STORAGE_GITHUB_ACCESS_TOKEN);
 
 /** Grabs the URL Param used for automatic queries. */
 function getRepoNameFromUrl() {
@@ -225,6 +139,11 @@ function landingPageTrigger() {
 }
 
 /* Initialize the structure used by the 'queries-logic.js' */
+const UF_ID_WRAPPER = 'useful_forks_wrapper';
+const UF_ID_HEADER  = 'useful_forks_header';
+const UF_ID_MSG     = 'useful_forks_msg';
+const UF_ID_DATA    = 'useful_forks_data';
+const UF_ID_TABLE   = 'useful_forks_table';
 $('#useful_forks_inject').append(
     $('<div>', {id: UF_ID_WRAPPER}).append(
         $('<div>', {id: UF_ID_HEADER}),
@@ -236,6 +155,9 @@ $('#useful_forks_inject').append(
         )
     )
 );
+function getJqId_$(id) {
+  return $('#' + id);
+}
 const JQ_ID_HEADER  = getJqId_$(UF_ID_HEADER);
 const JQ_ID_MSG     = getJqId_$(UF_ID_MSG);
 const JQ_ID_TABLE   = getJqId_$(UF_ID_TABLE);
