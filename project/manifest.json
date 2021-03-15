@@ -13,7 +13,7 @@
         "*://github.com/*/network/members"
       ],
       "js": [
-        "jquery-3.5.1.min.js",
+        "jquery-3.6.0.min.js",
         "useful-forks.js"
       ],
       "run_at": "document_idle",
