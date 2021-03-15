@@ -15,7 +15,7 @@ const UF_MSG_SCANNING     = "Currently scanning all the forks.";
 const UF_MSG_ERROR        = "There seems to have been an error while scanning forks.";
 const UF_MSG_EMPTY_FILTER = "All the forks have been filtered out: you can now rest easy!";
 const UF_MSG_API_RATE     = "<b>Exceeded GitHub API rate-limits.</b>";
-const UF_TABLE_SEPARATOR  = "&nbsp;|&nbsp;";
+const UF_TABLE_SEPARATOR  = "｜";
 
 const FORKS_PER_PAGE = 100; // enforced by GitHub API
 
