@@ -73,7 +73,9 @@ function getSyntaxTheme() {
 
 let SyntaxTheme = getSyntaxTheme();
 
-const hovercolor = SyntaxTheme == "dark" ? '#f00' : '#00b700';
+const hovercolor = SyntaxTheme == "dark" ? '#424242' : '#e2e2e2';
+
+const tr_bgcolor = SyntaxTheme == "dark" ? '#333' : '#f5f5f5';
 
 const additional_css_literal = `
 .uf_badge svg {
@@ -81,7 +83,7 @@ const additional_css_literal = `
   padding-top: 3px;
 }
 tr:hover {background-color: ${hovercolor} !important;}
-tr:nth-child(even) {background-color: #f5f5f5;}
+tr:nth-child(even) {background-color: ${tr_bgcolor};}
 #${UF_ID_MSG} {color: red}
 `;
 
@@ -353,17 +355,17 @@ function add_css() {
 
 /** Entry point. */
 function init() {
-const pathComponents = window.location.pathname.split('/');
-if (pathComponents.length >= 3) {
+  const pathComponents = window.location.pathname.split('/');
+  if (pathComponents.length >= 3) {
     if (pathComponents[4] == "members"){
-    const user = pathComponents[1], repo = pathComponents[2];
+      const user = pathComponents[1], repo = pathComponents[2];
       add_css();
       prepare_display();
       // only call if GITHUB_ACCESS_TOKEN has been set up
       if (valid(GITHUB_ACCESS_TOKEN)) {
         initial_request(user, repo);
       } else {
-      setMsg(UF_MSG_ACCESS_TOKEN);
+        setMsg(UF_MSG_ACCESS_TOKEN);
       }
     }
   }
