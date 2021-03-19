@@ -302,10 +302,16 @@ function add_css() {
 }
 
 /** Entry point. */
-const pathComponents = window.location.pathname.split('/');
-if (pathComponents.length >= 3) {
-  const user = pathComponents[1], repo = pathComponents[2];
-  add_css();
-  prepare_display();
-  initial_request(user, repo);
+function init() {
+  const pathComponents = window.location.pathname.split('/');
+  if (pathComponents[4] == "members"){
+    const user = pathComponents[1], repo = pathComponents[2];
+    add_css();
+    prepare_display();
+    initial_request(user, repo);
+  }
 }
+
+init();
+
+document.addEventListener('pjax:end', init);
