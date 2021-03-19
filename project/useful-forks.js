@@ -308,10 +308,36 @@ function prepare_display() {
   );
 }
 
+/** To determine if Dark Mode is enabled. */
+function getGitHubTheme() {
+  let colorMode = document.querySelector('[data-color-mode]')?.dataset.colorMode;
+  if (colorMode === 'dark') {
+    return "dark";
+  } else if (colorMode === 'auto') {
+    if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+      return "dark";
+    }
+  }
+  return "light"; // default
+}
+
 function add_css() {
+  const GITHUB_THEME = getGitHubTheme();
+  const TR_HOVER_COLOR = GITHUB_THEME === "dark" ? '#2f353e' : '#e2e2e2';
+  const TR_BG_COLOR = GITHUB_THEME === "dark" ? '#161b22' : '#f5f5f5';
+  const ADDITIONAL_CSS = `
+    .uf_badge svg {
+      display: table-cell;
+      padding-top: 3px;
+    }
+    tr:hover {background-color: ${TR_HOVER_COLOR} !important;}
+    tr:nth-child(even) {background-color: ${TR_BG_COLOR};}
+    #${UF_ID_MSG} {color: red;}
+    `;
+
   let styleSheet = document.createElement('style');
   styleSheet.type = "text/css";
-  styleSheet.innerText = additional_css_literal;
+  styleSheet.innerText = ADDITIONAL_CSS;
   document.head.appendChild(styleSheet);
 }
 
