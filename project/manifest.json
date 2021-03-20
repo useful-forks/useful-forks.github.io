@@ -10,7 +10,7 @@
   "content_scripts": [
     {
       "matches": [
-        "*://github.com/*/network/members"
+        "*://github.com/*/*"
       ],
       "js": [
         "jquery-3.5.1.min.js",
