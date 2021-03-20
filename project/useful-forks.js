@@ -304,7 +304,7 @@ function add_css() {
 /** Entry point. */
 function init() {
   const pathComponents = window.location.pathname.split('/');
-  if (pathComponents[4] == "members"){
+  if (pathComponents[4] === "members") {
     const user = pathComponents[1], repo = pathComponents[2];
     add_css();
     prepare_display();
@@ -314,4 +314,5 @@ function init() {
 
 init();
 
+//When navigating between Insights pages, URL is manipulated through PJAX.
 document.addEventListener('pjax:end', init);
