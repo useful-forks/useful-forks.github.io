@@ -37,19 +37,29 @@ function downloadCsv() {
   const rowDelim = '"\r\n"';
 
   // Manually adding headers
-  let headers = ["Repo", "Stars", "Forks", "Ahead", "Behind"];
+  let headers = ["Repo", "URL", "Stars", "Forks", "Ahead", "Behind"];
   let csv = '"' + headers.join(colDelim);
   csv += rowDelim;
 
   // Grab text from table into CSV formatted string
   csv += $rows.map(function (i, row) {
-    let $row = $(row), $cols = $row.find('td');
+    const $row = $(row);
+    const $cols = $row.find('td');
 
     return $cols.map(function (j, col) {
-      let $col = $(col), text = $col.attr('value');
+      const $col = $(col);
+      let text = $col.attr('value');
+
+      // special cases specific to useful-forks
       if (text === undefined) {
         return;
       }
+      if (j === 0) {
+        const url = $col.find("a").attr("href");
+        text += colDelim + url; // adding the repo URL
+        return text;
+      }
+
       return text.replace(/"/g, '""'); // escape double quotes
     }).get().join(tmpColDelim);
 
@@ -61,10 +71,13 @@ function downloadCsv() {
   let csvData = 'data:application/csv;charset=utf-8,' + encodeURIComponent(csv);
 
   // Download
+  const query = JQ_REPO_FIELD.val();
+  let filename = "useful-forks-" + query + ".csv";
+  filename = filename.replace("/","_"); // replace illegal char
   if (window.navigator.msSaveBlob) { // IE 10+
     window.navigator.msSaveOrOpenBlob(
-        new Blob([csv], {type: "text/plain;charset=utf-8;"}), "useful-forks.csv")
+        new Blob([csv], {type: "text/plain;charset=utf-8;"}), filename)
   } else {
-    $(this).attr({'download': 'useful-forks.csv', 'href': csvData, 'target': '_blank'});
+    $(this).attr({'download': filename, 'href': csvData, 'target': '_blank'});
   }
 }
