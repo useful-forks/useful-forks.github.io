@@ -3,11 +3,12 @@ import { throttling } from "https://cdn.skypack.dev/@octokit/plugin-throttling";
 
 const SLOW_DOWN_MSG_THRESHOLD = 800;
 
-/* Variables that should be cleared for every new query. */
-let TOTAL_FORKS              = 0;
-let RATE_LIMIT_EXCEEDED      = false;
-let TOTAL_API_CALLS_COUNTER  = 0;
-let ONGOING_REQUESTS_COUNTER = 0;
+/* Variables that should be cleared for every new query (defaults are set in "clear_old_data"). */
+let TOTAL_FORKS;
+let RATE_LIMIT_EXCEEDED;
+let TOTAL_API_CALLS_COUNTER;
+let ONGOING_REQUESTS_COUNTER;
+let AHEAD_COMMITS_FILTER;
 
 /** Used to reset the state for a brand new query. */
 function clear_old_data() {
@@ -19,6 +20,7 @@ function clear_old_data() {
   RATE_LIMIT_EXCEEDED = false;
   TOTAL_API_CALLS_COUNTER = 0;
   ONGOING_REQUESTS_COUNTER = 0;
+  AHEAD_COMMITS_FILTER = UF_SETTINGS_AHEAD_FILTER;
 }
 
 function extract_username_from_fork(combined_name) {
@@ -156,7 +158,7 @@ function add_fork_elements(forkdata_array, user, repo, parentDefaultBranch) {
       head: `${extract_username_from_fork(currFork.full_name)}:${currFork.default_branch}`
     });
     const onSuccess = (responseHeaders, responseData) => {
-      if (responseData.total_commits === 0) {
+      if (responseData.total_commits <= AHEAD_COMMITS_FILTER) {
         NEW_ROW.remove();
         if (table_body.children().length === 0) {
           setMsg(UF_MSG_EMPTY_FILTER);

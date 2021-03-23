@@ -69,3 +69,9 @@ table {
     width: 660px !important; /* dialogs width */
   }
 }
+
+@media screen and (min-width: 769px) {
+  .field-label.is-normal {
+    padding-top: 0 !important; /* settings popup fields misaligned */
+  }
+}
