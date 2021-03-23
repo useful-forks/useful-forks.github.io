@@ -155,6 +155,32 @@
             </div>
           </div>
         </div>
+
+        <!-- Relationship used for the commit diff count. -->
+        <div class="field is-horizontal">
+          <div class="field-label is-normal">
+            <label class="label">Diff relative:</label>
+          </div>
+          <div class="field-body">
+            <div class="field">
+              <div class="control">
+                <label class="radio">
+                  <input type="radio" name="rsvp" checked>
+                  Parent
+                </label>
+                <label class="radio" disabled>
+                  <input type="radio" name="rsvp" disabled>
+                  Source [WIP]
+                </label>
+                <label class="radio" disabled>
+                  <input type="radio" name="rsvp" disabled>
+                  Heuristic [WIP]
+                </label>
+              </div>
+              <p class="help"><strong>Default is 'Parent'.</strong> Which repository, relative to the evaluated fork, should be used to calculate the commit diff ('ahead' and 'behind').</p>
+            </div>
+          </div>
+        </div>
       </section>
       <footer class="modal-card-foot">
         <a class="button is-uf-orange is-large is-fullwidth"
