@@ -6,9 +6,9 @@ const SLOW_DOWN_MSG_THRESHOLD = 800;
 /* Variables that should be cleared for every new query (defaults are set in "clear_old_data"). */
 let TOTAL_FORKS;
 let RATE_LIMIT_EXCEEDED;
-let TOTAL_API_CALLS_COUNTER;
-let ONGOING_REQUESTS_COUNTER;
 let AHEAD_COMMITS_FILTER;
+let TOTAL_API_CALLS_COUNTER;
+let ONGOING_REQUESTS_COUNTER = 0;
 
 /** Used to reset the state for a brand new query. */
 function clear_old_data() {
