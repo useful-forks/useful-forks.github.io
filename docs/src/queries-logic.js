@@ -16,6 +16,7 @@ function clear_old_data() {
   clearMsg();
   clearTable();
   setApiCallsLabel(0);
+  hideExportCsvBtn();
   TOTAL_FORKS = 0;
   RATE_LIMIT_EXCEEDED = false;
   TOTAL_API_CALLS_COUNTER = 0;
@@ -105,6 +106,7 @@ function decrementCounters() {
     clearNonErrorMsg();
     sortTable();
     enableQueryFields();
+    displayCsvExportBtn();
   }
 }
 
@@ -124,7 +126,7 @@ function build_fork_element_html(table_body, combined_name, num_stars, num_forks
   const NEW_ROW = $('<tr>', {id: extract_username_from_fork(combined_name), class: "useful_forks_repo"});
   table_body.append(
       NEW_ROW.append(
-          $('<td>').html(getRepoCol(combined_name, false)),
+          $('<td>').html(getRepoCol(combined_name, false)).attr("value", combined_name),
           $('<td>').html(UF_TABLE_SEPARATOR + getStarCol(num_stars)).attr("value", num_stars),
           $('<td>').html(UF_TABLE_SEPARATOR + getForkCol(num_forks)).attr("value", num_forks)
       )
@@ -160,16 +162,16 @@ function add_fork_elements(forkdata_array, user, repo, parentDefaultBranch) {
     const onSuccess = (responseHeaders, responseData) => {
       if (responseData.total_commits <= AHEAD_COMMITS_FILTER) {
         NEW_ROW.remove();
-        if (table_body.children().length === 0) {
+        if (tableIsEmpty(table_body)) {
           setMsg(UF_MSG_EMPTY_FILTER);
         }
       } else {
         /* Appending the commit badges to the new row. */
         NEW_ROW.append(
             $('<td>').html(UF_TABLE_SEPARATOR),
-            $('<td>', {class: "uf_badge"}).html(ahead_badge(responseData.ahead_by)),
+            $('<td>', {class: "uf_badge"}).html(ahead_badge(responseData.ahead_by)).attr("value", responseData.ahead_by),
             $('<td>').html(UF_TABLE_SEPARATOR),
-            $('<td>', {class: "uf_badge"}).html(behind_badge(responseData.behind_by))
+            $('<td>', {class: "uf_badge"}).html(behind_badge(responseData.behind_by)).attr("value", responseData.behind_by)
         );
       }
     };

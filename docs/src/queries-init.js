@@ -71,6 +71,12 @@ function getForkButtonLink(qualifier, full_name) {
 function getTableBody() {
   return JQ_ID_TABLE.find($("tbody"));
 }
+function tableIsEmpty(table) {
+  if (table === undefined) { // faking overloaded function
+    table = getTableBody();
+  }
+  return table.children().length === 0;
+}
 function clearTable() {
   getTableBody().empty();
 }
