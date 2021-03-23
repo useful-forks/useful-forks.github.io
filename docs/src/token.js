@@ -48,10 +48,3 @@ JQ_TOKEN_FIELD.keyup(event => {
 const GITHUB_ACCESS_TOKEN_STORAGE_KEY = "useful-forks-access-token";
 let LOCAL_STORAGE_GITHUB_ACCESS_TOKEN = localStorage.getItem(GITHUB_ACCESS_TOKEN_STORAGE_KEY);
 drawAddTokenBtn(LOCAL_STORAGE_GITHUB_ACCESS_TOKEN);
-
-
-/* Burger-menu toggling */
-$(".navbar-burger").click(function() {
-  $(".navbar-burger").toggleClass("is-active");
-  $(".navbar-menu").toggleClass("is-active");
-});
