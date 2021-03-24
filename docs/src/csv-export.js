@@ -6,12 +6,18 @@ const EXPORT_DIV = $('<div>', {id: EXPORT_DIV_ID, class: "mt-2"}).append(EXPORT_
 
 
 function displayCsvExportBtn() {
+  if (!UF_SETTINGS_CSV_DISPLAY) {
+    return;
+  }
   if (!tableIsEmpty()) {
     JQ_ID_HEADER.append(EXPORT_DIV);
     setClickEvent();
   }
 }
 function hideExportCsvBtn() {
+  if (!UF_SETTINGS_CSV_DISPLAY) {
+    return;
+  }
   if (!tableIsEmpty()) {
     getJqId_$(EXPORT_DIV_ID).remove();
   }

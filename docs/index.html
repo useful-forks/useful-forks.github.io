@@ -177,10 +177,29 @@
                   Heuristic [WIP]
                 </label>
               </div>
-              <p class="help"><strong>Default is 'Parent'.</strong> Which repository, relative to the evaluated fork, should be used to calculate the commit diff ('ahead' and 'behind').</p>
+              <p class="help mb-2"><strong>Default is 'Parent'.</strong> Which repository, relative to the evaluated fork, should be used to calculate the commit diff ('ahead' and 'behind').</p>
             </div>
           </div>
         </div>
+
+        <!-- Export CSV button display. -->
+        <div class="field is-horizontal">
+          <div class="field-label is-normal">
+            <label class="label">Export CSV:</label>
+          </div>
+          <div class="field-body">
+            <div class="field">
+              <div class="control">
+                <label class="checkbox">
+                  <input type="checkbox" id="uf_settings_csv" checked>
+                  Display
+                </label>
+              </div>
+              <p class="help mb-2"><strong>Default is checked.</strong> Determines whether to display or not the "<span class="is-family-monospace">Export table as CSV</span>" button when a scan ends.</p>
+            </div>
+          </div>
+        </div>
+
       </section>
       <footer class="modal-card-foot">
         <a class="button is-uf-orange is-large is-fullwidth"
