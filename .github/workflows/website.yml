@@ -3,8 +3,7 @@ name: useful-forks-website
 on:
   push:
     branches:
-      - master
-      - npm+webpack
+      - 'npm**'
 
 jobs:
   pages:
