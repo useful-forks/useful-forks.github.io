@@ -15,9 +15,9 @@ jobs:
         with:
           node-version: '14'
       - name: Install Dependencies
-        run: npm install
+        run: npm install --prefix ./docs
       - name: Build
-        run: npm run build
+        run: npm run build --prefix ./docs
       - name: Deploy
         uses: peaceiris/actions-gh-pages@v3
         with:
