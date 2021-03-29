@@ -1,5 +1,5 @@
-import { Octokit } from "https://cdn.skypack.dev/@octokit/rest";
-import { throttling } from "https://cdn.skypack.dev/@octokit/plugin-throttling";
+const { Octokit } = require("@octokit/rest");
+const { throttling } = require("@octokit/plugin-throttling");
 
 const SLOW_DOWN_MSG_THRESHOLD = 800;
 

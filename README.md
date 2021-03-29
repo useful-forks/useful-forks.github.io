@@ -1,4 +1,4 @@
-![useful-forks banner](docs/assets/useful-forks-banner.png "useful-forks banner")
+![useful-forks banner](website/assets/useful-forks-banner.png "useful-forks banner")
 
 # Useful Forks
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/useful-forks/useful-forks.github.io/blob/master/LICENSE)
@@ -39,11 +39,11 @@ You can query repository directly with the URL. Here is an example: https://usef
 ### Chrome extension (WIP)
 Not published yet. If you want to install it:
 1. Clone this repository
-2. Change the [script file](project/useful-forks.js) so that `GITHUB_ACCESS_TOKEN`'s value is that of an [Access Token](https://github.com/settings/tokens/new?scopes=public_repo&description=UsefulForks)
+2. Change the [script file](plugin/useful-forks.js) so that `GITHUB_ACCESS_TOKEN`'s value is that of an [Access Token](https://github.com/settings/tokens/new?scopes=public_repo&description=UsefulForks)
 3. Go to the `chrome://extensions` URL
 4. Enable `Developer mode` (switch at the top-right)
 5. Click `Load unpacked` (button at the top-left)
-6. Select the [`project` folder](project)
+6. Select the [`plugin` folder](plugin)
 
 Once it's activated, the extension will automatically trigger itself whenever you open a Fork page, as shown by the GIF below:
 
@@ -63,8 +63,15 @@ This Activity Diagram (UML) should clarify a bit the inner-workings of the algor
 
 ## Contributing
 If you want to help, the structure of the repo is rather simple. In terms of folders:
-* [`docs`](/docs) contains the website
-* [`project`](/project) contains the Chrome Extension
+* [`website`](/website) contains the website
+* [`plugin`](/plugin) contains the Chrome Extension
+
+### Website instructions
+To run the website locally, you will need:
+* NodeJS (suggested v14.15+)
+* NPM (suggested v6.14+)
+
+Bring a terminal to the ``website`` folder and execute `npm install` and then `npm run dev`.
 
 ### To-do
 * Fix the [Issues](https://github.com/useful-forks/useful-forks.github.io/issues) (if there are any)
