@@ -3,7 +3,7 @@ name: useful-forks-website
 on:
   push:
     branches:
-      - 'npm**'
+      - master
 
 jobs:
   deploy:
