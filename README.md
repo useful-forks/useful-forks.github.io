@@ -66,6 +66,13 @@ If you want to help, the structure of the repo is rather simple. In terms of fol
 * [`docs`](/docs) contains the website
 * [`project`](/project) contains the Chrome Extension
 
+### Website instructions
+To run the website locally, you will need:
+* NodeJS (suggested v14.15+)
+* NPM (suggested v6.14+)
+
+Bring a terminal to the ``docs`` folder and execute `npm install` and then `npm run dev`.
+
 ### To-do
 * Fix the [Issues](https://github.com/useful-forks/useful-forks.github.io/issues) (if there are any)
 * Cache responses for a little while 
