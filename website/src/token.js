@@ -26,6 +26,7 @@ function saveTokenBtnClicked() {
 
   /* If the user was asked to enter a Token, his query should re-execute. */
   if (shouldTriggerQueryOnTokenSave && JQ_REPO_FIELD.val()) {
+    enableQueryFields();
     JQ_SEARCH_BTN.click();
   }
 }
