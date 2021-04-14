@@ -22,6 +22,7 @@ function clear_old_data() {
   TOTAL_API_CALLS_COUNTER = 0;
   ONGOING_REQUESTS_COUNTER = 0;
   AHEAD_COMMITS_FILTER = UF_SETTINGS_AHEAD_FILTER;
+  shouldTriggerQueryOnTokenSave = false;
 }
 
 function extract_username_from_fork(combined_name) {
@@ -89,7 +90,7 @@ function onRateLimitExceeded() {
     RATE_LIMIT_EXCEEDED = true;
     setMsg(UF_MSG_API_RATE);
     if (!LOCAL_STORAGE_GITHUB_ACCESS_TOKEN) {
-      openTokenDialog();
+      proposeAddingToken();
     }
     disableQueryFields();
   }

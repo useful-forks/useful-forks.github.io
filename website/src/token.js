@@ -3,6 +3,8 @@ const JQ_TOKEN_FIELD = $('#tokenInput');
 const JQ_TOKEN_BTN   = $('#addTokenBtn');
 const JQ_TOKEN_POPUP = $('#useful_forks_token_popup');
 
+let shouldTriggerQueryOnTokenSave = false;
+
 
 function openTokenDialog() {
   ga_openToken();
@@ -21,6 +23,16 @@ function saveTokenBtnClicked() {
   LOCAL_STORAGE_GITHUB_ACCESS_TOKEN = INPUT_TOKEN;
   drawAddTokenBtn(INPUT_TOKEN);
   closeTokenDialog();
+
+  /* If the user was asked to enter a Token, his query should re-execute. */
+  if (shouldTriggerQueryOnTokenSave && JQ_REPO_FIELD.val()) {
+    JQ_SEARCH_BTN.click();
+  }
+}
+
+function proposeAddingToken() {
+  shouldTriggerQueryOnTokenSave = true;
+  openTokenDialog();
 }
 
 function drawAddTokenBtn(accessToken) {
