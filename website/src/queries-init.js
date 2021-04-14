@@ -6,14 +6,16 @@ const JQ_TOTAL_CALLS = $('#totalApiCalls');
 
 const UF_MSG_NO_FORKS     = "No one forked this specific repository.";
 const UF_MSG_SCANNING     = "Currently scanning all the forks.";
-const UF_MSG_ERROR        = "There seems to have been an error. (Maybe you had a typo in the provided input?)";
 const UF_MSG_EMPTY_FILTER = "All the forks have been filtered out: you can now rest easy!";
 const UF_TABLE_SEPARATOR  = "｜";
-const UF_MSG_SLOWER       = "The scan will be slowing down due to the high amount of requests.<br/>"
-    + "(That is to prevent GitHub API from refusing to respond due to thinking those requests are malicious.)";
-const UF_MSG_API_RATE     = "<b>GitHub API rate-limits exceeded.</b> Consider providing an <b>Access Token</b> if you haven't already (click the button at the top-right).<br/>"
-    + "The amount of API calls you are allowed to do will re-accumulate over time: you can try again later on.<br/>"
-    + "It's also possible that the queried repository has so many forks that it's impossible to scan it completely without running out of API calls.<br/>"
+const UF_MSG_ERROR        = "There seems to have been an error.<br>"
+    + "Maybe you had a typo in the provided input? Or the Access Token credentials are invalid?<br>"
+    + "If the scan is continuing, ignore this: the GitHub API some times returns erroneous data.";
+const UF_MSG_SLOWER       = "The scan is slowing down (and will stall for a little while) due to the high amount of requests.<br>"
+    + "(This is to prevent GitHub API from refusing to respond due to thinking those requests are malicious.)";
+const UF_MSG_API_RATE     = "<b>GitHub API rate-limits exceeded.</b> Consider providing an <b>Access Token</b> if you haven't already (click the button at the top-right).<br>"
+    + "The amount of API calls you are allowed to do will re-accumulate over time: you can try again later on.<br>"
+    + "It's also possible that the queried repository has so many forks that it's impossible to scan it completely without running out of API calls.<br>"
     + ":(";
 
 
@@ -87,7 +89,8 @@ function clearMsg() {
   JQ_ID_MSG.empty();
 }
 function clearNonErrorMsg() {
-  if (JQ_ID_MSG.html() !== UF_MSG_ERROR)
+  const errorMsg = JQ_ID_MSG.html();
+  if (errorMsg !== UF_MSG_ERROR && errorMsg !== UF_MSG_SLOWER)
     clearMsg();
 }
 function setHeader(msg) {
@@ -100,6 +103,7 @@ function clearHeader() {
 /* Search Query Fields */
 function enableQueryFields() {
   JQ_REPO_FIELD.prop('disabled', false);
+  JQ_SEARCH_BTN.prop('disabled', false);
   JQ_SEARCH_BTN.removeClass('is-loading');
 }
 function setQueryFieldsAsLoading() {

@@ -4,6 +4,7 @@ const JQ_TOKEN_BTN   = $('#addTokenBtn');
 const JQ_TOKEN_POPUP = $('#useful_forks_token_popup');
 
 let shouldTriggerQueryOnTokenSave = false;
+let shouldReconstructOctokit = true;
 
 
 function openTokenDialog() {
@@ -25,6 +26,7 @@ function saveTokenBtnClicked() {
   closeTokenDialog();
 
   /* If the user was asked to enter a Token, his query should re-execute. */
+  shouldReconstructOctokit = true;
   if (shouldTriggerQueryOnTokenSave && JQ_REPO_FIELD.val()) {
     enableQueryFields();
     JQ_SEARCH_BTN.click();

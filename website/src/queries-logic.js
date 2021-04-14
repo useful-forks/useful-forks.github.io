@@ -1,8 +1,6 @@
 const { Octokit } = require("@octokit/rest");
 const { throttling } = require("@octokit/plugin-throttling");
 
-const SLOW_DOWN_MSG_THRESHOLD = 800;
-
 /* Variables that should be cleared for every new query (defaults are set in "clear_old_data"). */
 let TOTAL_FORKS;
 let RATE_LIMIT_EXCEEDED;
@@ -78,10 +76,6 @@ function incrementCounters() {
   ONGOING_REQUESTS_COUNTER++;
   TOTAL_API_CALLS_COUNTER++;
   setApiCallsLabel(TOTAL_API_CALLS_COUNTER);
-
-  if (TOTAL_API_CALLS_COUNTER === SLOW_DOWN_MSG_THRESHOLD) {
-    setMsg(UF_MSG_SLOWER);
-  }
 }
 
 function onRateLimitExceeded() {
@@ -89,10 +83,10 @@ function onRateLimitExceeded() {
     console.warn('[useful-forks] GitHub API rate-limit exceeded. (Since useful-forks sends many requests at once, you might have a lot of `Error Code 403` in your browser Console Logs.)');
     RATE_LIMIT_EXCEEDED = true;
     setMsg(UF_MSG_API_RATE);
+    disableQueryFields();
     if (!LOCAL_STORAGE_GITHUB_ACCESS_TOKEN) {
       proposeAddingToken();
     }
-    disableQueryFields();
   }
 }
 
@@ -109,6 +103,12 @@ function decrementCounters() {
     enableQueryFields();
     displayCsvExportBtn();
   }
+}
+
+function searchNotAllowed() {
+  if (shouldTriggerQueryOnTokenSave)
+    return false;
+  return ONGOING_REQUESTS_COUNTER !== 0 || JQ_SEARCH_BTN.hasClass('is-loading');
 }
 
 function send(requestPromise, successFn, failureFn) {
@@ -140,7 +140,7 @@ function add_fork_elements(forkdata_array, user, repo, parentDefaultBranch) {
   if (isEmpty(forkdata_array))
     return;
 
-  if (!RATE_LIMIT_EXCEEDED && TOTAL_API_CALLS_COUNTER < SLOW_DOWN_MSG_THRESHOLD) // because some times gets called after some other msgs are displayed
+  if (!RATE_LIMIT_EXCEEDED) // because some times gets called after some other msgs are displayed
     clearNonErrorMsg();
 
   let table_body = getTableBody();
@@ -272,7 +272,7 @@ function initial_request(user, repo) {
 function initiate_search() {
 
   /* Checking if search is allowed. */
-  if (ONGOING_REQUESTS_COUNTER !== 0 || JQ_SEARCH_BTN.hasClass('is-loading')) {
+  if (searchNotAllowed()) {
     return; // abort
   }
 
@@ -288,6 +288,8 @@ function initiate_search() {
     return; // abort
   }
 
+  setUpOctokitWithLatestToken();
+
   setQueryFieldsAsLoading();
   setMsg(UF_MSG_SCANNING);
 
@@ -299,21 +301,32 @@ function initiate_search() {
 
 /* Object used for REST calls. */
 const MyOctokit = Octokit.plugin(throttling);
-const octokit = new MyOctokit({
-  auth: LOCAL_STORAGE_GITHUB_ACCESS_TOKEN,
-  userAgent: 'useful-forks',
-  throttle: {
-    onRateLimit: (retryAfter, options) => {
-      onRateLimitExceeded();
-      if (options.request.retryCount === 0) { // only retries once
-        return true; // true = retry
-      }
-    },
-    onAbuseLimit: (retryAfter, options) => {
-      return true; // true = automatically retry after given amount of seconds
-    }
+let octokit;
+setUpOctokitWithLatestToken();
+function setUpOctokitWithLatestToken() {
+  if (!shouldReconstructOctokit) {
+    return;
   }
-});
+
+  octokit = new MyOctokit({
+    auth: LOCAL_STORAGE_GITHUB_ACCESS_TOKEN,
+    userAgent: 'useful-forks',
+    throttle: {
+      onRateLimit: (retryAfter, options) => {
+        onRateLimitExceeded();
+        if (options.request.retryCount === 0) { // only retries once
+          return true; // true = retry
+        }
+      },
+      onAbuseLimit: (retryAfter, options) => {
+        setMsg(UF_MSG_SLOWER);
+        return true; // true = automatically retry after given amount of seconds
+      }
+    }
+  });
+
+  shouldReconstructOctokit = false;
+}
 
 
 /* Setting up query triggers. */
