@@ -112,6 +112,11 @@ function searchNotAllowed() {
 }
 
 function send(requestPromise, successFn, failureFn) {
+  if (RATE_LIMIT_EXCEEDED) {
+    failureFn();
+    return;
+  }
+
   incrementCounters();
   requestPromise()
   .then(
@@ -272,9 +277,8 @@ function initial_request(user, repo) {
 function initiate_search() {
 
   /* Checking if search is allowed. */
-  if (searchNotAllowed()) {
+  if (searchNotAllowed())
     return; // abort
-  }
 
   clear_old_data();
 
@@ -304,9 +308,8 @@ const MyOctokit = Octokit.plugin(throttling);
 let octokit;
 setUpOctokitWithLatestToken();
 function setUpOctokitWithLatestToken() {
-  if (!shouldReconstructOctokit) {
+  if (!shouldReconstructOctokit)
     return;
-  }
 
   octokit = new MyOctokit({
     auth: LOCAL_STORAGE_GITHUB_ACCESS_TOKEN,
