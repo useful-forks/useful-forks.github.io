@@ -98,7 +98,7 @@ function allRequestsAreDone() {
 function decrementCounters() {
   ONGOING_REQUESTS_COUNTER--;
   if (allRequestsAreDone()) {
-    clearNonErrorMsg();
+    clearMsg();
     sortTable();
     enableQueryFields();
     displayCsvExportBtn();
