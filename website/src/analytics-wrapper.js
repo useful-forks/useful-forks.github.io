@@ -62,3 +62,12 @@ function ga_createToken() {
 function ga_openSettings() {
   dispatch('query', 'Query-Settings', 'Open');
 }
+
+
+/* Footer. */
+function ga_footerStar() {
+  dispatch('click', 'footer', 'repo-star-link');
+}
+function ga_footerEmail() {
+  dispatch('click', 'footer', 'email-icon');
+}

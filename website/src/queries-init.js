@@ -25,15 +25,14 @@ const EXAMPLE_LINK_2 = `<a href="${buildAutoQueryURL('https://github.com/payne91
                            onclick="ga_fullExampleLink();">https://github.com/payne911/PieMenu</a>`;
 const BODY_REPO_LINK = `<a href="${buildGithubRepoURL('useful-forks/useful-forks.github.io')}"
                            onclick="ga_bodyRepoLink();">the GitHub project</a>`;
-const LANDING_PAGE_INIT_MSG = "<b>Introducing:</b><br/><br/>"
+const LANDING_PAGE_INIT_MSG = "<h1 class='title'>Introducing:</h1>"
     + "<img src='assets/useful-forks-banner.png' alt='useful-forks banner' width='500'/><br/><br/>"
     + "It aims at increasing the discoverability of <b>useful</b> forks of open-source projects.<br/>"
     + "Simply type a repository's URL in the Text Field above. Both of those examples are valid entries: <br/>"
-    + "<b>" + EXAMPLE_LINK_1 + "</b> and <b>" + EXAMPLE_LINK_2 + "</b><br/><br/>"
-    + "The criteria is simple: <b>if a fork was created, but never received any other activity on its master branch, it is filtered out.</b><br/>"
+    + "<b>" + EXAMPLE_LINK_1 + "</b> and <b>" + EXAMPLE_LINK_2 + "</b>.<br/><br/>"
+    + "The criteria is simple: <b>if a fork was created, but never received any other activity on its <span class='is-family-monospace'>master</span> branch, it is filtered out.</b><br/>"
     + "The results are sorted by the amount of stars.<br/><br/>"
-    + "For more information, check out " + BODY_REPO_LINK + ".<br/>"
-    + "And while you're there, if you like this project, feel free to ⭐ us."
+    + "For more information, check out " + BODY_REPO_LINK + ".";
 
 
 const SVG_FORK = '<svg class="octicon octicon-repo-forked v-align-text-bottom" viewBox="0 0 10 16" width="10" height="16" aria-hidden="true"><path fill-rule="evenodd" d="M8 1a1.993 1.993 0 00-1 3.72V6L5 8 3 6V4.72A1.993 1.993 0 002 1a1.993 1.993 0 00-1 3.72V6.5l3 3v1.78A1.993 1.993 0 005 15a1.993 1.993 0 001-3.72V9.5l3-3V4.72A1.993 1.993 0 008 1zM2 4.2C1.34 4.2.8 3.65.8 3c0-.65.55-1.2 1.2-1.2.65 0 1.2.55 1.2 1.2 0 .65-.55 1.2-1.2 1.2zm3 10c-.66 0-1.2-.55-1.2-1.2 0-.65.55-1.2 1.2-1.2.65 0 1.2.55 1.2 1.2 0 .65-.55 1.2-1.2 1.2zm3-10c-.66 0-1.2-.55-1.2-1.2 0-.65.55-1.2 1.2-1.2.65 0 1.2.55 1.2 1.2 0 .65-.55 1.2-1.2 1.2z"></path></svg>';
