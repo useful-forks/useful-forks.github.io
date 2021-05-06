@@ -73,18 +73,6 @@ To run the website locally, you will need:
 
 Bring a terminal to the ``website`` folder and execute `npm install` and then `npm run dev`.
 
-### To-do
-* Fix the [Issues](https://github.com/useful-forks/useful-forks.github.io/issues) (if there are any)
-* Cache responses for a little while 
-  * https://docs.github.com/en/free-pro-team@latest/rest/guides/getting-started-with-the-rest-api#conditional-requests
-  * https://docs.github.com/en/free-pro-team@latest/rest/overview/resources-in-the-rest-api#conditional-requests
-  * https://stackoverflow.com/a/14890859/9768291
-* Publish as a Chrome Extension (create 'options' and 'background' pages?)
-  * See: https://developer.chrome.com/extensions/samples
-    * https://developer.chrome.com/extensions/examples/tutorials/broken_background_color.zip
-    * https://developer.chrome.com/extensions/examples/tutorials/getstarted.zip
-  * Allow people to input their Access Token to increase API limits (from Extension's settings rather than through script)
-
 ## Credits
 * Thanks to [raeleus](https://github.com/raeleus) for his design of the logo!
 * Thanks to [jkunstwald](https://github.com/jkunstwald/) for allowing me to apply the MIT license to what has been expanded from [his own initial work](https://github.com/jkunstwald/useful-forks). Here is a list of the improvements that were made made:
