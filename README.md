@@ -75,7 +75,7 @@ Bring a terminal to the ``website`` folder and execute `npm install` and then `n
 
 ## Credits
 * Thanks to [raeleus](https://github.com/raeleus) for his design of the logo!
-* Thanks to [jkunstwald](https://github.com/jkunstwald/) for allowing me to apply the MIT license to what has been expanded from [his own initial work](https://github.com/jkunstwald/useful-forks). Here is a list of the improvements that were made made:
+* Thanks to [jkunstwald](https://github.com/jkunstwald/) for allowing me to apply the MIT license to what has been expanded from [his own initial work](https://github.com/jkunstwald/useful-forks). Here is a list of the improvements that were made:
   * Recursive search of all sub-forks
   * GitHub API's `Watchers` value is bugged so it was removed
   * Implement authenticated requests to the GitHub API (which increases the limit of calls)
