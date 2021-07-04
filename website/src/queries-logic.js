@@ -245,9 +245,9 @@ function initial_request(user, repo) {
 
     let html_txt = '<b>Queried repository</b>:&nbsp;&nbsp;&nbsp;';
     html_txt += getRepoCol(responseData.full_name, true);
-    html_txt += UF_TABLE_SEPARATOR + getWatchCol(responseData.subscribers_count);
     html_txt += UF_TABLE_SEPARATOR + getStarCol(responseData.stargazers_count);
     html_txt += UF_TABLE_SEPARATOR + getForkCol(TOTAL_FORKS);
+    html_txt += UF_TABLE_SEPARATOR + getWatchCol(responseData.subscribers_count);
     html_txt += UF_TABLE_SEPARATOR + getDateCol(getOnlyDate(responseData.pushed_at));
 
     /* Warning the user if he's not scanning from the root. */
