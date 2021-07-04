@@ -71,7 +71,9 @@ To run the website locally, you will need:
 * NodeJS (suggested v14.15+)
 * NPM (suggested v6.14+)
 
-Bring a terminal to the ``website`` folder and execute `npm install` and then `npm run dev`.
+Bring a terminal to the ``website`` folder and execute `npm install`, and then `npm run dev`.
+
+Whenever you want to test changes to the `src/queries-logic.js` file, you will need to re-execute `npm run dev` for `dist/main.js` to recompile.
 
 ## Credits
 * Thanks to [raeleus](https://github.com/raeleus) for his design of the logo!
