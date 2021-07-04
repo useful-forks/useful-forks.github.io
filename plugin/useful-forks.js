@@ -6,8 +6,9 @@ const UF_ID_MSG     = 'useful_forks_msg';
 const UF_ID_DATA    = 'useful_forks_data';
 const UF_ID_TABLE   = 'useful_forks_table';
 
-const svg_literal_fork = '<svg class="octicon octicon-repo-forked v-align-text-bottom" viewBox="0 0 10 16" width="10" height="16" aria-hidden="true"><path fill-rule="evenodd" d="M8 1a1.993 1.993 0 00-1 3.72V6L5 8 3 6V4.72A1.993 1.993 0 002 1a1.993 1.993 0 00-1 3.72V6.5l3 3v1.78A1.993 1.993 0 005 15a1.993 1.993 0 001-3.72V9.5l3-3V4.72A1.993 1.993 0 008 1zM2 4.2C1.34 4.2.8 3.65.8 3c0-.65.55-1.2 1.2-1.2.65 0 1.2.55 1.2 1.2 0 .65-.55 1.2-1.2 1.2zm3 10c-.66 0-1.2-.55-1.2-1.2 0-.65.55-1.2 1.2-1.2.65 0 1.2.55 1.2 1.2 0 .65-.55 1.2-1.2 1.2zm3-10c-.66 0-1.2-.55-1.2-1.2 0-.65.55-1.2 1.2-1.2.65 0 1.2.55 1.2 1.2 0 .65-.55 1.2-1.2 1.2z"></path></svg>';
-const svg_literal_star = '<svg aria-label="star" height="16" class="octicon octicon-star v-align-text-bottom" viewBox="0 0 14 16" width="14" role="img"><path fill-rule="evenodd" d="M14 6l-4.9-.64L7 1 4.9 5.36 0 6l3.6 3.26L2.67 14 7 11.67 11.33 14l-.93-4.74L14 6z"></path></svg>';
+const svg_literal_fork = '<svg class="octicon octicon-repo-forked v-align-text-bottom" viewBox="0 0 10 16" width="10" height="16" aria-hidden="true" role="img"><title>Amount of forks, or name of the repository</title><path fill-rule="evenodd" d="M8 1a1.993 1.993 0 00-1 3.72V6L5 8 3 6V4.72A1.993 1.993 0 002 1a1.993 1.993 0 00-1 3.72V6.5l3 3v1.78A1.993 1.993 0 005 15a1.993 1.993 0 001-3.72V9.5l3-3V4.72A1.993 1.993 0 008 1zM2 4.2C1.34 4.2.8 3.65.8 3c0-.65.55-1.2 1.2-1.2.65 0 1.2.55 1.2 1.2 0 .65-.55 1.2-1.2 1.2zm3 10c-.66 0-1.2-.55-1.2-1.2 0-.65.55-1.2 1.2-1.2.65 0 1.2.55 1.2 1.2 0 .65-.55 1.2-1.2 1.2zm3-10c-.66 0-1.2-.55-1.2-1.2 0-.65.55-1.2 1.2-1.2.65 0 1.2.55 1.2 1.2 0 .65-.55 1.2-1.2 1.2z"></path></svg>';
+const svg_literal_star = '<svg class="octicon octicon-star v-align-text-bottom" viewBox="0 0 14 16" width="14" height="16" aria-label="star" role="img"><title>Amount of stars</title><path fill-rule="evenodd" d="M14 6l-4.9-.64L7 1 4.9 5.36 0 6l3.6 3.26L2.67 14 7 11.67 11.33 14l-.93-4.74L14 6z"></path></svg>';
+const svg_literal_date = '<svg class="octicon octicon-history text-gray" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" role="img"><title>Date of the most recent push in ANY branch of the repository</title><path fill-rule="evenodd" d="M1.643 3.143L.427 1.927A.25.25 0 000 2.104V5.75c0 .138.112.25.25.25h3.646a.25.25 0 00.177-.427L2.715 4.215a6.5 6.5 0 11-1.18 4.458.75.75 0 10-1.493.154 8.001 8.001 0 101.6-5.684zM7.75 4a.75.75 0 01.75.75v2.992l2.028.812a.75.75 0 01-.557 1.392l-2.5-1A.75.75 0 017 8.25v-3.5A.75.75 0 017.75 4z"></path></svg>';
 
 const UF_MSG_HEADER       = "<b>Useful forks</b>";
 const UF_MSG_NO_FORKS     = "No one forked this specific repository.";
@@ -30,6 +31,10 @@ function checkIfAllRequestsAreDone() {
   if (allRequestsAreDone()) {
     sortTable();
   }
+}
+
+function getOnlyDate(full) {
+  return full.split('T')[0];
 }
 
 function extract_username_from_fork(combined_name) {
@@ -93,7 +98,7 @@ function sortTableColumn(table_id, sortColumn){
 }
 
 /** The secondary request which appends the badges. */
-function commits_count(request, table_body, table_row) {
+function commits_count(request, table_body, table_row, pushed_at) {
   return () => {
     const response = JSON.parse(request.responseText);
 
@@ -107,8 +112,9 @@ function commits_count(request, table_body, table_row) {
           $('<td>').html(UF_TABLE_SEPARATOR),
           $('<td>', {class: "uf_badge"}).html(ahead_badge(response.ahead_by)),
           $('<td>').html(UF_TABLE_SEPARATOR),
-          $('<td>', {class: "uf_badge"}).html(behind_badge(response.behind_by))
-      )
+          $('<td>', {class: "uf_badge"}).html(behind_badge(response.behind_by)),
+          $('<td>').html(UF_TABLE_SEPARATOR + svg_literal_date + ' ' + pushed_at)
+      );
     }
 
     /* Detection of final request. */
@@ -156,7 +162,7 @@ function onreadystatechangeFactory(xhr, successFn, failureFn) {
   };
 }
 
-/** Dynamically fills the second part of the rows. */
+/** Fills the first part of the rows. */
 function build_fork_element_html(table_body, combined_name, num_stars, num_forks) {
   const NEW_ROW = $('<tr>', {id: extract_username_from_fork(combined_name), class: "useful_forks_repo"});
   table_body.append(
@@ -186,7 +192,7 @@ function add_fork_elements(forkdata_array, user, repo, parentDefaultBranch) {
     /* Commits diff data (ahead/behind). */
     const API_REQUEST_URL = `https://api.github.com/repos/${user}/${repo}/compare/${parentDefaultBranch}...${extract_username_from_fork(currFork.full_name)}:${currFork.default_branch}`;
     let request = authenticatedRequestHeaderFactory(API_REQUEST_URL);
-    request.onreadystatechange = onreadystatechangeFactory(request, commits_count(request, table_body, NEW_ROW), commits_count_failure(NEW_ROW));
+    request.onreadystatechange = onreadystatechangeFactory(request, commits_count(request, table_body, NEW_ROW, getOnlyDate(currFork.pushed_at)), commits_count_failure(NEW_ROW));
     request.send();
 
     /* Forks of forks. */

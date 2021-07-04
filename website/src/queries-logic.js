@@ -23,6 +23,10 @@ function clear_old_data() {
   shouldTriggerQueryOnTokenSave = false;
 }
 
+function getOnlyDate(full) {
+  return full.split('T')[0];
+}
+
 function extract_username_from_fork(combined_name) {
   return combined_name.split('/')[0];
 }
@@ -127,7 +131,7 @@ function send(requestPromise, successFn, failureFn) {
       () => decrementCounters());
 }
 
-/** Dynamically fills the second part of a row. */
+/** Fills the first part of a row. */
 function build_fork_element_html(table_body, combined_name, num_stars, num_forks) {
   const NEW_ROW = $('<tr>', {id: extract_username_from_fork(combined_name), class: "useful_forks_repo"});
   table_body.append(
@@ -173,11 +177,13 @@ function add_fork_elements(forkdata_array, user, repo, parentDefaultBranch) {
         }
       } else {
         /* Appending the commit badges to the new row. */
+        let pushed_at = getOnlyDate(currFork.pushed_at);
         NEW_ROW.append(
             $('<td>').html(UF_TABLE_SEPARATOR),
             $('<td>', {class: "uf_badge"}).html(ahead_badge(responseData.ahead_by)).attr("value", responseData.ahead_by),
             $('<td>').html(UF_TABLE_SEPARATOR),
-            $('<td>', {class: "uf_badge"}).html(behind_badge(responseData.behind_by)).attr("value", responseData.behind_by)
+            $('<td>', {class: "uf_badge"}).html(behind_badge(responseData.behind_by)).attr("value", responseData.behind_by),
+            $('<td>').html(UF_TABLE_SEPARATOR + getDateCol(pushed_at)).attr("value", pushed_at)
         );
       }
     };
@@ -242,6 +248,7 @@ function initial_request(user, repo) {
     html_txt += UF_TABLE_SEPARATOR + getStarCol(responseData.stargazers_count);
     html_txt += UF_TABLE_SEPARATOR + getWatchCol(responseData.subscribers_count);
     html_txt += UF_TABLE_SEPARATOR + getForkCol(TOTAL_FORKS);
+    html_txt += UF_TABLE_SEPARATOR + getDateCol(getOnlyDate(responseData.pushed_at));
 
     /* Warning the user if he's not scanning from the root. */
     if (responseData.source) { // guarantees both 'source' and 'parent' are present
