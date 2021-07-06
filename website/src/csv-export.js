@@ -25,6 +25,8 @@ function hideExportCsvBtn() {
 function setClickEvent() {
   EXPORT_BTN.on('click', function (event) {
     downloadCsv.apply(this);
+    const query = JQ_REPO_FIELD.val();
+    ga_exportCSV(query);
   });
 }
 

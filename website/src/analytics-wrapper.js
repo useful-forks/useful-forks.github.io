@@ -31,6 +31,15 @@ function ga_queryResultClick(fullName, isInitialRepo) {
 }
 
 
+/* Functionalities. */
+function ga_exportCSV(query) {
+  dispatch('feature', 'Export-CSV', query);
+}
+function ga_openSettings() {
+  dispatch('feature', 'Query-Settings', 'Open');
+}
+
+
 /* Header buttons. */
 function ga_homeHeader() {
   dispatch('click', 'left-header-button', 'Home');
@@ -55,12 +64,6 @@ function ga_saveToken() {
 }
 function ga_createToken() {
   dispatch('click', 'access-token', 'Create-Token');
-}
-
-
-/* Settings. */
-function ga_openSettings() {
-  dispatch('query', 'Query-Settings', 'Open');
 }
 
 
