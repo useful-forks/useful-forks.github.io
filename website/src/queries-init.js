@@ -27,10 +27,10 @@ const BODY_REPO_LINK = `<a href="${buildGithubRepoURL('useful-forks/useful-forks
                            onclick="ga_bodyRepoLink();">the GitHub project</a>`;
 const LANDING_PAGE_INIT_MSG = "<h1 class='title'>Introducing:</h1>"
     + "<img src='assets/useful-forks-banner.png' alt='useful-forks banner' width='500'/><br/><br/>"
-    + "It aims at increasing the discoverability of <b>useful</b> forks of open-source projects.<br/>"
+    + "It aims at increasing the discoverability of <strong>useful</strong> forks of open-source projects.<br/>"
     + "Simply type a repository's URL in the Text Field above. Both of those examples are valid entries: <br/>"
-    + "<b>" + EXAMPLE_LINK_1 + "</b> and <b>" + EXAMPLE_LINK_2 + "</b>.<br/><br/>"
-    + "The criteria is simple: <b>if a fork was created, but never received any other activity on its <span class='is-family-monospace'>master</span> branch, it is filtered out.</b><br/>"
+    + "<strong>" + EXAMPLE_LINK_1 + "</strong> and <strong>" + EXAMPLE_LINK_2 + "</strong>.<br/><br/>"
+    + "The criteria is simple: <strong>if a fork was created, but never received any other activity on its <span class='is-family-monospace'>master</span> branch, it is filtered out.</strong><br/>"
     + "The results are sorted by the amount of stars.<br/><br/>"
     + "For more information, check out " + BODY_REPO_LINK + ".";
 
