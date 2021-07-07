@@ -2,6 +2,7 @@ const { Octokit } = require("@octokit/rest");
 const { throttling } = require("@octokit/plugin-throttling");
 
 /* Variables that should be cleared for every new query (defaults are set in "clear_old_data"). */
+let REPO_DATE;
 let TOTAL_FORKS;
 let RATE_LIMIT_EXCEEDED;
 let AHEAD_COMMITS_FILTER;
@@ -15,6 +16,7 @@ function clear_old_data() {
   clearTable();
   setApiCallsLabel(0);
   hideExportCsvBtn();
+  REPO_DATE = new Date();
   TOTAL_FORKS = 0;
   RATE_LIMIT_EXCEEDED = false;
   TOTAL_API_CALLS_COUNTER = 0;
@@ -144,6 +146,11 @@ function build_fork_element_html(table_body, combined_name, num_stars, num_forks
   return NEW_ROW;
 }
 
+/** Add bold to the date text if the date is earlier than the queried repo. */
+function compareDates(date, html) {
+  return REPO_DATE <= new Date(date) ? `<strong>${html}</strong>` : html;
+}
+
 /** Prepares, appends, and updates a table row. */
 function add_fork_elements(forkdata_array, user, repo, parentDefaultBranch) {
   if (isEmpty(forkdata_array))
@@ -177,13 +184,14 @@ function add_fork_elements(forkdata_array, user, repo, parentDefaultBranch) {
         }
       } else {
         /* Appending the commit badges to the new row. */
-        let pushed_at = getOnlyDate(currFork.pushed_at);
+        const pushed_at = getOnlyDate(currFork.pushed_at);
+        const date_txt = compareDates(pushed_at, getDateCol(pushed_at));
         NEW_ROW.append(
             $('<td>').html(UF_TABLE_SEPARATOR),
             $('<td>', {class: "uf_badge"}).html(ahead_badge(responseData.ahead_by)).attr("value", responseData.ahead_by),
             $('<td>').html(UF_TABLE_SEPARATOR),
             $('<td>', {class: "uf_badge"}).html(behind_badge(responseData.behind_by)).attr("value", responseData.behind_by),
-            $('<td>').html(UF_TABLE_SEPARATOR + getDateCol(pushed_at)).attr("value", pushed_at)
+            $('<td>').html(UF_TABLE_SEPARATOR + date_txt).attr("value", pushed_at)
         );
       }
     };
@@ -241,6 +249,8 @@ function initial_request(user, repo) {
     if (isEmpty(responseData))
       return;
 
+    const onlyDate = getOnlyDate(responseData.pushed_at);
+    REPO_DATE = new Date(onlyDate);
     TOTAL_FORKS = responseData.forks_count;
 
     let html_txt = '<b>Queried repository</b>:&nbsp;&nbsp;&nbsp;';
@@ -248,7 +258,7 @@ function initial_request(user, repo) {
     html_txt += UF_TABLE_SEPARATOR + getStarCol(responseData.stargazers_count);
     html_txt += UF_TABLE_SEPARATOR + getForkCol(TOTAL_FORKS);
     html_txt += UF_TABLE_SEPARATOR + getWatchCol(responseData.subscribers_count);
-    html_txt += UF_TABLE_SEPARATOR + getDateCol(getOnlyDate(responseData.pushed_at));
+    html_txt += UF_TABLE_SEPARATOR + getDateCol(onlyDate);
 
     /* Warning the user if he's not scanning from the root. */
     if (responseData.source) { // guarantees both 'source' and 'parent' are present
