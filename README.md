@@ -14,7 +14,7 @@ Some times, a project might be abandoned, or someone had a different idea of how
 
 ## Table of Content
 * [Releases](#releases)
-  * [Website](#website)
+  * [Online tool](#online-tool)
   * [Chrome extension](#chrome-extension-wip) (WIP)
   * [`refined-github`](#refined-github)
 * [How it works](#how-it-works)
@@ -29,7 +29,7 @@ The project is released as:
 2. A Chrome extension: has the advantage of always performing the search whenever you open a project's GitHub Forks page.
 3. A feature in [`refined-github`](https://github.com/sindresorhus/refined-github)
 
-### Website
+### Online tool
 The project is [available online](https://useful-forks.github.io/) thanks to GitHub Pages.
 
 You can query repository directly with the URL. Here is an example: https://useful-forks.github.io/?repository=kotcrab/vis-ui
