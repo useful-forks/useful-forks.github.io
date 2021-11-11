@@ -160,7 +160,7 @@ function add_fork_elements(forkdata_array, user, repo, parentDefaultBranch) {
     clearNonErrorMsg();
 
   let table_body = getTableBody();
-  for (let i = 0; i < forkdata_array.length; i++) {
+  for (let i of forkdata_array) {
     const currFork = forkdata_array[i];
 
     /* Basic data (name/stars/forks). */
