@@ -85,8 +85,8 @@
         <!-- Right-side buttons which will populate the Burger -->
         <div class="navbar-end">
           <a id="addTokenBtn" class="navbar-item has-text-weight-bold"
-             onclick="ga_openTokenHeader();">
-            <img src="assets/settings-icon.png" alt="Settings" />
+             onclick="openTokenDialog();">
+            <img src="assets/settings-icon.png" alt="Access Token" />
             Add an Access Token
           </a>
         </div>
@@ -99,10 +99,9 @@
     <div class="modal-background"></div>
     <div class="modal-card">
       <header class="modal-card-head">
-        <p id="modalCardTitle" class="modal-card-title">Add a GitHub Access Token</p>
-        <button id="closeModalBtn" class="delete is-large" aria-label="close"
-                onclick="ga_closeToken();">
-        </button>
+        <p id="modalTokenCardTitle" class="modal-card-title">Add a GitHub Access Token</p>
+        <button class="delete is-large" aria-label="close"
+                onclick="closeTokenDialog();"></button>
       </header>
       <section class="modal-card-body">
         <p><em>Useful Forks</em> uses the GitHub API to retrieve repository metadata. You may see this dialog because you have hit the
@@ -115,11 +114,98 @@
         <input class="input" id="tokenInput" placeholder="90c6b8218dae4122b07b4a0fae252c619a08941b" />
       </section>
       <footer class="modal-card-foot">
-        <a href="https://github.com/settings/tokens/new?scopes=public_repo&description=UsefulForks" target="_blank" rel="noopener noreferrer"
-           class="button is-link is-large is-fullwidth"
-           onclick="ga_createToken();">Create</a>
-        <a id="saveTokenBtn" class="button is-success is-large is-fullwidth"
-           onclick="ga_saveToken();">Save</a>
+        <a href="https://github.com/settings/tokens/new?description=useful-forks%20(no%20scope%20required)" target="_blank" rel="noopener noreferrer"
+           class="button is-uf-blue is-large is-fullwidth"
+           onclick="ga_createToken();">
+          Create
+        </a>
+        <a class="button is-uf-orange is-large is-fullwidth"
+           onclick="saveTokenBtnClicked();">
+          Save
+        </a>
+      </footer>
+    </div>
+  </div>
+
+  <!-- Query Settings popup -->
+  <div class="modal" id="uf_settings_popup">
+    <div class="modal-background"></div>
+    <div class="modal-card">
+      <header class="modal-card-head">
+        <p class="modal-card-title">Customize query settings</p>
+        <button class="delete is-large" aria-label="close"
+                onclick="closeSettingsDialog();"></button>
+      </header>
+      <section class="modal-card-body">
+        <p>Settings will be saved on your local browser and will apply to your future queries.</p><br/>
+
+        <!-- Amount of commit diffs for the automatic filtering. -->
+        <div class="field is-horizontal">
+          <div class="field-label is-normal">
+            <label class="label">Ahead filter:</label>
+          </div>
+          <div class="field-body">
+            <div class="field">
+              <div class="control">
+                <input id="uf_settings_filter" class="input is-small is-fullwidth has-tooltip-arrow"
+                       type="number" value="0" min="1"
+                       placeholder="Default is 0" required>
+              </div>
+              <p class="help mb-2"><strong>Default is 0.</strong> If the amount of 'ahead' commits is less than or equal to this value, the fork is automatically removed from the list.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Relationship used for the commit diff count. -->
+        <div class="field is-horizontal">
+          <div class="field-label is-normal">
+            <label class="label">Diff relative:</label>
+          </div>
+          <div class="field-body">
+            <div class="field">
+              <div class="control">
+                <label class="radio">
+                  <input type="radio" name="rsvp" checked>
+                  Parent
+                </label>
+                <label class="radio" disabled>
+                  <input type="radio" name="rsvp" disabled>
+                  Source [WIP]
+                </label>
+                <label class="radio" disabled>
+                  <input type="radio" name="rsvp" disabled>
+                  Heuristic [WIP]
+                </label>
+              </div>
+              <p class="help mb-2"><strong>Default is 'Parent'.</strong> Which repository, relative to the evaluated fork, should be used to calculate the commit diff ('ahead' and 'behind').</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Export CSV button display. -->
+        <div class="field is-horizontal">
+          <div class="field-label is-normal">
+            <label class="label">Export CSV:</label>
+          </div>
+          <div class="field-body">
+            <div class="field">
+              <div class="control">
+                <label class="checkbox">
+                  <input type="checkbox" id="uf_settings_csv" checked>
+                  Display
+                </label>
+              </div>
+              <p class="help mb-2"><strong>Default is checked.</strong> Determines whether to display or not the "<span class="is-family-monospace">Export table as CSV</span>" button when a scan ends.</p>
+            </div>
+          </div>
+        </div>
+
+      </section>
+      <footer class="modal-card-foot">
+        <a class="button is-uf-orange is-large is-fullwidth"
+           onclick="saveSettingsBtnClicked();">
+          Save
+        </a>
       </footer>
     </div>
   </div>
@@ -129,6 +215,12 @@
     <div class="container has-text-centered">
       <div class="search-container">
         <div class="field has-addons">
+          <p class="control">
+            <a class="button is-dark is-outlined px-2"
+               onclick="openSettingsDialog();">
+              <img src="assets/settings-icon_big.png" alt="Settings" width="26" height="26"/>
+            </a>
+          </p>
           <div class="control is-expanded">
             <input class="input is-dark" type="text" id="repo" name="repo" placeholder="payne911/PieMenu" autofocus />
           </div>
@@ -152,20 +244,29 @@
   <div class="container">
     <hr style="background-color:#dbdbdb; height: 1px" />
     <div style="float:left">
-      Website template adapted from
-      <a href="https://github.com/timqian/star-history/tree/master/website"><span><strong>star-history</strong></span></a>
+      If you like this project, feel free to
+      <strong>
+        <a href="https://github.com/useful-forks/useful-forks.github.io" target="_blank" rel="noopener noreferrer"
+           onclick="ga_footerStar();">give it a ⭐</a>
+      </strong>
     </div>
     <div style="float: right">
-      <a class="icon button is-white" href="mailto:jeremi.grenier.berthiaume@gmail.com">
+      <a class="icon button is-white" href="mailto:jeremi.grenier.berthiaume@gmail.com"
+         onclick="ga_footerEmail();">
         ✉
       </a>
     </div>
   </div>
 </footer>
 
-<script type="text/javascript" src="src/jquery-3.5.1.min.js"></script>
-<script type="text/javascript" src="src/index.js" charset="utf-8"></script>
-<script type="module" src="src/queries-logic.js" charset="utf-8"></script>
+<script type="text/javascript" src="src/lib/jquery-3.6.0.min.js"></script>
+<script type="text/javascript" src="src/token.js" charset="utf-8"></script>
+<script type="text/javascript" src="src/navbar-burger.js" charset="utf-8"></script>
+<script type="text/javascript" src="src/settings.js" charset="utf-8"></script>
+<script type="text/javascript" src="src/queries-init.js" charset="utf-8"></script>
+<script type="text/javascript" src="src/csv-export.js" charset="utf-8"></script>
+<script src="dist/main.js"></script> <!-- replaces "queries-logic.js" -->
+
 </body>
 
 </html>

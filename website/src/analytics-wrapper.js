@@ -31,6 +31,15 @@ function ga_queryResultClick(fullName, isInitialRepo) {
 }
 
 
+/* Functionalities. */
+function ga_exportCSV(query) {
+  dispatch('feature', 'Export-CSV', query);
+}
+function ga_openSettings() {
+  dispatch('feature', 'Query-Settings', 'Open');
+}
+
+
 /* Header buttons. */
 function ga_homeHeader() {
   dispatch('click', 'left-header-button', 'Home');
@@ -44,7 +53,7 @@ function ga_chromeHeader() {
 
 
 /* Access Token. */
-function ga_openTokenHeader() {
+function ga_openToken() {
   dispatch('click', 'access-token', 'Open-Dialog');
 }
 function ga_closeToken() {
@@ -55,4 +64,13 @@ function ga_saveToken() {
 }
 function ga_createToken() {
   dispatch('click', 'access-token', 'Create-Token');
+}
+
+
+/* Footer. */
+function ga_footerStar() {
+  dispatch('click', 'footer', 'repo-star-link');
+}
+function ga_footerEmail() {
+  dispatch('click', 'footer', 'email-icon');
 }

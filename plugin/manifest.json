@@ -1,7 +1,7 @@
 {
   "name": "Useful Forks",
-  "version": "1.5",
-  "description": "Displays GitHub forks ordered by stars, and with additional information and automatic filters.",
+  "version": "1.7",
+  "description": "Displays GitHub forks ordered by stars, with additional information and automatic filtering of irrelevant ones.",
   "permissions": [
     "*://github.com/*",
     "*://api.github.com/*",
@@ -10,10 +10,10 @@
   "content_scripts": [
     {
       "matches": [
-        "*://github.com/*/network/members"
+        "*://github.com/*/*"
       ],
       "js": [
-        "jquery-3.5.1.min.js",
+        "jquery-3.6.0.min.js",
         "useful-forks.js"
       ],
       "run_at": "document_idle",

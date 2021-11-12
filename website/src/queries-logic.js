@@ -1,12 +1,12 @@
-import { Octokit } from "https://cdn.skypack.dev/@octokit/rest";
-import { throttling } from "https://cdn.skypack.dev/@octokit/plugin-throttling";
+const { Octokit } = require("@octokit/rest");
+const { throttling } = require("@octokit/plugin-throttling");
 
-const SLOW_DOWN_MSG_THRESHOLD = 800;
-
-/* Variables that should be cleared for every new query. */
-let TOTAL_FORKS              = 0;
-let RATE_LIMIT_EXCEEDED      = false;
-let TOTAL_API_CALLS_COUNTER  = 0;
+/* Variables that should be cleared for every new query (defaults are set in "clear_old_data"). */
+let REPO_DATE;
+let TOTAL_FORKS;
+let RATE_LIMIT_EXCEEDED;
+let AHEAD_COMMITS_FILTER;
+let TOTAL_API_CALLS_COUNTER;
 let ONGOING_REQUESTS_COUNTER = 0;
 
 /** Used to reset the state for a brand new query. */
@@ -15,10 +15,18 @@ function clear_old_data() {
   clearMsg();
   clearTable();
   setApiCallsLabel(0);
+  hideExportCsvBtn();
+  REPO_DATE = new Date();
   TOTAL_FORKS = 0;
   RATE_LIMIT_EXCEEDED = false;
   TOTAL_API_CALLS_COUNTER = 0;
   ONGOING_REQUESTS_COUNTER = 0;
+  AHEAD_COMMITS_FILTER = UF_SETTINGS_AHEAD_FILTER;
+  shouldTriggerQueryOnTokenSave = false;
+}
+
+function getOnlyDate(full) {
+  return full.split('T')[0];
 }
 
 function extract_username_from_fork(combined_name) {
@@ -74,10 +82,6 @@ function incrementCounters() {
   ONGOING_REQUESTS_COUNTER++;
   TOTAL_API_CALLS_COUNTER++;
   setApiCallsLabel(TOTAL_API_CALLS_COUNTER);
-
-  if (TOTAL_API_CALLS_COUNTER === SLOW_DOWN_MSG_THRESHOLD) {
-    setMsg(UF_MSG_SLOWER);
-  }
 }
 
 function onRateLimitExceeded() {
@@ -85,10 +89,10 @@ function onRateLimitExceeded() {
     console.warn('[useful-forks] GitHub API rate-limit exceeded. (Since useful-forks sends many requests at once, you might have a lot of `Error Code 403` in your browser Console Logs.)');
     RATE_LIMIT_EXCEEDED = true;
     setMsg(UF_MSG_API_RATE);
-    if (!LOCAL_STORAGE_GITHUB_ACCESS_TOKEN) {
-      openTokenDialog();
-    }
     disableQueryFields();
+    if (!LOCAL_STORAGE_GITHUB_ACCESS_TOKEN) {
+      proposeAddingToken();
+    }
   }
 }
 
@@ -100,13 +104,25 @@ function allRequestsAreDone() {
 function decrementCounters() {
   ONGOING_REQUESTS_COUNTER--;
   if (allRequestsAreDone()) {
-    clearNonErrorMsg();
+    clearMsg();
     sortTable();
     enableQueryFields();
+    displayCsvExportBtn();
   }
 }
 
+function searchNotAllowed() {
+  if (shouldTriggerQueryOnTokenSave)
+    return false;
+  return ONGOING_REQUESTS_COUNTER !== 0 || JQ_SEARCH_BTN.hasClass('is-loading');
+}
+
 function send(requestPromise, successFn, failureFn) {
+  if (RATE_LIMIT_EXCEEDED) {
+    failureFn();
+    return;
+  }
+
   incrementCounters();
   requestPromise()
   .then(
@@ -117,12 +133,12 @@ function send(requestPromise, successFn, failureFn) {
       () => decrementCounters());
 }
 
-/** Dynamically fills the second part of a row. */
+/** Fills the first part of a row. */
 function build_fork_element_html(table_body, combined_name, num_stars, num_forks) {
   const NEW_ROW = $('<tr>', {id: extract_username_from_fork(combined_name), class: "useful_forks_repo"});
   table_body.append(
       NEW_ROW.append(
-          $('<td>').html(getRepoCol(combined_name, false)),
+          $('<td>').html(getRepoCol(combined_name, false)).attr("value", combined_name),
           $('<td>').html(UF_TABLE_SEPARATOR + getStarCol(num_stars)).attr("value", num_stars),
           $('<td>').html(UF_TABLE_SEPARATOR + getForkCol(num_forks)).attr("value", num_forks)
       )
@@ -130,12 +146,17 @@ function build_fork_element_html(table_body, combined_name, num_stars, num_forks
   return NEW_ROW;
 }
 
+/** Add bold to the date text if the date is earlier than the queried repo. */
+function compareDates(date, html) {
+  return REPO_DATE <= new Date(date) ? `<strong>${html}</strong>` : html;
+}
+
 /** Prepares, appends, and updates a table row. */
 function add_fork_elements(forkdata_array, user, repo, parentDefaultBranch) {
   if (isEmpty(forkdata_array))
     return;
 
-  if (!RATE_LIMIT_EXCEEDED && TOTAL_API_CALLS_COUNTER < SLOW_DOWN_MSG_THRESHOLD) // because some times gets called after some other msgs are displayed
+  if (!RATE_LIMIT_EXCEEDED) // because some times gets called after some other msgs are displayed
     clearNonErrorMsg();
 
   let table_body = getTableBody();
@@ -156,18 +177,21 @@ function add_fork_elements(forkdata_array, user, repo, parentDefaultBranch) {
       head: `${extract_username_from_fork(currFork.full_name)}:${currFork.default_branch}`
     });
     const onSuccess = (responseHeaders, responseData) => {
-      if (responseData.total_commits === 0) {
+      if (responseData.total_commits <= AHEAD_COMMITS_FILTER) {
         NEW_ROW.remove();
-        if (table_body.children().length === 0) {
+        if (tableIsEmpty(table_body)) {
           setMsg(UF_MSG_EMPTY_FILTER);
         }
       } else {
         /* Appending the commit badges to the new row. */
+        const pushed_at = getOnlyDate(currFork.pushed_at);
+        const date_txt = compareDates(pushed_at, getDateCol(pushed_at));
         NEW_ROW.append(
             $('<td>').html(UF_TABLE_SEPARATOR),
-            $('<td>', {class: "uf_badge"}).html(ahead_badge(responseData.ahead_by)),
+            $('<td>', {class: "uf_badge"}).html(ahead_badge(responseData.ahead_by)).attr("value", responseData.ahead_by),
             $('<td>').html(UF_TABLE_SEPARATOR),
-            $('<td>', {class: "uf_badge"}).html(behind_badge(responseData.behind_by))
+            $('<td>', {class: "uf_badge"}).html(behind_badge(responseData.behind_by)).attr("value", responseData.behind_by),
+            $('<td>').html(UF_TABLE_SEPARATOR + date_txt).attr("value", pushed_at)
         );
       }
     };
@@ -225,13 +249,16 @@ function initial_request(user, repo) {
     if (isEmpty(responseData))
       return;
 
+    const onlyDate = getOnlyDate(responseData.pushed_at);
+    REPO_DATE = new Date(onlyDate);
     TOTAL_FORKS = responseData.forks_count;
 
     let html_txt = '<b>Queried repository</b>:&nbsp;&nbsp;&nbsp;';
     html_txt += getRepoCol(responseData.full_name, true);
     html_txt += UF_TABLE_SEPARATOR + getStarCol(responseData.stargazers_count);
-    html_txt += UF_TABLE_SEPARATOR + getWatchCol(responseData.subscribers_count);
     html_txt += UF_TABLE_SEPARATOR + getForkCol(TOTAL_FORKS);
+    html_txt += UF_TABLE_SEPARATOR + getWatchCol(responseData.subscribers_count);
+    html_txt += UF_TABLE_SEPARATOR + getDateCol(onlyDate);
 
     /* Warning the user if he's not scanning from the root. */
     if (responseData.source) { // guarantees both 'source' and 'parent' are present
@@ -267,9 +294,8 @@ function initial_request(user, repo) {
 function initiate_search() {
 
   /* Checking if search is allowed. */
-  if (ONGOING_REQUESTS_COUNTER !== 0 || JQ_SEARCH_BTN.hasClass('is-loading')) {
+  if (searchNotAllowed())
     return; // abort
-  }
 
   clear_old_data();
 
@@ -283,6 +309,8 @@ function initiate_search() {
     return; // abort
   }
 
+  setUpOctokitWithLatestToken();
+
   setQueryFieldsAsLoading();
   setMsg(UF_MSG_SCANNING);
 
@@ -294,21 +322,31 @@ function initiate_search() {
 
 /* Object used for REST calls. */
 const MyOctokit = Octokit.plugin(throttling);
-const octokit = new MyOctokit({
-  auth: LOCAL_STORAGE_GITHUB_ACCESS_TOKEN,
-  userAgent: 'useful-forks',
-  throttle: {
-    onRateLimit: (retryAfter, options) => {
-      onRateLimitExceeded();
-      if (options.request.retryCount === 0) { // only retries once
-        return true; // true = retry
+let octokit;
+setUpOctokitWithLatestToken();
+function setUpOctokitWithLatestToken() {
+  if (!shouldReconstructOctokit)
+    return;
+
+  octokit = new MyOctokit({
+    auth: LOCAL_STORAGE_GITHUB_ACCESS_TOKEN,
+    userAgent: 'useful-forks',
+    throttle: {
+      onRateLimit: (retryAfter, options) => {
+        onRateLimitExceeded();
+        if (options.request.retryCount === 0) { // only retries once
+          return true; // true = retry
+        }
+      },
+      onAbuseLimit: (retryAfter, options) => {
+        setMsg(UF_MSG_SLOWER);
+        return true; // true = automatically retry after given amount of seconds
       }
-    },
-    onAbuseLimit: (retryAfter, options) => {
-      return true; // true = automatically retry after given amount of seconds
     }
-  }
-});
+  });
+
+  shouldReconstructOctokit = false;
+}
 
 
 /* Setting up query triggers. */

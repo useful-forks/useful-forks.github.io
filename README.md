@@ -1,4 +1,4 @@
-![useful-forks banner](docs/assets/useful-forks-banner.png "useful-forks banner")
+![useful-forks banner](website/assets/useful-forks-banner.png "useful-forks banner")
 
 # Useful Forks
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/useful-forks/useful-forks.github.io/blob/master/LICENSE)
@@ -14,7 +14,7 @@ Some times, a project might be abandoned, or someone had a different idea of how
 
 ## Table of Content
 * [Releases](#releases)
-  * [Website](#website)
+  * [Online tool](#online-tool)
   * [Chrome extension](#chrome-extension-wip) (WIP)
   * [`refined-github`](#refined-github)
 * [How it works](#how-it-works)
@@ -29,7 +29,7 @@ The project is released as:
 2. A Chrome extension: has the advantage of always performing the search whenever you open a project's GitHub Forks page.
 3. A feature in [`refined-github`](https://github.com/sindresorhus/refined-github)
 
-### Website
+### Online tool
 The project is [available online](https://useful-forks.github.io/) thanks to GitHub Pages.
 
 You can query repository directly with the URL. Here is an example: https://useful-forks.github.io/?repository=kotcrab/vis-ui
@@ -39,11 +39,11 @@ You can query repository directly with the URL. Here is an example: https://usef
 ### Chrome extension (WIP)
 Not published yet. If you want to install it:
 1. Clone this repository
-2. Change the [script file](project/useful-forks.js) so that `GITHUB_ACCESS_TOKEN`'s value is that of an [Access Token](https://github.com/settings/tokens/new?scopes=public_repo&description=UsefulForks)
+2. Change the [script file](plugin/useful-forks.js#L1) so that `GITHUB_ACCESS_TOKEN`'s value is that of an [Access Token](https://github.com/settings/tokens/new?description=useful-forks%20(no%20scope%20required))
 3. Go to the `chrome://extensions` URL
 4. Enable `Developer mode` (switch at the top-right)
 5. Click `Load unpacked` (button at the top-left)
-6. Select the [`project` folder](project)
+6. Select the [`plugin` folder](plugin)
 
 Once it's activated, the extension will automatically trigger itself whenever you open a Fork page, as shown by the GIF below:
 
@@ -63,24 +63,21 @@ This Activity Diagram (UML) should clarify a bit the inner-workings of the algor
 
 ## Contributing
 If you want to help, the structure of the repo is rather simple. In terms of folders:
-* [`docs`](/docs) contains the website
-* [`project`](/project) contains the Chrome Extension
+* [`website`](/website) contains the website
+* [`plugin`](/plugin) contains the Chrome Extension
 
-### To-do
-* Fix the [Issues](https://github.com/useful-forks/useful-forks.github.io/issues) (if there are any)
-* Cache responses for a little while 
-  * https://docs.github.com/en/free-pro-team@latest/rest/guides/getting-started-with-the-rest-api#conditional-requests
-  * https://docs.github.com/en/free-pro-team@latest/rest/overview/resources-in-the-rest-api#conditional-requests
-  * https://stackoverflow.com/a/14890859/9768291
-* Publish as a Chrome Extension (create 'options' and 'background' pages?)
-  * See: https://developer.chrome.com/extensions/samples
-    * https://developer.chrome.com/extensions/examples/tutorials/broken_background_color.zip
-    * https://developer.chrome.com/extensions/examples/tutorials/getstarted.zip
-  * Allow people to input their Access Token to increase API limits (from Extension's settings rather than through script)
+### Website instructions
+To run the website locally, you will need:
+* NodeJS (suggested v14.15+)
+* NPM (suggested v6.14+)
+
+Bring a terminal to the ``website`` folder and execute `npm install`, and then `npm run dev`.
+
+Whenever you want to test changes to the `src/queries-logic.js` file, you will need to re-execute `npm run dev` for `dist/main.js` to recompile.
 
 ## Credits
 * Thanks to [raeleus](https://github.com/raeleus) for his design of the logo!
-* Thanks to [jkunstwald](https://github.com/jkunstwald/) for allowing me to apply the MIT license to what has been expanded from [his own initial work](https://github.com/jkunstwald/useful-forks). Here is a list of the improvements that were made made:
+* Thanks to [jkunstwald](https://github.com/jkunstwald/) for allowing me to apply the MIT license to what has been expanded from [his own initial work](https://github.com/jkunstwald/useful-forks). Here is a list of the improvements that were made:
   * Recursive search of all sub-forks
   * GitHub API's `Watchers` value is bugged so it was removed
   * Implement authenticated requests to the GitHub API (which increases the limit of calls)
