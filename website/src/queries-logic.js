@@ -160,8 +160,7 @@ function add_fork_elements(forkdata_array, user, repo, parentDefaultBranch) {
     clearNonErrorMsg();
 
   let table_body = getTableBody();
-  for (let i = 0; i < forkdata_array.length; i++) {
-    const currFork = forkdata_array[i];
+  for (const currFork of forkdata_array) {
 
     /* Basic data (name/stars/forks). */
     const NEW_ROW = build_fork_element_html(table_body, currFork.full_name, currFork.stargazers_count, currFork.forks_count);
