@@ -84,4 +84,4 @@ Whenever you want to test changes to the `src/queries-logic.js` file, you will n
   * Added some minimal feedback for certain edge-cases
   * Created an actual website for the feature
   * Position the chrome extension's results where they won't move the other links of the page
-* Thanks to [`star-history`](https://star-history.t9t.io/#useful-forks/useful-forks.github.io)'s [open-source website](https://github.com/timqian/star-history/tree/master/website) which I adapted for this project
+* Thanks to [`star-history`](https://star-history.t9t.io/#useful-forks/useful-forks.github.io)'s [open-source website](https://github.com/bytebase/star-history/tree/c0e7aa7cc01d5bab9188fc7d2a2bac409d2915ec/website) which I adapted for this project
