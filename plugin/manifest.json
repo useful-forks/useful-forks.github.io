@@ -3,15 +3,15 @@
   "version": "1.7",
   "description": "Displays GitHub forks ordered by stars, with additional information and automatic filtering of irrelevant ones.",
   "permissions": [
-    "*://github.com/*",
-    "*://api.github.com/*",
     "storage"
+  ],
+  "host_permissions": [
+    "*://github.com/*",
+    "*://api.github.com/*"
   ],
   "content_scripts": [
     {
-      "matches": [
-        "*://github.com/*/*"
-      ],
+      "matches": ["*://github.com/*/*"],
       "js": [
         "jquery-3.6.0.min.js",
         "useful-forks.js"
@@ -20,5 +20,5 @@
       "all_frames": true
     }
   ],
-  "manifest_version": 2
+  "manifest_version": 3
 }
