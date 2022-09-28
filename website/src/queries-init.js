@@ -45,13 +45,13 @@ function getRepoCol(full_name, isInitialRepo) {
                          onclick="ga_queryResultClick('${full_name}', ${isInitialRepo});">${full_name}</a>`;
 }
 function getStarCol(num_stars) {
-  return SVG_STAR + ' x ' + num_stars;
+  return SVG_STAR + ' × ' + num_stars;
 }
 function getForkCol(num_forks) {
-  return SVG_FORK + ' x ' + num_forks;
+  return SVG_FORK + ' × ' + num_forks;
 }
 function getWatchCol(num_watchers) {
-  return SVG_EYE + ' x ' + num_watchers;
+  return SVG_EYE + ' × ' + num_watchers;
 }
 function getDateCol(date) {
   return SVG_DATE + ' ' + date;
