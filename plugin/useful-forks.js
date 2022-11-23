@@ -168,8 +168,8 @@ function build_fork_element_html(table_body, combined_name, num_stars, num_forks
   table_body.append(
       NEW_ROW.append(
           $('<td>').html(svg_literal_fork + ` <a href="https://github.com/${combined_name}" target="_blank" rel="noopener noreferrer">${combined_name}</a>`),
-          $('<td>').html(UF_TABLE_SEPARATOR + svg_literal_star + ' x ' + num_stars).attr("value", num_stars),
-          $('<td>').html(UF_TABLE_SEPARATOR + svg_literal_fork + ' x ' + num_forks).attr("value", num_forks)
+          $('<td>').html(UF_TABLE_SEPARATOR + svg_literal_star + ' × ' + num_stars).attr("value", num_stars),
+          $('<td>').html(UF_TABLE_SEPARATOR + svg_literal_fork + ' × ' + num_forks).attr("value", num_forks)
       )
   );
   return NEW_ROW;
