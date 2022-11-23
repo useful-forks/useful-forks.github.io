@@ -18,6 +18,15 @@ const UF_MSG_API_RATE     = "<b>GitHub API rate-limits exceeded.</b> Consider pr
     + "It's also possible that the queried repository has so many forks that it's impossible to scan it completely without running out of API calls.<br>"
     + ":(";
 
+// list of messages which should not be cleared when the request ends
+const UF_PRESERVED_MSGS = [
+    UF_MSG_NO_FORKS,
+    UF_MSG_EMPTY_FILTER,
+    UF_MSG_ERROR,
+    UF_MSG_SLOWER,
+    UF_MSG_API_RATE
+];
+
 
 const EXAMPLE_LINK_1 = `<a href="${buildAutoQueryURL('payne911/PieMenu')}"
                            onclick="ga_shortExampleLink();">payne911/PieMenu</a>`;
@@ -92,8 +101,8 @@ function clearMsg() {
   JQ_ID_MSG.empty();
 }
 function clearNonErrorMsg() {
-  const errorMsg = JQ_ID_MSG.html();
-  if (errorMsg !== UF_MSG_ERROR && errorMsg !== UF_MSG_SLOWER)
+  const msg = JQ_ID_MSG.html();
+  if (!UF_PRESERVED_MSGS.includes(msg))
     clearMsg();
 }
 function setHeader(msg) {
