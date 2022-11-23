@@ -73,6 +73,8 @@ To run the website locally, you will need:
 
 Bring a terminal to the ``website`` folder and execute `npm install`, and then `npm run dev`.
 
+If after running `npm run dev` you get an error that mentions "`code: 'ERR_OSSL_EVP_UNSUPPORTED'`", [this](https://stackoverflow.com/a/69746937/9768291) should be able to help.
+
 Whenever you want to test changes to the `src/queries-logic.js` file, you will need to re-execute `npm run dev` for `dist/main.js` to recompile.
 
 ## Credits
