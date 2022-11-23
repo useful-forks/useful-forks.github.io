@@ -25,7 +25,7 @@ Sometimes, a project might be abandoned, or someone had a different idea of how 
 
 ## Releases
 The project is released as:
-1. A website: great for people that just want to use this tool every now and then.
+1. A website: great for people that just want to use this tool occasionally.
 2. A Chrome extension: has the advantage of always performing the search whenever you open a project's GitHub Forks page.
 3. A feature in [`refined-github`](https://github.com/sindresorhus/refined-github)
 
