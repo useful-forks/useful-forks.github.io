@@ -330,16 +330,17 @@ function setUpOctokitWithLatestToken() {
   octokit = new MyOctokit({
     auth: LOCAL_STORAGE_GITHUB_ACCESS_TOKEN,
     userAgent: 'useful-forks',
+    // https://github.com/octokit/plugin-throttling.js#usage
     throttle: {
-      onRateLimit: (retryAfter, options) => {
+      onRateLimit: (retryAfter, options, octokit, retryCount) => {
         onRateLimitExceeded();
-        if (options.request.retryCount === 0) { // only retries once
+        if (retryCount < 1) { // only retries once
           return true; // true = retry
         }
       },
-      onAbuseLimit: (retryAfter, options) => {
+      onSecondaryRateLimit: (retryAfter, options, octokit) => {
         setMsg(UF_MSG_SLOWER);
-        return true; // true = automatically retry after given amount of seconds
+        return true; // true = automatically retry after given amount of seconds (usually 60)
       }
     }
   });
