@@ -95,10 +95,19 @@ function clearTable() {
   getTableBody().empty();
 }
 function setMsg(msg) {
-  JQ_ID_MSG.html(msg);
+  JQ_ID_MSG
+    .html(msg)
+    .addClass("box")
+    .addClass("has-background-info-light")
+    .css("border-width", "thin")
+    .css("border-color", "rgba(0,0,0,0.25)")
+    .css("border-style", "solid");
 }
 function clearMsg() {
-  JQ_ID_MSG.empty();
+  JQ_ID_MSG
+    .empty()
+    .removeClass("box")
+    .css("border-style", "");
 }
 function clearNonErrorMsg() {
   const msg = JQ_ID_MSG.html();
