@@ -11,7 +11,7 @@ const UF_TABLE_SEPARATOR  = "｜";
 const UF_MSG_ERROR        = "There seems to have been an error.<br>"
     + "Maybe you had a typo in the provided input? Or the Access Token credentials are invalid?<br>"
     + "If the scan is continuing, ignore this: the GitHub API some times returns erroneous data.";
-const UF_MSG_SLOWER       = "The scan is slowing down (and will stall for a little while) due to the high amount of requests.<br>"
+const UF_MSG_SLOWER       = "The scan will stall for a little while due to the high amount of requests.<br>"
     + "(This is to prevent GitHub API from refusing to respond due to thinking those requests are malicious.)";
 const UF_MSG_API_RATE     = "<b>GitHub API rate-limits exceeded.</b> Consider providing an <b>Access Token</b> if you haven't already (click the button at the top-right).<br>"
     + "The amount of API calls you are allowed to do will re-accumulate over time: you can try again later on.<br>"
@@ -107,6 +107,7 @@ function clearMsg() {
     .empty()
     .removeClass("box")
     .css("border-style", "");
+  removeProgressBar();
 }
 function clearNonErrorMsg() {
   const msg = JQ_ID_MSG.html();
@@ -118,6 +119,13 @@ function setHeader(msg) {
 }
 function clearHeader() {
   JQ_ID_HEADER.empty();
+}
+
+function getJq_ProgressBar() {
+  return $(".progress");
+}
+function removeProgressBar() {
+  getJq_ProgressBar().remove();
 }
 
 /* Search Query Fields */

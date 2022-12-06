@@ -217,6 +217,8 @@ function request_fork_page(page_number, user, repo, defaultBranch) {
     page: page_number
   });
   const onSuccess = (responseHeaders, responseData) => {
+    removeProgressBar();
+
     if (isEmpty(responseData)) // repo has not been forked
       return;
 
@@ -338,9 +340,25 @@ function setUpOctokitWithLatestToken() {
           return true; // true = retry
         }
       },
-      onSecondaryRateLimit: (retryAfter, options, octokit) => {
+      onSecondaryRateLimit: (retryAfter, options, octokit) => { // slow down
         setMsg(UF_MSG_SLOWER);
-        return true; // true = automatically retry after given amount of seconds (usually 60)
+
+        // setup the progress bar
+        if (!getJq_ProgressBar()[0]) { // only if it isn't displayed yet
+          JQ_ID_MSG.after(`<progress class="progress is-small" value="${retryAfter}" max="${retryAfter}">some%</progress>`);
+          getJq_ProgressBar().animate(
+            {value: "0"}, // target for the "value" attribute
+            {
+                duration: 1000 * retryAfter, // in ms
+                easing: 'linear',
+                done: function() {
+                    getJq_ProgressBar().removeAttr('value'); // for moving bar
+                }
+            }
+          );
+        }
+
+        return true; // true = automatically retry after given amount of seconds (usually 1 min)
       }
     }
   });
