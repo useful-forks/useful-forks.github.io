@@ -317,6 +317,9 @@ function initiate_search() {
 
   const user = queryValues[len - 2];
   const repo = queryValues[len - 1];
+  if (history.replaceState) {
+    history.replaceState({}, document.title, `?repo=${user}/${repo}`); // replace current URL param
+  }
   ga_searchQuery(user, repo);
   initial_request(user, repo);
 }
