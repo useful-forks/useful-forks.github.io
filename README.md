@@ -17,6 +17,7 @@ Sometimes, a project might be abandoned, or someone had a different idea of how 
   * [Online tool](#online-tool)
   * [Chrome extension](#chrome-extension-wip) (WIP)
   * [`refined-github`](#refined-github)
+  * [Bookmarklet](#bookmarklet)
 * [How it works](#how-it-works)
 * [Contributing](#contributing)
 * [Credits](#credits)
@@ -28,6 +29,7 @@ The project is released as:
 1. A website: great for people that just want to use this tool occasionally.
 2. A Chrome extension: has the advantage of always performing the search whenever you open a project's GitHub Forks page.
 3. A feature in [`refined-github`](https://github.com/sindresorhus/refined-github)
+4. A bookmarklet
 
 ### Online tool
 The project is [available online](https://useful-forks.github.io/) thanks to GitHub Pages.
@@ -55,6 +57,16 @@ Once it's activated, the extension will automatically trigger itself whenever yo
 `useful-forks` is part of the dozens of features provided. In that context, it appears as a button which redirects you to the [`useful-forks` website](https://useful-forks.github.io/):
 
 ![screenshot](https://user-images.githubusercontent.com/38117856/107463541-542e8500-6b2c-11eb-8b25-082f344c1587.png)
+
+### Bookmarklet
+
+The online tool can be used as a bookmarklet. To add one manually, press Ctrl+D to create a new bookmark and add this code in the URL field:
+
+```js
+javascript:!function(){if(m=window.location.href.match(/github.com\/([^\/]+)\/([^\/]+)/),m){window.open(`https://useful-forks.github.io/?repo=${m[1]}/${m[2]}`)}else window.alert("Not a GitHub repo")}();
+```
+
+When you're viewing a GitHub repo in your browser, you can press the newly created bookmarklet and this will open the online tool for the repo.
 
 ## How it works
 ![Activity_Diagram](media/query-diagram.png)
