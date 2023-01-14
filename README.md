@@ -66,7 +66,7 @@ The online tool can be used as a [bookmarklet](https://en.wikipedia.org/wiki/Boo
 javascript:!function(){if(m=window.location.href.match(/github.com\/([^\/]+)\/([^\/]+)/),m){window.open(`https://useful-forks.github.io/?repo=${m[1]}/${m[2]}`)}else window.alert("Not a GitHub repo")}();
 ```
 
-When you're viewing a GitHub repo in your browser, you can press the newly created bookmarklet and this will open the online tool for the repo.
+When you're viewing a GitHub repo in your browser, you can press the newly created bookmarklet and this will open the online tool for the repo in a new tab.
 
 ## How it works
 ![Activity_Diagram](media/query-diagram.png)
