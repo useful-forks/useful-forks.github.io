@@ -60,7 +60,7 @@ Once it's activated, the extension will automatically trigger itself whenever yo
 
 ### Bookmarklet
 
-The online tool can be used as a bookmarklet. To add one manually, press Ctrl+D to create a new bookmark and add this code in the URL field:
+The online tool can be used as a [bookmarklet](https://en.wikipedia.org/wiki/Bookmarklet). To add one manually, press `Ctrl+D` to create a new bookmark and add this code in the URL field:
 
 ```js
 javascript:!function(){if(m=window.location.href.match(/github.com\/([^\/]+)\/([^\/]+)/),m){window.open(`https://useful-forks.github.io/?repo=${m[1]}/${m[2]}`)}else window.alert("Not a GitHub repo")}();
