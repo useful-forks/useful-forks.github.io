@@ -1,19 +1,22 @@
 {
   "name": "Useful Forks",
-  "version": "1.7",
-  "description": "Displays GitHub forks ordered by stars, with additional information and automatic filtering of irrelevant ones.",
+  "version": "2.0",
+  "description": "To list GitHub forks ordered by stars, with additional information and automatic filtering of irrelevant ones.",
   "permissions": [
-    "*://github.com/*",
-    "*://api.github.com/*",
-    "storage"
+    "*://github.com/*"
   ],
+  "icons": {
+    "16": "images/useful-forks-16.png",
+    "32": "images/useful-forks-32.png",
+    "48": "images/useful-forks-32.png",
+    "128": "images/useful-forks-128.png"
+  },
   "content_scripts": [
     {
       "matches": [
         "*://github.com/*/*"
       ],
       "js": [
-        "jquery-3.6.0.min.js",
         "useful-forks.js"
       ],
       "run_at": "document_idle",

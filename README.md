@@ -15,7 +15,7 @@ Sometimes, a project might be abandoned, or someone had a different idea of how 
 ## Table of Content
 * [Releases](#releases)
   * [Online tool](#online-tool)
-  * [Chrome extension](#chrome-extension-wip) (WIP)
+  * [Chrome extension](#chrome-extension)
   * [`refined-github`](#refined-github)
   * [Bookmarklet](#bookmarklet)
 * [How it works](#how-it-works)
@@ -26,8 +26,8 @@ Sometimes, a project might be abandoned, or someone had a different idea of how 
 
 ## Releases
 The project is released as:
-1. A website: great for people that just want to use this tool occasionally.
-2. A Chrome extension: has the advantage of always performing the search whenever you open a project's GitHub Forks page.
+1. A website
+2. A Chrome extension
 3. A feature in [`refined-github`](https://github.com/sindresorhus/refined-github)
 4. A bookmarklet
 
@@ -38,18 +38,19 @@ You can query repository directly with the URL. Here is an example: https://usef
 
 ![website example](media/website_demo.gif)
 
-### Chrome extension (WIP)
+### Chrome extension
 Not published yet. If you want to install it:
 1. Clone this repository
-2. Change the [script file](plugin/useful-forks.js#L1) so that `GITHUB_ACCESS_TOKEN`'s value is that of an [Access Token](https://github.com/settings/tokens/new?description=useful-forks%20(no%20scope%20required))
-3. Go to the `chrome://extensions` URL
-4. Enable `Developer mode` (switch at the top-right)
-5. Click `Load unpacked` (button at the top-left)
-6. Select the [`plugin` folder](plugin)
+2. Go to the `chrome://extensions` URL
+3. Enable `Developer mode` (switch at the top-right)
+4. Click `Load unpacked` (button at the top-left)
+5. Select the [`plugin` folder](plugin)
 
-Once it's activated, the extension will automatically trigger itself whenever you open a Fork page, as shown by the GIF below:
+Once it's activated, the extension will automatically add a new "Useful" button, as shown by the GIF below:
 
 ![example](media/chrome_extension_demo.gif)
+
+This button will only appear when you visit GitHub repositories, and clicking it opens a new tab that will automatically trigger a search using [the online tool](#online-tool).
 
 ### `refined-github`
 [`refined-github`](https://github.com/sindresorhus/refined-github) is an ensemble of tools and tweaks aimed at improving your GitHub experience.
@@ -97,5 +98,5 @@ Whenever you want to test changes to the `src/queries-logic.js` file, you will n
   * Implement authenticated requests to the GitHub API (which increases the limit of calls)
   * Added some minimal feedback for certain edge-cases
   * Created an actual website for the feature
-  * Position the chrome extension's results where they won't move the other links of the page
+  * The Chrome extension leads to the (more powerful) website
 * Thanks to [`star-history`](https://star-history.t9t.io/#useful-forks/useful-forks.github.io)'s [open-source website](https://github.com/bytebase/star-history/tree/c0e7aa7cc01d5bab9188fc7d2a2bac409d2915ec/website) which I adapted for this project
