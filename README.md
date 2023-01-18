@@ -16,7 +16,7 @@ Sometimes, a project might be abandoned, or someone had a different idea of how 
 * [Releases](#releases)
   * [Online tool](#online-tool)
   * [Chrome extension](#chrome-extension)
-  * [`refined-github`](#refined-github)
+  * [Refined GitHub](#refined-github)
   * [Bookmarklet](#bookmarklet)
 * [How it works](#how-it-works)
 * [Contributing](#contributing)
@@ -54,12 +54,16 @@ Once it's activated, the extension will automatically add a new "Useful" button,
 
 This button will only appear when you visit GitHub repositories, and clicking it opens a new tab that will automatically trigger a search using [the online tool](#online-tool).
 
-### `refined-github`
-[`refined-github`](https://github.com/sindresorhus/refined-github) is an ensemble of tools and tweaks aimed at improving your GitHub experience.
+### Refined GitHub
+[Refined GitHub](https://github.com/sindresorhus/refined-github) is an ensemble of tools and tweaks aimed at improving your GitHub experience.
 
-`useful-forks` is part of the dozens of features provided. In that context, it appears as a button which redirects you to the [`useful-forks` website](https://useful-forks.github.io/):
+`useful-forks` is part of the hundreds of features provided. In that context, it appears as a button which redirects you to the [Useful Forks website](https://useful-forks.github.io/):
 
-![screenshot](https://user-images.githubusercontent.com/38117856/107463541-542e8500-6b2c-11eb-8b25-082f344c1587.png)
+![screenshot](media/insights_rg.png)
+
+It also appears next to the archive notification:
+
+|[screenshot](media/archived_repo_rg.png)
 
 ### Bookmarklet
 
