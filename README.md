@@ -34,7 +34,9 @@ The project is released as:
 ### Online tool
 The project is [available online](https://useful-forks.github.io/) thanks to GitHub Pages.
 
-You can query repository directly with the URL. Here is an example: https://useful-forks.github.io/?repository=kotcrab/vis-ui
+You can query a repository directly with the URL. Click this link to get an example: https://useful-forks.github.io/?repo=payne911/PieMenu.
+
+Below is a recording of what a scan would look like:
 
 ![website example](media/website_demo.gif)
 
