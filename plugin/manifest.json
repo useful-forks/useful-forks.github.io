@@ -1,6 +1,6 @@
 {
   "name": "Useful Forks",
-  "version": "2.0",
+  "version": "2.1",
   "description": "To list GitHub forks ordered by stars, with additional information and automatic filtering of irrelevant ones.",
   "permissions": [
     "*://github.com/*"
@@ -8,7 +8,7 @@
   "icons": {
     "16": "images/useful-forks-16.png",
     "32": "images/useful-forks-32.png",
-    "48": "images/useful-forks-32.png",
+    "48": "images/useful-forks-48.png",
     "128": "images/useful-forks-128.png"
   },
   "content_scripts": [
