@@ -1,4 +1,4 @@
-![useful-forks banner](website/assets/useful-forks-banner.png "useful-forks banner")
+![useful-forks banner](website/assets/useful-forks-banner.png "Useful Forks banner")
 
 # Useful Forks
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/useful-forks/useful-forks.github.io/blob/master/LICENSE)
@@ -38,7 +38,7 @@ You can query a repository directly with the URL. Click this link to get an exam
 
 Below is a recording of what a scan would look like:
 
-![website example](media/website_demo.gif)
+![website example](media/website_demo.gif "Website demo")
 
 ### Chrome extension
 Not published yet. If you want to install it:
@@ -50,7 +50,7 @@ Not published yet. If you want to install it:
 
 Once it's activated, the extension will automatically add a new "Useful" button, as shown by the GIF below:
 
-![example](media/chrome_extension_demo.gif)
+![example](media/chrome_extension_demo.gif "Chrome Extension demo")
 
 This button will only appear when you visit GitHub repositories, and clicking it opens a new tab that will automatically trigger a search using [the online tool](#online-tool).
 
@@ -59,11 +59,11 @@ This button will only appear when you visit GitHub repositories, and clicking it
 
 `useful-forks` is part of the hundreds of features provided. In that context, it appears as a button which redirects you to the [Useful Forks website](https://useful-forks.github.io/):
 
-![screenshot](media/insights_rg.png)
+![screenshot](media/insights_rg.png "Insights page for Refined GitHub")
 
 It also appears next to the archive notification:
 
-|[screenshot](media/archived_repo_rg.png)
+|[screenshot](media/archived_repo_rg.png "Archived repository for Refined GitHub")
 
 ### Bookmarklet
 
@@ -76,7 +76,7 @@ javascript:!function(){if(m=window.location.href.match(/github\.com\/([\w.-]+)\/
 When you're viewing a GitHub repo in your browser, you can press the newly created bookmarklet and this will open the online tool for the repo in a new tab.
 
 ## How it works
-![Activity_Diagram](media/query-diagram.png)
+![Activity_Diagram](media/query-diagram.png "High-level diagram describing the flow of Useful Forks")
 
 This Activity Diagram (UML) should clarify a bit the inner-workings of the algorithm, and why it may some times require so many API calls.
 
