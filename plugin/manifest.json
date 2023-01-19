@@ -1,6 +1,6 @@
 {
   "name": "Useful Forks",
-  "version": "2.1",
+  "version": "2.2",
   "description": "To list GitHub forks ordered by stars, with additional information and automatic filtering of irrelevant ones.",
   "permissions": [
     "*://github.com/*"
