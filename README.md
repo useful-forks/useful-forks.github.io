@@ -59,11 +59,11 @@ This button will only appear when you visit GitHub repositories, and clicking it
 
 `useful-forks` is part of the hundreds of features provided. In that context, it appears as a button which redirects you to the [Useful Forks website](https://useful-forks.github.io/):
 
-![screenshot](media/insights_rg.png "Insights page for Refined GitHub")
+![insights_screenshot](media/insights_rg.png "Insights page for Refined GitHub")
 
 It also appears next to the archive notification:
 
-|[screenshot](media/archived_repo_rg.png "Archived repository for Refined GitHub")
+![archive_screenshot](media/archived_repo_rg.png "Archived repository for Refined GitHub")
 
 ### Bookmarklet
 
