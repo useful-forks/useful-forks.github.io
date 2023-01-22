@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Useful Forks",
-  "version": "2.2.0",
+  "version": "2.2.1",
 
   "description": "To list GitHub forks ordered by stars, with additional information and automatic filtering of irrelevant ones.",
   "icons": {
