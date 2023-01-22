@@ -1,7 +1,7 @@
 function getRepoUrl() {
   const pathComponents = window.location.pathname.split('/');
   const user = pathComponents[1], repo = pathComponents[2];
-  return `https://useful-forks.github.io/?repo=${user}/${repo}`
+  return `https://useful-forks.github.io/?repo=${user}/${repo}`;
 }
 
 function setBtnUrl() {
@@ -37,7 +37,7 @@ function init() {
   if (forkBtn) { // sufficient to know the user is looking at a repository
     const parentLi = forkBtn.closest("li");
     const newLi = document.createElement("li");
-    newLi.id = UF_LI_ID
+    newLi.id = UF_LI_ID;
     setContent(newLi);
     parentLi.parentNode.insertBefore(newLi, parentLi);
     setBtnUrl();
