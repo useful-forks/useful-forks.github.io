@@ -32,7 +32,7 @@ The project is released as:
 4. A bookmarklet
 
 ### Online tool
-The project is [available online](https://useful-forks.github.io/) thanks to GitHub Pages.
+The project is [available online](https://useful-forks.github.io/) for free thanks to GitHub Pages.
 
 You can query a repository directly with the URL. Click this link to get an example: https://useful-forks.github.io/?repo=payne911/PieMenu.
 
@@ -41,18 +41,19 @@ Below is a recording of what a scan would look like:
 ![website example](media/website_demo.gif "Website demo")
 
 ### Chrome extension
-Not published yet. If you want to install it:
-1. Clone this repository
-2. Go to the `chrome://extensions` URL
-3. Enable `Developer mode` (switch at the top-right)
-4. Click `Load unpacked` (button at the top-left)
-5. Select the [`plugin` folder](plugin)
+Head to [Chrome's Web Store](https://chrome.google.com/webstore/detail/useful-forks/aflbdmaojedofngiigjpnlabhginodbf) to install the published extension.
 
-Once it's activated, the extension will automatically add a new "Useful" button, as shown by the GIF below:
+Once it's activated, the extension will automatically add a new "Useful" button on all GitHub repository pages:
+
+![extension_btn](media/plugin_btn_highlighted.png "This is what the 'Useful' button looks like")
+
+Here is what happens when you click it:
 
 ![example](media/chrome_extension_demo.gif "Chrome Extension demo")
 
 This button will only appear when you visit GitHub repositories, and clicking it opens a new tab that will automatically trigger a search using [the online tool](#online-tool).
+
+Please note that I will not be updating the [GitHub Releases](https://github.com/useful-forks/useful-forks.github.io/releases) page with the most updated versions. I will officially go through the Web Store for updates.
 
 ### Refined GitHub
 [Refined GitHub](https://github.com/sindresorhus/refined-github) is an ensemble of tools and tweaks aimed at improving your GitHub experience.
