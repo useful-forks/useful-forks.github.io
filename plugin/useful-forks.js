@@ -19,7 +19,7 @@ function setContent(li) {
                        </svg>
                        Useful
                      </button>
-                     <tool-tip for="${UF_BTN_ID}" id="${UF_TIP_ID}" data-direction="s" data-type="description" data-view-component="true" class="position-absolute sr-only" role="tooltip" style="left: 649.869px; top: 183px;">
+                     <tool-tip for="${UF_BTN_ID}" id="${UF_TIP_ID}" class="position-absolute sr-only">
                        Search for useful forks in a new tab
                      </tool-tip>
                    </div>`;
