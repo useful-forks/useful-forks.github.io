@@ -11,7 +11,8 @@ function setBtnUrl() {
   });
 }
 
-function setContent(li) {
+function createUsefulBtn() {
+  const li = document.createElement("li");
   const content = `<div class="float-left">
                      <button id="${UF_BTN_ID}" class="btn-sm btn" aria-describedby="${UF_TIP_ID}">
                        <svg height="16" width="16" version="1.1" viewBox="0 0 183.79 183.79" class="octicon octicon-pin mr-1">
@@ -24,6 +25,8 @@ function setContent(li) {
                      </tool-tip>
                    </div>`;
   li.innerHTML = content;
+  li.id = UF_LI_ID;
+  return li;
 }
 
 function init() {
@@ -36,9 +39,7 @@ function init() {
   const forkBtn = document.getElementById("fork-button");
   if (forkBtn) { // sufficient to know the user is looking at a repository
     const parentLi = forkBtn.closest("li");
-    const newLi = document.createElement("li");
-    newLi.id = UF_LI_ID;
-    setContent(newLi);
+    const newLi = createUsefulBtn();
     parentLi.parentNode.insertBefore(newLi, parentLi);
     setBtnUrl();
   }
