@@ -41,7 +41,7 @@ function init() {
     const parentLi = forkBtn.closest("li");
     const newLi = createUsefulBtn();
     parentLi.parentNode.insertBefore(newLi, parentLi);
-    setBtnUrl();
+    setBtnUrl(); // this needs to happen after the btn is inserted in the DOM
   }
 }
 
