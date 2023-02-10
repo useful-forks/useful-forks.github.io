@@ -169,7 +169,7 @@ function send(requestPromise, successFn, failureFn) {
 }
 
 /** Updates table data, then calls function to update the table. */
-function update_table_data(responseData, user, repo, parentDefaultBranch) {
+function update_table_data(responseData, user, repo, parentDefaultBranch, is_useful_fork) {
   if (isEmpty(responseData)) {
     return;
   }
@@ -204,7 +204,11 @@ function update_table_data(responseData, user, repo, parentDefaultBranch) {
         datum['pushed_at'] = getOnlyDate(currFork.pushed_at);
         TABLE_DATA.push(datum);
 
-        update_table(TABLE_DATA);
+        if (typeof is_useful_fork === 'function') {
+          update_table(TABLE_DATA.filter(is_useful_fork));
+        } else {
+          update_table(TABLE_DATA);
+        }
       }
     };
     const onFailure = () => { }; // do nothing
@@ -214,6 +218,17 @@ function update_table_data(responseData, user, repo, parentDefaultBranch) {
     if (currFork.forks_count > 0) {
       request_fork_page(1, currFork.owner.login, currFork.name, currFork.default_branch);
     }
+  }
+}
+
+function update_filter() {
+  clearNonErrorMsg();
+  
+  let is_useful_fork = getFilterFunction()
+  if (typeof is_useful_fork === 'function') {
+    update_table(TABLE_DATA.filter(is_useful_fork));
+  } else {
+    update_table(TABLE_DATA);
   }
 }
 
@@ -242,6 +257,60 @@ function update_table(data) {
     table_body.append(NEW_ROW);
   }
   sortTable();
+}
+
+function getFilterFunction() {
+  const filter = getFilterOrDefault();
+  if (filter === '') {
+    return; // no filter
+  }
+
+  const mapTable = {
+    'ahead': 'ahead_by',
+    'behind': 'behind_by',
+    'pushed': 'pushed_at'
+  };
+
+  // parse filter string into condition object
+  const conditionStrList = filter.split(' ');
+  let conditionObj = {};
+  for (const condition of conditionStrList) {
+    let [attribute, requirement] = condition.split(':');
+    const [_, operator, value] = requirement.split(/([<>=]+)/);
+    if (attribute in mapTable) {
+      attribute = mapTable[attribute];
+    }
+    conditionObj[attribute] = { operator, value };
+  }
+  // construct filter function 'is_useful_fork'
+  let is_useful_fork = (datum) => {
+    for (const [attribute, { operator, value }] of Object.entries(conditionObj)) {
+      switch (operator) {
+        case '>':
+          if (datum[attribute] <= value)
+            return false;
+          break;
+        case '>=':
+          if (datum[attribute] < value)
+            return false;
+          break;
+        case '<':
+          if (datum[attribute] >= value)
+            return false;
+          break;
+        case '<=':
+          if (datum[attribute] > value)
+            return false;
+          break;
+        case '=':
+          if (datum[attribute] != value)
+            return false;
+          break;
+      }
+    }
+    return true;
+  }
+  return is_useful_fork;
 }
 
 /** Add bold to the date text if the date is earlier than the queried repo. */
@@ -278,7 +347,12 @@ function request_fork_page(page_number, user, repo, defaultBranch) {
       }
     }
 
-    update_table_data(responseData, user, repo, defaultBranch);
+    let is_useful_fork = getFilterFunction()
+    if (typeof is_useful_fork === 'function') {
+      update_table_data(responseData, user, repo, defaultBranch, is_useful_fork);
+    } else {
+      update_table_data(responseData, user, repo, defaultBranch);
+    }
   };
   const onFailure = () => displayConditionalErrorMsg();
   send(requestPromise, onSuccess, onFailure);
@@ -429,3 +503,9 @@ JQ_REPO_FIELD.keyup(event => {
 if (JQ_REPO_FIELD.val()) {
   JQ_SEARCH_BTN.click();
 }
+
+JQ_FILTER_FIELD.keyup(event => {
+  if (event.keyCode === 13) { // 'ENTER'
+    update_filter();
+  }
+});
