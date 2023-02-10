@@ -2,6 +2,7 @@ const { Octokit } = require("@octokit/rest");
 const { throttling } = require("@octokit/plugin-throttling");
 
 /* Variables that should be cleared for every new query (defaults are set in "clear_old_data"). */
+let TABLE_DATA = [];
 let REPO_DATE;
 let TOTAL_FORKS;
 let RATE_LIMIT_EXCEEDED;
@@ -13,7 +14,8 @@ let ONGOING_REQUESTS_COUNTER = 0;
 function clear_old_data() {
   clearHeader();
   clearMsg();
-  clearTable();
+  TABLE_DATA = []; // clear the table data
+  clearTable(); // clear the table DOM
   setApiCallsLabel(0);
   hideExportCsvBtn();
   REPO_DATE = new Date();
@@ -135,8 +137,10 @@ function allRequestsAreDone() {
 function decrementCounters() {
   ONGOING_REQUESTS_COUNTER--;
   if (allRequestsAreDone()) {
+    if (tableIsEmpty(getTableBody())) {
+      setMsg(UF_MSG_EMPTY_FILTER);
+    }
     clearNonErrorMsg();
-    sortTable();
     enableQueryFields();
     displayCsvExportBtn();
   }
@@ -164,40 +168,25 @@ function send(requestPromise, successFn, failureFn) {
       () => decrementCounters());
 }
 
-/** Fills the first part of a row. */
-function build_fork_element_html(table_body, combined_name, num_stars, num_forks) {
-  const NEW_ROW = $('<tr>', {id: extract_username_from_fork(combined_name), class: "useful_forks_repo"});
-  table_body.append(
-      NEW_ROW.append(
-          $('<td>').html(getRepoCol(combined_name, false)).attr("value", combined_name),
-          $('<td>').html(UF_TABLE_SEPARATOR + getStarCol(num_stars)).attr("value", num_stars),
-          $('<td>').html(UF_TABLE_SEPARATOR + getForkCol(num_forks)).attr("value", num_forks)
-      )
-  );
-  return NEW_ROW;
-}
-
-/** Add bold to the date text if the date is earlier than the queried repo. */
-function compareDates(date, html) {
-  return REPO_DATE <= new Date(date) ? `<strong>${html}</strong>` : html;
-}
-
-/** Prepares, appends, and updates a table row. */
-function add_fork_elements(forkdata_array, user, repo, parentDefaultBranch) {
-  if (isEmpty(forkdata_array))
+/** Updates table data, then calls function to update the table. */
+function update_table_data(responseData, user, repo, parentDefaultBranch) {
+  if (isEmpty(responseData)) {
     return;
+  }
 
-  if (!RATE_LIMIT_EXCEEDED) // because some times gets called after some other msgs are displayed
+  if (!RATE_LIMIT_EXCEEDED) {// because some times gets called after some other msgs are displayed
     clearNonErrorMsg();
+  }
 
-  let table_body = getTableBody();
-  for (const currFork of forkdata_array) {
-
-    /* Basic data (name/stars/forks). */
-    const NEW_ROW = build_fork_element_html(table_body, currFork.full_name, currFork.stargazers_count, currFork.forks_count);
-
+  for (const currFork of responseData) {
     if (RATE_LIMIT_EXCEEDED) // we can skip everything below because they are only requests
       continue;
+
+    let datum = {
+      'name': currFork.full_name,
+      'stars': currFork.stargazers_count,
+      'forks': currFork.forks_count,
+    };
 
     /* Commits diff data (ahead/behind). */
     const requestPromise = () => octokit.repos.compareCommits({
@@ -207,27 +196,18 @@ function add_fork_elements(forkdata_array, user, repo, parentDefaultBranch) {
       head: `${extract_username_from_fork(currFork.full_name)}:${currFork.default_branch}`
     });
     const onSuccess = (responseHeaders, responseData) => {
-      if (responseData.total_commits <= AHEAD_COMMITS_FILTER) {
-        NEW_ROW.remove();
-        if (tableIsEmpty(table_body)) {
-          setMsg(UF_MSG_EMPTY_FILTER);
-        }
-      } else {
-        /* Appending the commit badges to the new row. */
-        const ahead_url = responseData.html_url;
-        const behind_url = getBehindUrl(ahead_url);
-        const pushed_at = getOnlyDate(currFork.pushed_at);
-        const date_txt = compareDates(pushed_at, getDateCol(pushed_at));
-        NEW_ROW.append(
-            $('<td>').html(UF_TABLE_SEPARATOR),
-            $('<td>', {class: "uf_badge"}).html(ahead_badge(responseData.ahead_by, ahead_url)).attr("value", responseData.ahead_by),
-            $('<td>').html(UF_TABLE_SEPARATOR),
-            $('<td>', {class: "uf_badge"}).html(behind_badge(responseData.behind_by, behind_url)).attr("value", responseData.behind_by),
-            $('<td>').html(UF_TABLE_SEPARATOR + date_txt).attr("value", pushed_at)
-        );
+      if (responseData.total_commits > AHEAD_COMMITS_FILTER) {
+        datum['ahead_by'] = responseData.ahead_by;
+        datum['ahead_url'] = responseData.html_url;
+        datum['behind_by'] = responseData.behind_by;
+        datum['behind_url'] = getBehindUrl(responseData.html_url);
+        datum['pushed_at'] = getOnlyDate(currFork.pushed_at);
+        TABLE_DATA.push(datum);
+
+        update_table(TABLE_DATA);
       }
     };
-    const onFailure = () => NEW_ROW.remove();
+    const onFailure = () => { }; // do nothing
     send(requestPromise, onSuccess, onFailure);
 
     /* Forks of forks. */
@@ -235,6 +215,38 @@ function add_fork_elements(forkdata_array, user, repo, parentDefaultBranch) {
       request_fork_page(1, currFork.owner.login, currFork.name, currFork.default_branch);
     }
   }
+}
+
+/**
+ * Rewrites the table with the specified data.
+ * @param {Array} data - Array of objects with the following keys: name, stars, forks, ahead_by, ahead_url, behind_by, behind_url, pushed_at
+ */
+function update_table(data) {
+  clearTable();
+  let table_body = getTableBody();
+  for (const currFork of data) {
+    const { name, stars, forks, ahead_by, ahead_url, behind_by, behind_url, pushed_at } = currFork;
+    const date_txt = compareDates(pushed_at, getDateCol(pushed_at));
+
+    const NEW_ROW = $('<tr>', { id: extract_username_from_fork(name), class: "useful_forks_repo" });
+    NEW_ROW.append(
+      $('<td>').html(getRepoCol(name, false)).attr("value", name),
+      $('<td>').html(UF_TABLE_SEPARATOR + getStarCol(stars)).attr("value", stars),
+      $('<td>').html(UF_TABLE_SEPARATOR + getForkCol(forks)).attr("value", forks),
+      $('<td>').html(UF_TABLE_SEPARATOR),
+      $('<td>', { class: "uf_badge" }).html(ahead_badge(ahead_by, ahead_url)).attr("value", ahead_by),
+      $('<td>').html(UF_TABLE_SEPARATOR),
+      $('<td>', { class: "uf_badge" }).html(behind_badge(behind_by, behind_url)).attr("value", behind_by),
+      $('<td>').html(UF_TABLE_SEPARATOR + date_txt).attr("value", pushed_at)
+    );
+    table_body.append(NEW_ROW);
+  }
+  sortTable();
+}
+
+/** Add bold to the date text if the date is earlier than the queried repo. */
+function compareDates(date, html) {
+  return REPO_DATE <= new Date(date) ? `<strong>${html}</strong>` : html;
 }
 
 /** Paginated (index starts at 1) recursive forks scan. */
@@ -266,8 +278,7 @@ function request_fork_page(page_number, user, repo, defaultBranch) {
       }
     }
 
-    /* Populate the table. */
-    add_fork_elements(responseData, user, repo, defaultBranch);
+    update_table_data(responseData, user, repo, defaultBranch);
   };
   const onFailure = () => displayConditionalErrorMsg();
   send(requestPromise, onSuccess, onFailure);
