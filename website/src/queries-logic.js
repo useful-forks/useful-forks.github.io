@@ -505,7 +505,6 @@ if (JQ_REPO_FIELD.val()) {
 }
 
 JQ_FILTER_FIELD.keyup(event => {
-  if (event.keyCode === 13) { // 'ENTER'
-    update_filter();
-  }
+  // User updated the filter field, so we need to re-filter the table. 
+  update_filter();
 });
