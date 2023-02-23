@@ -137,11 +137,17 @@ function allRequestsAreDone() {
 function decrementCounters() {
   ONGOING_REQUESTS_COUNTER--;
   if (allRequestsAreDone()) {
-    if (tableIsEmpty(getTableBody())) {
-      setMsg(UF_MSG_EMPTY_FILTER);
-    }
-    clearNonErrorMsg();
+    manageMsgs();
     enableQueryFields();
+  }
+}
+
+function manageMsgs() {
+  clearNonErrorMsg();
+  if (tableIsEmpty(getTableBody())) {
+    setMsg(UF_MSG_EMPTY_FILTER);
+    hideExportCsvBtn();
+  } else {
     displayCsvExportBtn();
   }
 }
@@ -222,14 +228,14 @@ function update_table_data(responseData, user, repo, parentDefaultBranch, is_use
 }
 
 function update_filter() {
-  clearNonErrorMsg();
-  
   let is_useful_fork = getFilterFunction()
   if (typeof is_useful_fork === 'function') {
     update_table(TABLE_DATA.filter(is_useful_fork));
   } else {
     update_table(TABLE_DATA);
   }
+
+  manageMsgs();
 }
 
 /**

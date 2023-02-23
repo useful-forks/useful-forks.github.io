@@ -22,7 +22,6 @@ const UF_MSG_API_RATE     = "<b>GitHub API rate-limits exceeded.</b> Consider pr
 // list of messages which should not be cleared when the request ends
 const UF_PRESERVED_MSGS = [
     UF_MSG_NO_FORKS,
-    UF_MSG_EMPTY_FILTER,
     UF_MSG_ERROR,
     UF_MSG_API_RATE
 ];

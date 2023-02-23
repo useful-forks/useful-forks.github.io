@@ -11,18 +11,14 @@ function displayCsvExportBtn() {
   if (!UF_SETTINGS_CSV_DISPLAY) {
     return;
   }
-  if (!tableIsEmpty()) {
-    JQ_ID_HEADER.append(EXPORT_DIV);
-    setClickEvent();
-  }
+  JQ_ID_HEADER.append(EXPORT_DIV);
+  setClickEvent();
 }
 function hideExportCsvBtn() {
   if (!UF_SETTINGS_CSV_DISPLAY) {
     return;
   }
-  if (!tableIsEmpty()) {
-    getJqId_$(EXPORT_DIV_ID).remove();
-  }
+  getJqId_$(EXPORT_DIV_ID).remove();
 }
 function setClickEvent() {
   EXPORT_BTN.on('click', function (event) {
