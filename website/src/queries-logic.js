@@ -282,7 +282,13 @@ function getFilterFunction() {
   let conditionObj = {};
   for (const condition of conditionStrList) {
     let [attribute, requirement] = condition.split(':');
+    if (!attribute || !requirement) {
+      return; // invalid filter
+    }
     const [_, operator, value] = requirement.split(/([<>=]+)/);
+    if (!operator || !value) {
+      return; // invalid filter
+    }
     if (attribute in mapTable) {
       attribute = mapTable[attribute];
     }
