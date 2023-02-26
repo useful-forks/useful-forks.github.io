@@ -36,8 +36,12 @@ function init() {
     oldLi.remove();
   }
 
-  const forkBtn = document.getElementById("fork-button");
+  const forkBtn = document.getElementById("repo-network-counter");
   if (forkBtn) { // sufficient to know the user is looking at a repository
+    const forksAmount = forkBtn.textContent;
+    if (forksAmount < 1) {
+      return;
+    }
     const parentLi = forkBtn.closest("li");
     const newLi = createUsefulBtn();
     parentLi.parentNode.insertBefore(newLi, parentLi);
