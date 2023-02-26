@@ -265,6 +265,11 @@ function update_table(data) {
   sortTable();
 }
 
+/**
+ * 1. Empty filter means no filter.
+ * 2. Filter string is a list of conditions separated by spaces.
+ * 3. If a condition is invalid, it is ignored, and the rest of the conditions are applied.
+ */
 function getFilterFunction() {
   const filter = getFilterOrDefault();
   if (filter === '') {
@@ -283,11 +288,11 @@ function getFilterFunction() {
   for (const condition of conditionStrList) {
     let [attribute, requirement] = condition.split(':');
     if (!attribute || !requirement) {
-      return; // invalid filter
+      continue; // invalid condition
     }
     const [_, operator, value] = requirement.split(/([<>=]+)/);
     if (!operator || !value) {
-      return; // invalid filter
+      continue; // invalid condition
     }
     if (attribute in mapTable) {
       attribute = mapTable[attribute];
