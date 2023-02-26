@@ -71,6 +71,9 @@ function ga_createToken() {
 function ga_footerStar() {
   dispatch('click', 'footer', 'repo-star-link');
 }
+function ga_footerReview() {
+  dispatch('click', 'footer', 'chrome-review-link');
+}
 function ga_footerEmail() {
   dispatch('click', 'footer', 'email-icon');
 }
