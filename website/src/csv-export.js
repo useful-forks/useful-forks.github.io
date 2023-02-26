@@ -3,7 +3,7 @@ const EXPORT_DIV_BTN = "uf_csv_export_btn";
 const EXPORT_BTN = $('<a>', {id: EXPORT_DIV_BTN, class: "button is-dark is-outlined is-small"})
                    .attr("href", "#")
                    .prepend($('<img>', {src: "assets/csv_dl.svg", class: "mr-2", alt: "csv", width: "26", height: "26"}))
-                   .append("Export table as CSV");
+                   .append("Export table below as CSV");
 const EXPORT_DIV = $('<div>', {id: EXPORT_DIV_ID, class: "mt-2"}).append(EXPORT_BTN);
 
 
