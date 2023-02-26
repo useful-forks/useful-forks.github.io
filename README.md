@@ -6,9 +6,9 @@
 
 ---
 
-Adding a sorted list of starred forks to the GitHub forks page. Results are filtered out if there were never any commits pushed on the main branch since the fork was created.
+This tool enhances the discoverability of useful forks for open-source projects by providing a list of forks worth exploring.
 
-This is meant to help increase the discoverability of useful forks of open-source projects.
+The results are filtered to exclude forks that have never had any commits pushed to the main branch since their creation.
 
 Sometimes, a project might be abandoned, or someone had a different idea of how it should be implemented... and when you go looking for those interesting forks, you find yourself searching through potentially hundreds of them. This tool is here to help you discover the hidden jewels you were looking for!
 
@@ -25,11 +25,9 @@ Sometimes, a project might be abandoned, or someone had a different idea of how 
 ---
 
 ## Releases
-The project is released as:
-1. A website
-2. A Chrome extension
-3. A feature in [`refined-github`](https://github.com/sindresorhus/refined-github)
-4. A bookmarklet
+There are several ways to access the tool.
+
+If you use Chrome, your best option would be to download the [Chrome extension](#chrome-extension). For other browsers, you may want to use the [bookmarklet](#bookmarklet).
 
 ### Online tool
 The project is [available online](https://useful-forks.github.io/) for free thanks to GitHub Pages.
@@ -53,7 +51,7 @@ Here is what happens when you click it:
 
 This button will only appear when you visit GitHub repositories, and clicking it opens a new tab that will automatically trigger a search using [the online tool](#online-tool).
 
-Please note that I will not be updating the [GitHub Releases](https://github.com/useful-forks/useful-forks.github.io/releases) page with the most updated versions. I will officially go through the Web Store for updates.
+Please note that this project will not be updating the [GitHub Releases](https://github.com/useful-forks/useful-forks.github.io/releases) page anymore. We will now go through Chrome's Web Store to publish updates.
 
 ### Refined GitHub
 [Refined GitHub](https://github.com/sindresorhus/refined-github) is an ensemble of tools and tweaks aimed at improving your GitHub experience.
