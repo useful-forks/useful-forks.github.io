@@ -279,7 +279,12 @@ function getFilterFunction() {
   const mapTable = {
     'ahead': 'ahead_by',
     'behind': 'behind_by',
-    'pushed': 'pushed_at'
+    'pushed': 'pushed_at',
+    'a': 'ahead_by',
+    'b': 'behind_by',
+    'p': 'pushed_at',
+    's': 'stars',
+    'f': 'forks',
   };
 
   // parse filter string into condition object
