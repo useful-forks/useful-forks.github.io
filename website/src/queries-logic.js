@@ -143,9 +143,11 @@ function decrementCounters() {
 }
 
 function manageMsgs() {
-  clearNonErrorMsg();
+  clearNonErrorMsg()
   if (tableIsEmpty(getTableBody())) {
-    setMsg(UF_MSG_EMPTY_FILTER);
+    if (isMsgEmpty()) {
+      setMsg(UF_MSG_EMPTY_FILTER);
+    }
     hideExportCsvBtn();
   } else {
     displayCsvExportBtn();

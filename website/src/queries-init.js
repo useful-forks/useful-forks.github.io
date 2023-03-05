@@ -102,6 +102,11 @@ function setMsg(msg) {
     .css("border-color", "rgba(0,0,0,0.25)")
     .css("border-style", "solid");
 }
+
+function isMsgEmpty() {
+  return JQ_ID_MSG.html() === "";
+}
+
 function clearMsg() {
   JQ_ID_MSG
     .empty()
