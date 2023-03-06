@@ -211,7 +211,8 @@ function update_table_data(responseData, user, repo, parentDefaultBranch, is_use
         datum['behind_url'] = getBehindUrl(responseData.html_url);
         datum['pushed_at'] = getOnlyDate(currFork.pushed_at);
         TABLE_DATA.push(datum);
-
+        if (TABLE_DATA.length > 1) showFilterContainer();
+        
         if (typeof is_useful_fork === 'function') {
           update_table(TABLE_DATA.filter(is_useful_fork));
         } else {
@@ -455,6 +456,7 @@ function initiate_search() {
   setUpOctokitWithLatestToken();
 
   setQueryFieldsAsLoading();
+  hideFilterContainer();
   setMsg(UF_MSG_SCANNING);
 
   const user = queryValues[len - 2];

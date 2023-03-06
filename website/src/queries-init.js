@@ -2,6 +2,7 @@ const SELF_URL = "https://useful-forks.github.io/";
 
 const JQ_REPO_FIELD  = $('#repo');
 const JQ_FILTER_FIELD = $('#filter');
+const JQ_FILTER_CONTAINER = $('#filterContainer');
 const JQ_SEARCH_BTN  = $('#searchBtn');
 const JQ_TOTAL_CALLS = $('#totalApiCalls');
 
@@ -154,6 +155,14 @@ function getQueryOrDefault(defaultVal) {
     JQ_REPO_FIELD.val(defaultVal);
   }
   return JQ_REPO_FIELD.val();
+}
+
+function hideFilterContainer() {
+  JQ_FILTER_CONTAINER.hide();
+}
+
+function showFilterContainer() {
+  JQ_FILTER_CONTAINER.show();
 }
 
 function getFilterOrDefault(defaultVal) {
