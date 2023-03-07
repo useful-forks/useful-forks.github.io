@@ -195,9 +195,8 @@ function update_table_data(responseData, user, repo, parentDefaultBranch, is_use
     return;
   }
 
-  if (!RATE_LIMIT_EXCEEDED) {// because some times gets called after some other msgs are displayed
+  if (!RATE_LIMIT_EXCEEDED) // because some times gets called after some other msgs are displayed
     clearNonErrorMsg();
-  }
 
   for (const currFork of responseData) {
     if (RATE_LIMIT_EXCEEDED) // we can skip everything below because they are only requests
