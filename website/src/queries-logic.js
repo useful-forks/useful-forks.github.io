@@ -143,7 +143,7 @@ function decrementCounters() {
 }
 
 function manageMsgs() {
-  clearNonErrorMsg()
+  clearNonErrorMsg();
   if (tableIsEmpty(getTableBody())) {
     if (isMsgEmpty()) {
       setMsg(UF_MSG_EMPTY_FILTER);
@@ -174,6 +174,19 @@ function send(requestPromise, successFn, failureFn) {
       () => failureFn())
   .finally(
       () => decrementCounters());
+}
+
+/** Add bold to the date text if the date is earlier than the queried repo. */
+function compareDates(date, html) {
+  return REPO_DATE <= new Date(date) ? `<strong>${html}</strong>` : html;
+}
+
+function update_table_trying_use_filter(is_useful_fork) {
+  if (typeof is_useful_fork === 'function') {
+    update_table(TABLE_DATA.filter(is_useful_fork));
+  } else {
+    update_table(TABLE_DATA);
+  }
 }
 
 /** Updates table data, then calls function to update the table. */
@@ -213,11 +226,7 @@ function update_table_data(responseData, user, repo, parentDefaultBranch, is_use
         TABLE_DATA.push(datum);
         if (TABLE_DATA.length > 1) showFilterContainer();
         
-        if (typeof is_useful_fork === 'function') {
-          update_table(TABLE_DATA.filter(is_useful_fork));
-        } else {
-          update_table(TABLE_DATA);
-        }
+        update_table_trying_use_filter(is_useful_fork);
       }
     };
     const onFailure = () => { }; // do nothing
@@ -232,11 +241,7 @@ function update_table_data(responseData, user, repo, parentDefaultBranch, is_use
 
 function update_filter() {
   let is_useful_fork = getFilterFunction()
-  if (typeof is_useful_fork === 'function') {
-    update_table(TABLE_DATA.filter(is_useful_fork));
-  } else {
-    update_table(TABLE_DATA);
-  }
+  update_table_trying_use_filter(is_useful_fork);
 
   manageMsgs();
 }
@@ -336,11 +341,6 @@ function getFilterFunction() {
     return true;
   }
   return is_useful_fork;
-}
-
-/** Add bold to the date text if the date is earlier than the queried repo. */
-function compareDates(date, html) {
-  return REPO_DATE <= new Date(date) ? `<strong>${html}</strong>` : html;
 }
 
 /** Paginated (index starts at 1) recursive forks scan. */
