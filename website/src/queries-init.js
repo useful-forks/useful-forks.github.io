@@ -113,7 +113,6 @@ function clearMsg() {
     .empty()
     .removeClass("box")
     .css("border-style", "");
-  removeProgressBar();
 }
 function clearNonErrorMsg() {
   const msg = JQ_ID_MSG.html();

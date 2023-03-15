@@ -14,6 +14,7 @@ let ONGOING_REQUESTS_COUNTER = 0;
 function clear_old_data() {
   clearHeader();
   clearMsg();
+  removeProgressBar();
   TABLE_DATA = []; // clear the table data
   clearTable(); // clear the table DOM
   setApiCallsLabel(0);
@@ -138,6 +139,7 @@ function decrementCounters() {
   ONGOING_REQUESTS_COUNTER--;
   if (allRequestsAreDone()) {
     manageMsgs();
+    removeProgressBar();
     enableQueryFields();
   }
 }
@@ -195,8 +197,10 @@ function update_table_data(responseData, user, repo, parentDefaultBranch, is_use
     return;
   }
 
-  if (!RATE_LIMIT_EXCEEDED) // because some times gets called after some other msgs are displayed
+  if (!RATE_LIMIT_EXCEEDED) {// because some times gets called after some other msgs are displayed
     clearNonErrorMsg();
+    removeProgressBar();
+  }
 
   for (const currFork of responseData) {
     if (RATE_LIMIT_EXCEEDED) // we can skip everything below because they are only requests
