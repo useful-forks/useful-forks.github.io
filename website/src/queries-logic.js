@@ -287,6 +287,8 @@ function getFilterFunction() {
     'ahead': 'ahead_by',
     'behind': 'behind_by',
     'pushed': 'pushed_at',
+    'date': 'pushed_at',
+    'd': 'pushed_at',
     'a': 'ahead_by',
     'b': 'behind_by',
     'p': 'pushed_at',
