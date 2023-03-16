@@ -27,6 +27,11 @@ const UF_PRESERVED_MSGS = [
     UF_MSG_API_RATE
 ];
 
+// messages about the current state of the scan but not about the results
+const UF_MSGS_SCAN_STATE = [
+  UF_MSG_SCANNING,
+  UF_MSG_SLOWER
+];
 
 const EXAMPLE_LINK_1 = `<a href="${buildAutoQueryURL('payne911/PieMenu')}"
                            onclick="ga_shortExampleLink();">payne911/PieMenu</a>`;
@@ -119,6 +124,14 @@ function clearNonErrorMsg() {
   if (!UF_PRESERVED_MSGS.includes(msg))
     clearMsg();
 }
+
+function clearNonScanStateMsg() {
+  const msg = JQ_ID_MSG.html();
+  if (!UF_MSGS_SCAN_STATE.includes(msg) && !UF_PRESERVED_MSGS.includes(msg)) {
+    clearMsg();
+  }
+}
+
 function setHeader(msg) {
   JQ_ID_HEADER.html(msg);
 }

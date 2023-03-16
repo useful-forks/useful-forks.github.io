@@ -138,14 +138,15 @@ function allRequestsAreDone() {
 function decrementCounters() {
   ONGOING_REQUESTS_COUNTER--;
   if (allRequestsAreDone()) {
-    manageMsgs();
+    clearNonErrorMsg();
     removeProgressBar();
+    updateBasedOnTable();
     enableQueryFields();
   }
 }
 
-function manageMsgs() {
-  clearNonErrorMsg();
+function updateBasedOnTable() {
+  clearNonScanStateMsg();
   if (tableIsEmpty(getTableBody())) {
     if (isMsgEmpty()) {
       setMsg(UF_MSG_EMPTY_FILTER);
@@ -246,7 +247,7 @@ function update_filter() {
   let is_useful_fork = getFilterFunction()
   update_table_trying_use_filter(is_useful_fork);
 
-  manageMsgs();
+  updateBasedOnTable();
 }
 
 /**
