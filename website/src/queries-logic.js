@@ -9,6 +9,8 @@ let RATE_LIMIT_EXCEEDED;
 let AHEAD_COMMITS_FILTER;
 let TOTAL_API_CALLS_COUNTER;
 let ONGOING_REQUESTS_COUNTER = 0;
+let IS_USEFUL_FORK; // function that determines if a fork is useful or not
+
 
 /** Used to reset the state for a brand new query. */
 function clear_old_data() {
@@ -184,16 +186,16 @@ function compareDates(date, html) {
   return REPO_DATE <= new Date(date) ? `<strong>${html}</strong>` : html;
 }
 
-function update_table_trying_use_filter(is_useful_fork) {
-  if (typeof is_useful_fork === 'function') {
-    update_table(TABLE_DATA.filter(is_useful_fork));
+function update_table_trying_use_filter() {
+  if (typeof IS_USEFUL_FORK === 'function') {
+    update_table(TABLE_DATA.filter(IS_USEFUL_FORK));
   } else {
     update_table(TABLE_DATA);
   }
 }
 
 /** Updates table data, then calls function to update the table. */
-function update_table_data(responseData, user, repo, parentDefaultBranch, is_useful_fork) {
+function update_table_data(responseData, user, repo, parentDefaultBranch) {
   if (isEmpty(responseData)) {
     return;
   }
@@ -230,7 +232,7 @@ function update_table_data(responseData, user, repo, parentDefaultBranch, is_use
         TABLE_DATA.push(datum);
         if (TABLE_DATA.length > 1) showFilterContainer();
         
-        update_table_trying_use_filter(is_useful_fork);
+        update_table_trying_use_filter();
       }
     };
     const onFailure = () => { }; // do nothing
@@ -244,8 +246,8 @@ function update_table_data(responseData, user, repo, parentDefaultBranch, is_use
 }
 
 function update_filter() {
-  let is_useful_fork = getFilterFunction()
-  update_table_trying_use_filter(is_useful_fork);
+  updateFilterFunction();
+  update_table_trying_use_filter();
 
   updateBasedOnTable();
 }
@@ -282,7 +284,7 @@ function update_table(data) {
  * 2. Filter string is a list of conditions separated by spaces.
  * 3. If a condition is invalid, it is ignored, and the rest of the conditions are applied.
  */
-function getFilterFunction() {
+function updateFilterFunction() {
   const filter = getFilterOrDefault();
   if (filter === '') {
     return; // no filter
@@ -318,8 +320,8 @@ function getFilterFunction() {
     }
     conditionObj[attribute] = { operator, value };
   }
-  // construct filter function 'is_useful_fork'
-  let is_useful_fork = (datum) => {
+  
+  IS_USEFUL_FORK = (datum) => {
     for (const [attribute, { operator, value }] of Object.entries(conditionObj)) {
       switch (operator) {
         case '>':
@@ -346,7 +348,6 @@ function getFilterFunction() {
     }
     return true;
   }
-  return is_useful_fork;
 }
 
 /** Paginated (index starts at 1) recursive forks scan. */
@@ -378,12 +379,7 @@ function request_fork_page(page_number, user, repo, defaultBranch) {
       }
     }
 
-    let is_useful_fork = getFilterFunction()
-    if (typeof is_useful_fork === 'function') {
-      update_table_data(responseData, user, repo, defaultBranch, is_useful_fork);
-    } else {
-      update_table_data(responseData, user, repo, defaultBranch);
-    }
+    update_table_data(responseData, user, repo, defaultBranch);
   };
   const onFailure = () => displayConditionalErrorMsg();
   send(requestPromise, onSuccess, onFailure);
