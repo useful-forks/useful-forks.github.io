@@ -6,7 +6,6 @@ let TABLE_DATA = [];
 let REPO_DATE;
 let TOTAL_FORKS;
 let RATE_LIMIT_EXCEEDED;
-let AHEAD_COMMITS_FILTER;
 let TOTAL_API_CALLS_COUNTER;
 let ONGOING_REQUESTS_COUNTER = 0;
 let IS_USEFUL_FORK; // function that determines if a fork is useful or not
@@ -26,7 +25,6 @@ function clear_old_data() {
   RATE_LIMIT_EXCEEDED = false;
   TOTAL_API_CALLS_COUNTER = 0;
   ONGOING_REQUESTS_COUNTER = 0;
-  AHEAD_COMMITS_FILTER = UF_SETTINGS_AHEAD_FILTER;
   shouldTriggerQueryOnTokenSave = false;
 }
 
@@ -234,7 +232,7 @@ function update_table_data(responseData, user, repo, parentDefaultBranch) {
       head: `${extract_username_from_fork(currFork.full_name)}:${currFork.default_branch}`
     });
     const onSuccess = (responseHeaders, responseData) => {
-      if (responseData.total_commits > AHEAD_COMMITS_FILTER) {
+      if (responseData.total_commits > 0) {
         datum['ahead_by'] = responseData.ahead_by;
         datum['ahead_url'] = responseData.html_url;
         datum['behind_by'] = responseData.behind_by;
