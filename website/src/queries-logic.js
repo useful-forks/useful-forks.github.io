@@ -306,7 +306,8 @@ function update_table(data) {
 function updateFilterFunction() {
   const filter = getFilterOrDefault();
   if (filter === '') {
-    return; // no filter
+    IS_USEFUL_FORK = () => true; // no filter
+    return;
   }
 
   const mapTable = {
@@ -551,7 +552,4 @@ if (JQ_REPO_FIELD.val()) {
   JQ_SEARCH_BTN.click();
 }
 
-JQ_FILTER_FIELD.keyup(event => {
-  // User updated the filter field, so we need to re-filter the table. 
-  update_filter();
-});
+JQ_FILTER_FIELD.on('input', update_filter);
