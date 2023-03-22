@@ -254,7 +254,17 @@ function update_table_data(responseData, user, repo, parentDefaultBranch) {
   }
 }
 
+function update_filter_appearance() {
+  const filter = getFilterOrDefault();
+  if (filter === '') {
+    JQ_FILTER_FIELD.removeClass('is-dark');
+  } else {
+    JQ_FILTER_FIELD.addClass('is-dark');
+  }
+}
+
 function update_filter() {
+  update_filter_appearance();
   updateFilterFunction();
   update_table_trying_use_filter();
 
