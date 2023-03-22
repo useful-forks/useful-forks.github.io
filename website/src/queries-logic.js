@@ -194,6 +194,14 @@ function update_table_trying_use_filter() {
   }
 }
 
+function is_duplicate_repo(name) {
+  for (const fork of TABLE_DATA) {
+    if (fork['name'] === name)
+      return true;
+  }
+  return false;
+}
+
 /** Updates table data, then calls function to update the table. */
 function update_table_data(responseData, user, repo, parentDefaultBranch) {
   if (isEmpty(responseData)) {
@@ -208,6 +216,9 @@ function update_table_data(responseData, user, repo, parentDefaultBranch) {
   for (const currFork of responseData) {
     if (RATE_LIMIT_EXCEEDED) // we can skip everything below because they are only requests
       continue;
+
+    if (is_duplicate_repo(currFork.full_name))
+      continue; // abort because repo is already listed
 
     let datum = {
       'name': currFork.full_name,
