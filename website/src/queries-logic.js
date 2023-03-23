@@ -552,4 +552,5 @@ if (JQ_REPO_FIELD.val()) {
   JQ_SEARCH_BTN.click();
 }
 
+/* User updated the filters, so we refresh the table. */
 JQ_FILTER_FIELD.on('input', update_filter);
