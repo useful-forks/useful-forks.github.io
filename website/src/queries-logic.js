@@ -1,6 +1,25 @@
 const { Octokit } = require("@octokit/rest");
 const { throttling } = require("@octokit/plugin-throttling");
 
+
+/* Filtering constants. */
+const attributeRgx = '([a-z]+)';
+const operatorRgx = '(<=|>=|[<=>])';
+const valueRgx = '([0-9]{4}-[0-9]{2}-[0-9]{2}|[0-9]+)';
+const regex = new RegExp(attributeRgx + operatorRgx + valueRgx);
+const mapTable = {
+  'ahead': 'ahead_by',
+  'behind': 'behind_by',
+  'pushed': 'pushed_at',
+  'date': 'pushed_at',
+  'd': 'pushed_at',
+  'a': 'ahead_by',
+  'b': 'behind_by',
+  'p': 'pushed_at',
+  's': 'stars',
+  'f': 'forks',
+};
+
 /* Variables that should be cleared for every new query (defaults are set in "clear_old_data"). */
 let TABLE_DATA = [];
 let REPO_DATE;
@@ -310,28 +329,10 @@ function updateFilterFunction() {
     return;
   }
 
-  const mapTable = {
-    'ahead': 'ahead_by',
-    'behind': 'behind_by',
-    'pushed': 'pushed_at',
-    'date': 'pushed_at',
-    'd': 'pushed_at',
-    'a': 'ahead_by',
-    'b': 'behind_by',
-    'p': 'pushed_at',
-    's': 'stars',
-    'f': 'forks',
-  };
-
   // parse filter string into condition object
   const conditionStrList = filter.split(' ');
   let conditionObj = {};
   for (const condition of conditionStrList) {
-    const attributeRgx = '([a-z]+)';
-    const operatorRgx = '(<=|>=|[<=>])';
-    const valueRgx = '([0-9]{4}-[0-9]{2}-[0-9]{2}|[0-9]+)';
-    const regex = new RegExp(attributeRgx + operatorRgx + valueRgx);
-
     const matchResult = condition.match(regex);
     let [attribute, operator, value] = matchResult ? matchResult.slice(1) : [];
     if (!attribute || !operator || !value) {
