@@ -327,12 +327,14 @@ function updateFilterFunction() {
   const conditionStrList = filter.split(' ');
   let conditionObj = {};
   for (const condition of conditionStrList) {
-    let [attribute, requirement] = condition.split(':');
-    if (!attribute || !requirement) {
-      continue; // invalid condition
-    }
-    const [_, operator, value] = requirement.split(/([<>=]+)/);
-    if (!operator || !value) {
+    const attributeRgx = '([a-z]+)';
+    const operatorRgx = '(<=|>=|[<=>])';
+    const valueRgx = '([0-9]{4}-[0-9]{2}-[0-9]{2}|[0-9]+)';
+    const regex = new RegExp(attributeRgx + operatorRgx + valueRgx);
+
+    const matchResult = condition.match(regex);
+    let [attribute, operator, value] = matchResult ? matchResult.slice(1) : [];
+    if (!attribute || !operator || !value) {
       continue; // invalid condition
     }
     if (attribute in mapTable) {
