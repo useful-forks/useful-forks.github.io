@@ -5,7 +5,8 @@ const { throttling } = require("@octokit/plugin-throttling");
 /* Filtering constants. */
 const attributeRgx = '([a-z]+)';
 const operatorRgx = '(<=|>=|[<=>])';
-const valueRgx = '([0-9]{4}-[0-9]{2}-[0-9]{2}|[0-9]+)';
+const dateRgx = '[0-9]{4}-[0-9]{2}-[0-9]{2}';
+const valueRgx = `(${dateRgx}|[0-9]+)`;
 const regex = new RegExp(attributeRgx + operatorRgx + valueRgx);
 const mapTable = {
   'ahead': 'ahead_by',
