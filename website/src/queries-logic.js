@@ -346,25 +346,26 @@ function updateFilterFunction() {
   
   IS_USEFUL_FORK = (datum) => {
     for (const [attribute, { operator, value }] of Object.entries(conditionObj)) {
+      const attrValue = datum[attribute];
       switch (operator) {
         case '>':
-          if (datum[attribute] <= value)
+          if (attrValue <= value)
             return false;
           break;
         case '>=':
-          if (datum[attribute] < value)
+          if (attrValue < value)
             return false;
           break;
         case '<':
-          if (datum[attribute] >= value)
+          if (attrValue >= value)
             return false;
           break;
         case '<=':
-          if (datum[attribute] > value)
+          if (attrValue > value)
             return false;
           break;
         case '=':
-          if (datum[attribute] != value)
+          if (attrValue != value)
             return false;
           break;
       }
