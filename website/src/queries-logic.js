@@ -5,7 +5,7 @@ const { throttling } = require("@octokit/plugin-throttling");
 /* Filtering constants. */
 const attributeRgx = '([a-z]+)';
 const operatorRgx = '(<=|>=|[<=>])';
-const dateRgx = '[0-9]{4}-[0-9]{2}-[0-9]{2}';
+const dateRgx = '[0-9]{4}(?:(?<!-|-[0-9])-[0-9]{0,2}){0,2}';
 const valueRgx = `(${dateRgx}|[0-9]+)`;
 const regex = new RegExp(attributeRgx + operatorRgx + valueRgx);
 const mapTable = {
