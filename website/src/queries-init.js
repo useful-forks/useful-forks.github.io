@@ -1,6 +1,8 @@
 const SELF_URL = "https://useful-forks.github.io/";
 
 const JQ_REPO_FIELD  = $('#repo');
+const JQ_FILTER_FIELD = $('#filter');
+const JQ_FILTER_CONTAINER = $('#filterContainer');
 const JQ_SEARCH_BTN  = $('#searchBtn');
 const JQ_TOTAL_CALLS = $('#totalApiCalls');
 
@@ -21,11 +23,15 @@ const UF_MSG_API_RATE     = "<b>GitHub API rate-limits exceeded.</b> Consider pr
 // list of messages which should not be cleared when the request ends
 const UF_PRESERVED_MSGS = [
     UF_MSG_NO_FORKS,
-    UF_MSG_EMPTY_FILTER,
     UF_MSG_ERROR,
     UF_MSG_API_RATE
 ];
 
+// messages about the current state of the scan but not about the results
+const UF_MSGS_SCAN_STATE = [
+  UF_MSG_SCANNING,
+  UF_MSG_SLOWER
+];
 
 const EXAMPLE_LINK_1 = `<a href="${buildAutoQueryURL('payne911/PieMenu')}"
                            onclick="ga_shortExampleLink();">payne911/PieMenu</a>`;
@@ -102,18 +108,30 @@ function setMsg(msg) {
     .css("border-color", "rgba(0,0,0,0.25)")
     .css("border-style", "solid");
 }
+
+function isMsgEmpty() {
+  return JQ_ID_MSG.html() === "";
+}
+
 function clearMsg() {
   JQ_ID_MSG
     .empty()
     .removeClass("box")
     .css("border-style", "");
-  removeProgressBar();
 }
 function clearNonErrorMsg() {
   const msg = JQ_ID_MSG.html();
   if (!UF_PRESERVED_MSGS.includes(msg))
     clearMsg();
 }
+
+function clearNonScanStateMsg() {
+  const msg = JQ_ID_MSG.html();
+  if (!UF_MSGS_SCAN_STATE.includes(msg) && !UF_PRESERVED_MSGS.includes(msg)) {
+    clearMsg();
+  }
+}
+
 function setHeader(msg) {
   JQ_ID_HEADER.html(msg);
 }
@@ -149,6 +167,21 @@ function getQueryOrDefault(defaultVal) {
     JQ_REPO_FIELD.val(defaultVal);
   }
   return JQ_REPO_FIELD.val();
+}
+
+function hideFilterContainer() {
+  JQ_FILTER_CONTAINER.hide();
+}
+
+function showFilterContainer() {
+  JQ_FILTER_CONTAINER.show();
+}
+
+function getFilterOrDefault(defaultVal) {
+  if (!JQ_FILTER_FIELD.val()) {
+    JQ_FILTER_FIELD.val(defaultVal);
+  }
+  return JQ_FILTER_FIELD.val();
 }
 
 function setApiCallsLabel(total) {

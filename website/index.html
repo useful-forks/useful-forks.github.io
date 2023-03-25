@@ -139,23 +139,6 @@
       <section class="modal-card-body">
         <p>Settings will be saved on your local browser and will apply to your future queries.</p><br/>
 
-        <!-- Amount of commit diffs for the automatic filtering. -->
-        <div class="field is-horizontal">
-          <div class="field-label is-normal">
-            <label class="label">Ahead filter:</label>
-          </div>
-          <div class="field-body">
-            <div class="field">
-              <div class="control">
-                <input id="uf_settings_filter" class="input is-small is-fullwidth has-tooltip-arrow"
-                       type="number" value="0" min="1"
-                       placeholder="Default is 0" required>
-              </div>
-              <p class="help mb-2"><strong>Default is 0.</strong> If the amount of 'ahead' commits is less than or equal to this value, the fork is automatically removed from the list.</p>
-            </div>
-          </div>
-        </div>
-
         <!-- Relationship used for the commit diff count. -->
         <div class="field is-horizontal">
           <div class="field-label is-normal">
@@ -195,7 +178,7 @@
                   Display
                 </label>
               </div>
-              <p class="help mb-2"><strong>Default is checked.</strong> Determines whether to display or not the "<span class="is-family-monospace">Export table as CSV</span>" button when a scan ends.</p>
+              <p class="help mb-2"><strong>Default is checked.</strong> Determines whether to display or not the "<span class="is-family-monospace">Export table below as CSV</span>" button when a scan ends.</p>
             </div>
           </div>
         </div>
@@ -230,6 +213,11 @@
               Find useful forks
             </button>
           </p>
+        </div>
+        <div class="control" id="filterContainer" hidden>
+          <input class="input" type="text" id="filter" name="filter"
+                 title='There are aliases too (e.g. "a" for "ahead", "d" for the date, etc.). There is an implicit AND boolean operator in between each filter.'
+                 placeholder="Type your filter here. eg: ahead>=1 behind<5" />
         </div>
       </div>
     </div>

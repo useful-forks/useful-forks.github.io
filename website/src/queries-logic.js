@@ -1,19 +1,43 @@
 const { Octokit } = require("@octokit/rest");
 const { throttling } = require("@octokit/plugin-throttling");
 
+
+/* Filtering constants. */
+const attributeRgx = '([a-z]+)';
+const operatorRgx = '(<=|>=|[<=>])';
+const dateRgx = '[0-9]{4}(?:(?<!-|-[0-9])-[0-9]{0,2}){0,2}';
+const valueRgx = `(${dateRgx}|[0-9]+)`;
+const regex = new RegExp(attributeRgx + operatorRgx + valueRgx);
+const mapTable = {
+  'ahead': 'ahead_by',
+  'behind': 'behind_by',
+  'pushed': 'pushed_at',
+  'date': 'pushed_at',
+  'd': 'pushed_at',
+  'a': 'ahead_by',
+  'b': 'behind_by',
+  'p': 'pushed_at',
+  's': 'stars',
+  'f': 'forks',
+};
+
 /* Variables that should be cleared for every new query (defaults are set in "clear_old_data"). */
+let TABLE_DATA = [];
 let REPO_DATE;
 let TOTAL_FORKS;
 let RATE_LIMIT_EXCEEDED;
-let AHEAD_COMMITS_FILTER;
 let TOTAL_API_CALLS_COUNTER;
 let ONGOING_REQUESTS_COUNTER = 0;
+let IS_USEFUL_FORK; // function that determines if a fork is useful or not
+
 
 /** Used to reset the state for a brand new query. */
 function clear_old_data() {
   clearHeader();
   clearMsg();
-  clearTable();
+  removeProgressBar();
+  TABLE_DATA = []; // clear the table data
+  clearTable(); // clear the table DOM
   setApiCallsLabel(0);
   hideExportCsvBtn();
   REPO_DATE = new Date();
@@ -21,7 +45,6 @@ function clear_old_data() {
   RATE_LIMIT_EXCEEDED = false;
   TOTAL_API_CALLS_COUNTER = 0;
   ONGOING_REQUESTS_COUNTER = 0;
-  AHEAD_COMMITS_FILTER = UF_SETTINGS_AHEAD_FILTER;
   shouldTriggerQueryOnTokenSave = false;
 }
 
@@ -136,8 +159,20 @@ function decrementCounters() {
   ONGOING_REQUESTS_COUNTER--;
   if (allRequestsAreDone()) {
     clearNonErrorMsg();
-    sortTable();
+    removeProgressBar();
+    updateBasedOnTable();
     enableQueryFields();
+  }
+}
+
+function updateBasedOnTable() {
+  clearNonScanStateMsg();
+  if (tableIsEmpty(getTableBody())) {
+    if (isMsgEmpty()) {
+      setMsg(UF_MSG_EMPTY_FILTER);
+    }
+    hideExportCsvBtn();
+  } else {
     displayCsvExportBtn();
   }
 }
@@ -164,40 +199,50 @@ function send(requestPromise, successFn, failureFn) {
       () => decrementCounters());
 }
 
-/** Fills the first part of a row. */
-function build_fork_element_html(table_body, combined_name, num_stars, num_forks) {
-  const NEW_ROW = $('<tr>', {id: extract_username_from_fork(combined_name), class: "useful_forks_repo"});
-  table_body.append(
-      NEW_ROW.append(
-          $('<td>').html(getRepoCol(combined_name, false)).attr("value", combined_name),
-          $('<td>').html(UF_TABLE_SEPARATOR + getStarCol(num_stars)).attr("value", num_stars),
-          $('<td>').html(UF_TABLE_SEPARATOR + getForkCol(num_forks)).attr("value", num_forks)
-      )
-  );
-  return NEW_ROW;
-}
-
 /** Add bold to the date text if the date is earlier than the queried repo. */
 function compareDates(date, html) {
   return REPO_DATE <= new Date(date) ? `<strong>${html}</strong>` : html;
 }
 
-/** Prepares, appends, and updates a table row. */
-function add_fork_elements(forkdata_array, user, repo, parentDefaultBranch) {
-  if (isEmpty(forkdata_array))
+function update_table_trying_use_filter() {
+  if (typeof IS_USEFUL_FORK === 'function') {
+    update_table(TABLE_DATA.filter(IS_USEFUL_FORK));
+  } else {
+    update_table(TABLE_DATA);
+  }
+}
+
+function is_duplicate_repo(name) {
+  for (const fork of TABLE_DATA) {
+    if (fork['name'] === name)
+      return true;
+  }
+  return false;
+}
+
+/** Updates table data, then calls function to update the table. */
+function update_table_data(responseData, user, repo, parentDefaultBranch) {
+  if (isEmpty(responseData)) {
     return;
+  }
 
-  if (!RATE_LIMIT_EXCEEDED) // because some times gets called after some other msgs are displayed
+  if (!RATE_LIMIT_EXCEEDED) { // because some times gets called after some other msgs are displayed
     clearNonErrorMsg();
+    removeProgressBar();
+  }
 
-  let table_body = getTableBody();
-  for (const currFork of forkdata_array) {
-
-    /* Basic data (name/stars/forks). */
-    const NEW_ROW = build_fork_element_html(table_body, currFork.full_name, currFork.stargazers_count, currFork.forks_count);
-
+  for (const currFork of responseData) {
     if (RATE_LIMIT_EXCEEDED) // we can skip everything below because they are only requests
       continue;
+
+    if (is_duplicate_repo(currFork.full_name))
+      continue; // abort because repo is already listed
+
+    let datum = {
+      'name': currFork.full_name,
+      'stars': currFork.stargazers_count,
+      'forks': currFork.forks_count,
+    };
 
     /* Commits diff data (ahead/behind). */
     const requestPromise = () => octokit.repos.compareCommits({
@@ -207,33 +252,126 @@ function add_fork_elements(forkdata_array, user, repo, parentDefaultBranch) {
       head: `${extract_username_from_fork(currFork.full_name)}:${currFork.default_branch}`
     });
     const onSuccess = (responseHeaders, responseData) => {
-      if (responseData.total_commits <= AHEAD_COMMITS_FILTER) {
-        NEW_ROW.remove();
-        if (tableIsEmpty(table_body)) {
-          setMsg(UF_MSG_EMPTY_FILTER);
-        }
-      } else {
-        /* Appending the commit badges to the new row. */
-        const ahead_url = responseData.html_url;
-        const behind_url = getBehindUrl(ahead_url);
-        const pushed_at = getOnlyDate(currFork.pushed_at);
-        const date_txt = compareDates(pushed_at, getDateCol(pushed_at));
-        NEW_ROW.append(
-            $('<td>').html(UF_TABLE_SEPARATOR),
-            $('<td>', {class: "uf_badge"}).html(ahead_badge(responseData.ahead_by, ahead_url)).attr("value", responseData.ahead_by),
-            $('<td>').html(UF_TABLE_SEPARATOR),
-            $('<td>', {class: "uf_badge"}).html(behind_badge(responseData.behind_by, behind_url)).attr("value", responseData.behind_by),
-            $('<td>').html(UF_TABLE_SEPARATOR + date_txt).attr("value", pushed_at)
-        );
+      if (responseData.total_commits > 0) {
+        datum['ahead_by'] = responseData.ahead_by;
+        datum['ahead_url'] = responseData.html_url;
+        datum['behind_by'] = responseData.behind_by;
+        datum['behind_url'] = getBehindUrl(responseData.html_url);
+        datum['pushed_at'] = getOnlyDate(currFork.pushed_at);
+        TABLE_DATA.push(datum);
+        if (TABLE_DATA.length > 1) showFilterContainer();
+        
+        update_table_trying_use_filter();
       }
     };
-    const onFailure = () => NEW_ROW.remove();
+    const onFailure = () => { }; // do nothing
     send(requestPromise, onSuccess, onFailure);
 
     /* Forks of forks. */
     if (currFork.forks_count > 0) {
       request_fork_page(1, currFork.owner.login, currFork.name, currFork.default_branch);
     }
+  }
+}
+
+function update_filter_appearance() {
+  const filter = getFilterOrDefault();
+  if (filter === '') {
+    JQ_FILTER_FIELD.removeClass('is-dark');
+  } else {
+    JQ_FILTER_FIELD.addClass('is-dark');
+  }
+}
+
+function update_filter() {
+  update_filter_appearance();
+  updateFilterFunction();
+  update_table_trying_use_filter();
+
+  updateBasedOnTable();
+}
+
+/**
+ * Rewrites the table with the specified data.
+ * @param {Array} data - Array of objects with the following keys: name, stars, forks, ahead_by, ahead_url, behind_by, behind_url, pushed_at
+ */
+function update_table(data) {
+  clearTable();
+  let table_body = getTableBody();
+  for (const currFork of data) {
+    const { name, stars, forks, ahead_by, ahead_url, behind_by, behind_url, pushed_at } = currFork;
+    const date_txt = compareDates(pushed_at, getDateCol(pushed_at));
+
+    const NEW_ROW = $('<tr>', { id: extract_username_from_fork(name), class: "useful_forks_repo" });
+    NEW_ROW.append(
+      $('<td>').html(getRepoCol(name, false)).attr("value", name),
+      $('<td>').html(UF_TABLE_SEPARATOR + getStarCol(stars)).attr("value", stars),
+      $('<td>').html(UF_TABLE_SEPARATOR + getForkCol(forks)).attr("value", forks),
+      $('<td>').html(UF_TABLE_SEPARATOR),
+      $('<td>', { class: "uf_badge" }).html(ahead_badge(ahead_by, ahead_url)).attr("value", ahead_by),
+      $('<td>').html(UF_TABLE_SEPARATOR),
+      $('<td>', { class: "uf_badge" }).html(behind_badge(behind_by, behind_url)).attr("value", behind_by),
+      $('<td>').html(UF_TABLE_SEPARATOR + date_txt).attr("value", pushed_at)
+    );
+    table_body.append(NEW_ROW);
+  }
+  sortTable();
+}
+
+/**
+ * 1. Empty filter means no filter.
+ * 2. Filter string is a list of conditions separated by spaces.
+ * 3. If a condition is invalid, it is ignored, and the rest of the conditions are applied.
+ */
+function updateFilterFunction() {
+  const filter = getFilterOrDefault();
+  if (filter === '') {
+    IS_USEFUL_FORK = () => true; // no filter
+    return;
+  }
+
+  // parse filter string into condition object
+  const conditionStrList = filter.split(' ');
+  let conditionObj = {};
+  for (const condition of conditionStrList) {
+    const matchResult = condition.match(regex);
+    let [attribute, operator, value] = matchResult ? matchResult.slice(1) : [];
+    if (!attribute || !operator || !value) {
+      continue; // invalid condition
+    }
+    if (attribute in mapTable) {
+      attribute = mapTable[attribute];
+    }
+    conditionObj[attribute] = { operator, value };
+  }
+  
+  IS_USEFUL_FORK = (datum) => {
+    for (const [attribute, { operator, value }] of Object.entries(conditionObj)) {
+      const attrValue = datum[attribute];
+      switch (operator) {
+        case '>':
+          if (attrValue <= value)
+            return false;
+          break;
+        case '>=':
+          if (attrValue < value)
+            return false;
+          break;
+        case '<':
+          if (attrValue >= value)
+            return false;
+          break;
+        case '<=':
+          if (attrValue > value)
+            return false;
+          break;
+        case '=':
+          if (attrValue != value)
+            return false;
+          break;
+      }
+    }
+    return true;
   }
 }
 
@@ -266,8 +404,7 @@ function request_fork_page(page_number, user, repo, defaultBranch) {
       }
     }
 
-    /* Populate the table. */
-    add_fork_elements(responseData, user, repo, defaultBranch);
+    update_table_data(responseData, user, repo, defaultBranch);
   };
   const onFailure = () => displayConditionalErrorMsg();
   send(requestPromise, onSuccess, onFailure);
@@ -346,6 +483,7 @@ function initiate_search() {
   setUpOctokitWithLatestToken();
 
   setQueryFieldsAsLoading();
+  hideFilterContainer();
   setMsg(UF_MSG_SCANNING);
 
   const user = queryValues[len - 2];
@@ -418,3 +556,6 @@ JQ_REPO_FIELD.keyup(event => {
 if (JQ_REPO_FIELD.val()) {
   JQ_SEARCH_BTN.click();
 }
+
+/* User updated the filters, so we refresh the table. */
+JQ_FILTER_FIELD.on('input', update_filter);
