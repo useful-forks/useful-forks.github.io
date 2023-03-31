@@ -35,7 +35,6 @@ function saveTokenBtnClicked() {
 
 function proposeAddingToken() {
   shouldTriggerQueryOnTokenSave = true;
-  openTokenDialog();
 }
 
 function drawAddTokenBtn(accessToken) {
