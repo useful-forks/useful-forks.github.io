@@ -16,7 +16,6 @@ Sometimes, a project might be abandoned, or someone had a different idea of how 
 * [Releases](#releases)
   * [Online tool](#online-tool)
   * [Chrome extension](#chrome-extension)
-  * [Refined GitHub](#refined-github)
   * [Bookmarklet](#bookmarklet)
 * [How it works](#how-it-works)
 * [Contributing](#contributing)
@@ -52,17 +51,6 @@ Here is what happens when you click it:
 This button will only appear when you visit GitHub repositories, and clicking it opens a new tab that will automatically trigger a search using [the online tool](#online-tool).
 
 Please note that this project will not be updating the [GitHub Releases](https://github.com/useful-forks/useful-forks.github.io/releases) page anymore. We will now go through Chrome's Web Store to publish updates.
-
-### Refined GitHub
-[Refined GitHub](https://github.com/sindresorhus/refined-github) is an ensemble of tools and tweaks aimed at improving your GitHub experience.
-
-`useful-forks` is part of the hundreds of features provided. In that context, it appears as a button which redirects you to the [Useful Forks website](https://useful-forks.github.io/):
-
-![insights_screenshot](media/insights_rg.png "Insights page for Refined GitHub")
-
-It also appears next to the archive notification:
-
-![archive_screenshot](media/archived_repo_rg.png "Archived repository for Refined GitHub")
 
 ### Bookmarklet
 
