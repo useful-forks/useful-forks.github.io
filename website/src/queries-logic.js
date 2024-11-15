@@ -107,7 +107,8 @@ function getTdValue(rows, index, col) {
 }
 
 function sortTable() {
-  sortTableColumn(UF_ID_TABLE, 1);
+  /** Number of commits ahead. */
+  sortTableColumn(UF_ID_TABLE, 4);
 }
 
 /** 'sortColumn' index starts at 0.   https://stackoverflow.com/a/37814596/9768291 */

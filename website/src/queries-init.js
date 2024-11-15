@@ -45,7 +45,7 @@ const LANDING_PAGE_INIT_MSG = "<h1 class='title'>Introducing:</h1>"
     + "Simply type a repository's URL in the Text Field above. Both of those examples are valid entries: <br/>"
     + "<strong>" + EXAMPLE_LINK_1 + "</strong> and <strong>" + EXAMPLE_LINK_2 + "</strong>.<br/><br/>"
     + "The criteria is simple: <strong>if a fork was created, but never received any other activity on its <span class='is-family-monospace'>master</span> branch, it is filtered out.</strong><br/>"
-    + "The results are sorted by the amount of stars.<br/><br/>"
+    + "The results are sorted by the number of commits ahead.<br/><br/>"
     + "For more information, check out " + BODY_REPO_LINK + ".";
 
 
