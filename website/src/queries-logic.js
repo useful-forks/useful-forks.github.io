@@ -471,11 +471,11 @@ function initiate_search() {
   clear_old_data();
 
   let queryString = getQueryOrDefault("payne911/PieMenu");
-  let queryValues = queryString.split('/').filter(Boolean);
+  let queryValues = queryString.split('/').filter(s => s.length > 0);
 
   let len = queryValues.length;
   if (len < 2) {
-    setMsg('Please enter a valid query: it should contain two strings separated by a "/"');
+    setMsg('Please enter a valid query: it should contain two strings separated by a "/", or the full URL to a GitHub repo');
     ga_faultyQuery(queryString);
     return; // abort
   }
@@ -486,8 +486,8 @@ function initiate_search() {
   hideFilterContainer();
   setMsg(UF_MSG_SCANNING);
 
-  const user = queryValues[len - 2];
-  const repo = queryValues[len - 1];
+  const user = queryValues[0];
+  const repo = queryValues[1];
   if (history.replaceState) {
     history.replaceState({}, document.title, `?repo=${user}/${repo}`); // replace current URL param
   }

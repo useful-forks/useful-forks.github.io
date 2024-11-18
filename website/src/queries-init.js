@@ -166,7 +166,15 @@ function getQueryOrDefault(defaultVal) {
   if (!JQ_REPO_FIELD.val()) {
     JQ_REPO_FIELD.val(defaultVal);
   }
-  return JQ_REPO_FIELD.val();
+
+  const val = JQ_REPO_FIELD.val();
+
+  const isShorthand = /^[\w\.-]+\/[\w\.-]+$/;
+  if (isShorthand.test(val)) {
+    return val;
+  } else {
+    return new URL(val).pathname;
+  }
 }
 
 function hideFilterContainer() {
