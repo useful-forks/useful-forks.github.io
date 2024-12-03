@@ -171,7 +171,7 @@ function getQueryOrDefault(defaultVal) {
 
   const isShorthand = /^[\w\.-]+\/[\w\.-]+$/;
   if (isShorthand.test(val)) {
-    return val;
+    return val; // we are dealing with "user/repo" input format
   } else {
     return new URL(val).pathname;
   }
