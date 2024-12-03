@@ -507,6 +507,7 @@ function initiate_search() {
 
   setUpOctokitWithLatestToken();
 
+  setQuery(`${user}/${repo}`);
   setQueryFieldsAsLoading();
   hideFilterContainer();
   setMsg(UF_MSG_SCANNING);
