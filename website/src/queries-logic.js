@@ -462,8 +462,32 @@ function initial_request(user, repo) {
 }
 
 /** Extracts and sanitizes 'user' and 'repo' values from potential inputs. */
-function initiate_search() {
+function parse_query(queryString) {
+  const shorthand = /^(?<user>[\w.-]+)\/(?<repo>[\w.-]+)$/;
+  const shorthandMatch = shorthand.exec(queryString);
 
+  if (shorthandMatch) { // we are dealing with "user/repo" input format
+    const {user, repo} = shorthandMatch.groups;
+    return {user, repo};
+  }
+
+  let pathname;
+  try {
+    pathname = new URL(queryString).pathname;
+  } catch {
+    return null;
+  }
+
+  const values = pathname.split('/').filter(s => s.length > 0);
+  if (values.length < 2)
+    return null;
+
+  const [user, repo] = values;
+  return {user, repo};
+}
+
+
+function initiate_search() {
   /* Checking if search is allowed. */
   if (searchNotAllowed())
     return; // abort
@@ -471,14 +495,15 @@ function initiate_search() {
   clear_old_data();
 
   let queryString = getQueryOrDefault("payne911/PieMenu");
-  let queryValues = queryString.split('/').filter(s => s.length > 0);
+  const queryValues = parse_query(queryString);
 
-  let len = queryValues.length;
-  if (len < 2) {
+  if (!queryValues) {
     setMsg('Please enter a valid query: it should contain two strings separated by a "/", or the full URL to a GitHub repo');
     ga_faultyQuery(queryString);
     return; // abort
   }
+
+  const {user, repo} = queryValues;
 
   setUpOctokitWithLatestToken();
 
@@ -486,8 +511,6 @@ function initiate_search() {
   hideFilterContainer();
   setMsg(UF_MSG_SCANNING);
 
-  const user = queryValues[0];
-  const repo = queryValues[1];
   if (history.replaceState) {
     history.replaceState({}, document.title, `?repo=${user}/${repo}`); // replace current URL param
   }

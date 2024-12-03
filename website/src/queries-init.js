@@ -166,15 +166,7 @@ function getQueryOrDefault(defaultVal) {
   if (!JQ_REPO_FIELD.val()) {
     JQ_REPO_FIELD.val(defaultVal);
   }
-
-  const val = JQ_REPO_FIELD.val();
-
-  const isShorthand = /^[\w\.-]+\/[\w\.-]+$/;
-  if (isShorthand.test(val)) {
-    return val; // we are dealing with "user/repo" input format
-  } else {
-    return new URL(val).pathname;
-  }
+  return JQ_REPO_FIELD.val();
 }
 
 function hideFilterContainer() {
