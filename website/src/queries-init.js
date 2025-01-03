@@ -162,15 +162,15 @@ function disableQueryFields() {
   JQ_SEARCH_BTN.removeClass('is-loading');
 }
 
-function getQueryOrDefault(defaultVal) {
-  if (!JQ_REPO_FIELD.val()) {
-    JQ_REPO_FIELD.val(defaultVal);
-  }
-  return JQ_REPO_FIELD.val();
-}
-
 function setQuery(query) {
   JQ_REPO_FIELD.val(query);
+}
+
+function getQueryOrDefault(defaultVal) {
+  if (!JQ_REPO_FIELD.val()) {
+    setQuery(defaultVal);
+  }
+  return JQ_REPO_FIELD.val();
 }
 
 function hideFilterContainer() {
@@ -206,7 +206,7 @@ function getRepoNameFromUrl() {
 function landingPageTrigger() {
   const query = getRepoNameFromUrl();
   if (query) {
-    JQ_REPO_FIELD.val(query);
+    setQuery(query);
     return "";
   } else {
     return LANDING_PAGE_INIT_MSG;
