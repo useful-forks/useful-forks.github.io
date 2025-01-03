@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+  <!-- Global site tag (gtag.js) - Google Analytics -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=UA-109668880-3"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'UA-109668880-3');
+  </script>
+  <!-- Personal wrapper around Google Analytics Events dispatch calls -->
+  <script type="text/javascript" src="src/analytics-wrapper.js" charset="utf-8"></script>
+
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="description" content="Find useful forks of GitHub projects" />
+
+  <meta property="og:type" content="website">
+  <meta property="og:locale" content="en_US">
+  <meta property="og:site_name" content="useful-forks">
+  <meta property="og:title" content="useful-forks">
+  <meta property="og:url" content="https://useful-forks.github.io/">
+  <meta property="og:image" content="https://useful-forks.github.io/assets/useful-forks-banner.png">
+
+  <link rel="icon" href="assets/favicon.ico" />
+  <link rel="apple-touch-icon" href="assets/favicon.ico" />
+  <link rel="bookmark" href="assets/favicon.ico" />
+  <link rel="shortcut icon" href="assets/favicon.ico" />
+
+  <link rel="stylesheet preload" href="css/my-style.css"  as="style" />
+  <link rel="stylesheet preload" href="css/bulma.min.css"  as="style" />
+  <link rel="stylesheet preload" href="css/bulma-badge.min.css"  as="style" />
+
+  <title>Useful Forks</title>
+</head>
+
+<body>
+
+<!-- CSS trick to force footer at bottom -->
+<div class="allButFooter">
+
+  <!-- Navigation bar -->
+  <nav class="navbar is-dark" style="z-index: 1">
+    <div class="container">
+      <div class="navbar-brand">
+
+        <!-- Left-side buttons which are always displayed -->
+        <a class="navbar-item has-text-weight-bold"
+           href="https://useful-forks.github.io/"
+           onclick="ga_homeHeader();">
+          <img src="assets/useful-forks-logo.png" alt="UsefulForks_logo" />
+          Home
+        </a>
+        <a class="navbar-item has-text-weight-bold"
+           href="https://github.com/useful-forks/useful-forks.github.io" target="_blank" rel="noopener noreferrer"
+           onclick="ga_githubHeader();">
+          <img src="assets/github-white-icon.png" alt="GitHub_logo" />
+          Open-Source Project
+        </a>
+
+        <!-- Dropdown button for smaller screens -->
+        <div class="navbar-burger burger" data-target="uf-burger">
+          <!-- Each `<span>` is a line in the burger icon -->
+          <span></span>
+          <span></span>
+          <span></span>
+        </div>
+      </div>
+
+      <div id="uf-burger" class="navbar-menu">
+
+        <!-- Left-side buttons which will populate the Burger -->
+        <div class="navbar-start">
+          <a class="navbar-item has-text-weight-bold"
+             href="https://chrome.google.com/webstore/detail/useful-forks/aflbdmaojedofngiigjpnlabhginodbf" target="_blank" rel="noopener noreferrer"
+             onclick="ga_chromeHeader();">
+            <img src="assets/chrome-icon.png" alt="Chrome_logo" />
+            Chrome Extension
+          </a>
+        </div>
+
+        <!-- Right-side buttons which will populate the Burger -->
+        <div class="navbar-end">
+          <a id="addTokenBtn" class="navbar-item has-text-weight-bold"
+             onclick="openTokenDialog();">
+            <img src="assets/settings-icon.png" alt="Access Token" />
+            Add an Access Token
+          </a>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Access Token popup -->
+  <div class="modal" id="useful_forks_token_popup">
+    <div class="modal-background"></div>
+    <div class="modal-card">
+      <header class="modal-card-head">
+        <p id="modalTokenCardTitle" class="modal-card-title">Add a GitHub Access Token</p>
+        <button class="delete is-large" aria-label="close"
+                onclick="closeTokenDialog();"></button>
+      </header>
+      <section class="modal-card-body">
+        <p><em>Useful Forks</em> uses the GitHub API to retrieve repository metadata. You may see this dialog because you have hit the
+          <a href="https://docs.github.com/rest/rate-limit" target="_blank" rel="noopener noreferrer">
+            GitHub API rate limit</a>.
+        </p><br/>
+        <p>To raise that limit (it increases it by almost 5000 calls per hour), you should provide a personal Access Token.</p><br/>
+        <p>If you don't already have one, you can create one and paste its ID into the text-box below. The required scope is pre-configured by the "Create" button's link below.</p><br/>
+        <label class="label">Access Token (will be stored in your browser's local storage):</label>
+        <input class="input" id="tokenInput" placeholder="ghp_cNlVBvUMvtiFsko51b25zZTOOsiwg1L2XRz2" />
+      </section>
+      <footer class="modal-card-foot">
+        <a href="https://github.com/settings/tokens/new?description=useful-forks%20(no%20scope%20required)" target="_blank" rel="noopener noreferrer"
+           class="button is-uf-blue is-large is-fullwidth"
+           onclick="ga_createToken();">
+          Create
+        </a>
+        <a class="button is-uf-orange is-large is-fullwidth"
+           onclick="saveTokenBtnClicked();">
+          Save
+        </a>
+      </footer>
+    </div>
+  </div>
+
+  <!-- Query Settings popup -->
+  <div class="modal" id="uf_settings_popup">
+    <div class="modal-background"></div>
+    <div class="modal-card">
+      <header class="modal-card-head">
+        <p class="modal-card-title">Customize query settings</p>
+        <button class="delete is-large" aria-label="close"
+                onclick="closeSettingsDialog();"></button>
+      </header>
+      <section class="modal-card-body">
+        <p>Settings will be saved on your local browser and will apply to your future queries.</p><br/>
+
+        <!-- Relationship used for the commit diff count. -->
+        <div class="field is-horizontal">
+          <div class="field-label is-normal">
+            <label class="label">Diff relative:</label>
+          </div>
+          <div class="field-body">
+            <div class="field">
+              <div class="control">
+                <label class="radio">
+                  <input type="radio" name="rsvp" checked>
+                  Parent
+                </label>
+                <label class="radio" disabled>
+                  <input type="radio" name="rsvp" disabled>
+                  Source [WIP]
+                </label>
+                <label class="radio" disabled>
+                  <input type="radio" name="rsvp" disabled>
+                  Heuristic [WIP]
+                </label>
+              </div>
+              <p class="help mb-2"><strong>Default is 'Parent'.</strong> Which repository, relative to the evaluated fork, should be used to calculate the commit diff ('ahead' and 'behind').</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Export CSV button display. -->
+        <div class="field is-horizontal">
+          <div class="field-label is-normal">
+            <label class="label">Export CSV:</label>
+          </div>
+          <div class="field-body">
+            <div class="field">
+              <div class="control">
+                <label class="checkbox">
+                  <input type="checkbox" id="uf_settings_csv" checked>
+                  Display
+                </label>
+              </div>
+              <p class="help mb-2"><strong>Default is checked.</strong> Determines whether to display or not the "<span class="is-family-monospace">Export table below as CSV</span>" button when a scan ends.</p>
+            </div>
+          </div>
+        </div>
+
+      </section>
+      <footer class="modal-card-foot">
+        <a class="button is-uf-orange is-large is-fullwidth"
+           onclick="saveSettingsBtnClicked();">
+          Save
+        </a>
+      </footer>
+    </div>
+  </div>
+
+  <!-- The actual "body" where all the action happens -->
+  <dev class="section">
+    <div class="container has-text-centered">
+      <div class="search-container">
+        <div class="field has-addons">
+          <p class="control">
+            <a class="button is-dark is-outlined px-2"
+               onclick="openSettingsDialog();">
+              <img src="assets/settings-icon_big.png" alt="Settings" width="26" height="26"/>
+            </a>
+          </p>
+          <div class="control is-expanded">
+            <input class="input is-dark" type="text" id="repo" name="repo" placeholder="payne911/PieMenu" autofocus />
+          </div>
+          <p class="control">
+            <button class="button is-dark is-outlined" id="searchBtn">
+              <span title="GitHub API calls issued so far for this query" class="badge is-dark" id="totalApiCalls">0 calls</span>
+              Find useful forks
+            </button>
+          </p>
+        </div>
+        <div class="control" id="filterContainer" hidden>
+          <input class="input" type="text" id="filter" name="filter"
+                 title='There are aliases too (e.g. "a" for "ahead", "d" for the date, etc.). There is an implicit AND boolean operator in between each filter.'
+                 placeholder="Type your filter here. eg: ahead>=1 behind<5" />
+        </div>
+      </div>
+    </div>
+    <div class="container" id="useful_forks_inject">
+    </div>
+  </dev>
+
+</div>
+
+<!-- Footer -->
+<footer class="footer" style="background-color:white">
+  <div class="container">
+    <hr style="background-color:#dbdbdb; height: 1px" />
+    <div style="float:left">
+      If you like this project, feel free to
+      <strong>
+        <a href="https://github.com/useful-forks/useful-forks.github.io" target="_blank" rel="noopener noreferrer"
+           onclick="ga_footerStar();">give it a ⭐</a>
+      </strong>
+      or
+      <strong>
+        <a href="https://chrome.google.com/webstore/detail/useful-forks/aflbdmaojedofngiigjpnlabhginodbf/reviews" target="_blank" rel="noopener noreferrer"
+           onclick="ga_footerStar();">leave a review</a>
+      </strong>
+    </div>
+    <div style="float: right">
+      <a class="icon button is-white" href="mailto:jeremi.grenier.berthiaume@gmail.com"
+         onclick="ga_footerEmail();">
+        ✉
+      </a>
+    </div>
+  </div>
+</footer>
+
+<script type="text/javascript" src="src/lib/jquery-3.6.0.min.js"></script>
+<script type="text/javascript" src="src/token.js" charset="utf-8"></script>
+<script type="text/javascript" src="src/navbar-burger.js" charset="utf-8"></script>
+<script type="text/javascript" src="src/settings.js" charset="utf-8"></script>
+<script type="text/javascript" src="src/queries-init.js" charset="utf-8"></script>
+<script type="text/javascript" src="src/csv-export.js" charset="utf-8"></script>
+<!-- "queries-logic.js" gets transformed into "main.js" -->
+<script src="dist/main.js"></script>
+
+</body>
+
+</html>

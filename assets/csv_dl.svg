@@ -1,0 +1,18 @@
+<svg version="1.2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+	<title>csv_dl</title>
+	<defs>
+		<image  width="32" height="32" id="img1" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgAQMAAABJtOi3AAAAAXNSR0IB2cksfwAAAANQTFRFAAAAp3o92gAAAAF0Uk5TAEDm2GYAAAAMSURBVHicY2AY3AAAAKAAAbAGYhgAAAAASUVORK5CYII="/>
+		<image  width="28" height="10" id="img2" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABwAAAAKCAMAAACQXM4gAAAAAXNSR0IB2cksfwAAAEhQTFRFAAAAMDAwEBAQQEBAj4+P8PDwwMDA4ODgv7+/cHBwICAgoKCgsLCwgICAkJCQ////r6+v0NDQ39/fn5+fX19fUFBQYGBgz8/PsmiV7AAAAINJREFUeJxlTwEOwyAIpFjEitpVV/f/n060Lm1GgocHXA6AEQt2MPAXuJJlB+jY8obkdZhmUwR1aQs6CBIbpHT1/D4042tIc3v6ev8d1xDn8m7IBs5jqpr8qyKXpiAQ6qSm7Khb0nJjpHRDeo5Rl+Ejt1MSuWyhknOsenV/3jvMeXyQX+H5A4/LcxoVAAAAAElFTkSuQmCC"/>
+	</defs>
+	<style>
+		.s0 { fill: #000000 } 
+	</style>
+	<use id="Background" href="#img1" x="0" y="0"/>
+	<use id="CSV" href="#img2" x="2" y="12"/>
+	<path id="arrow" class="s0" d="m16 23h1v6h-1z"/>
+	<path id="Shape 1" class="s0" d="m14 28h5v1h-5z"/>
+	<path id="Shape 2" class="s0" d="m14.1 29l0.7-0.8 1.9 1.7-0.6 0.8z"/>
+	<path id="Shape 3" class="s0" d="m18.6 28.3l0.6 0.9-2.6 1.8-0.6-0.8z"/>
+	<path id="Shape 4" class="s0" d="m15.9 28.6l1-0.1 0.2 1.9-1 0.1z"/>
+	<path id="letter" class="s0" d="m5.3 1.6h1v25.1h-1zm0.3 1.1v-1h15.9v1zm15 0.2l0.7-0.8 5.6 4.6-0.6 0.8zm5.2 3.8h1v20.3h-1zm-20.1 20.3v-1h7.8v1zm13.6 0.1v-1h7.6v1zm1.4-24.5h1v4.7h-1zm5.5 4.4v1h-5.4v-1z"/>
+</svg>
