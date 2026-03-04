@@ -10,8 +10,8 @@
     "build": "webpack --mode production --config webpack.config.js"
   },
   "dependencies": {
-    "@octokit/rest": "^19.0.5",
-    "@octokit/plugin-throttling": "^4.3.2"
+    "@octokit/plugin-throttling": "^11.0.3",
+    "@octokit/rest": "^22.0.1"
   },
   "devDependencies": {
     "webpack": "^5.94.0",

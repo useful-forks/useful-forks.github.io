@@ -1,0 +1,5 @@
+/* v8 ignore else -- @preserve */
+
+/* v8 ignore else -- @preserve -- Bug with vitest coverage where it sees an else branch that doesn't exist */
+
+/* v8 ignore next -- @preserve */
