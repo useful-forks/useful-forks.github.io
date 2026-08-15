@@ -235,6 +235,12 @@ function update_table_data(responseData, user, repo, parentDefaultBranch) {
     if (RATE_LIMIT_EXCEEDED) // we can skip everything below because they are only requests
       continue;
 
+    // Fix #55: Ignore private repos – listForks erroneously returns private forks
+    // which pollute Console with 404 on compareCommits.
+    // https://docs.github.com/en/rest/repos/forks#list-forks
+    if (currFork.private === true)
+      continue;
+
     if (is_duplicate_repo(currFork.full_name))
       continue; // abort because repo is already listed
 
