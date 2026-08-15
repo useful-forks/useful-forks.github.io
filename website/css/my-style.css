@@ -98,3 +98,81 @@ table {
     padding-top: 0 !important; /* settings popup fields misaligned */
   }
 }
+
+/* Responsive table – Fix #19: small screens get weird table */
+#useful_forks_wrapper {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+#useful_forks_data {
+  overflow-x: auto;
+  width: 100%;
+  display: block;
+}
+#useful_forks_table {
+  width: 100%;
+  min-width: 640px; /* ensure readable columns, scroll on mobile */
+  border-collapse: collapse;
+  table-layout: auto;
+}
+#useful_forks_table thead th {
+  white-space: nowrap;
+  position: sticky;
+  top: 0;
+  background: #fff;
+  z-index: 2;
+}
+
+@media screen and (max-width: 768px) {
+  .container {
+    padding-left: 12px !important;
+    padding-right: 12px !important;
+  }
+  .search-container {
+    min-width: 100% !important;
+    max-width: 100% !important;
+  }
+  #useful_forks_wrapper {
+    font-size: 0.9em;
+  }
+  #useful_forks_table {
+    font-size: 0.85em;
+    min-width: 560px;
+  }
+  #useful_forks_table thead th,
+  #useful_forks_table tbody td {
+    white-space: nowrap;
+    padding: 0.5em 0.35em;
+  }
+  .uf_badge svg {
+    transform: scale(0.9);
+  }
+  #useful_forks_header {
+    margin-bottom: 20px;
+    font-size: 0.9em;
+    word-break: break-word;
+  }
+}
+
+/* Ultra-small: stack using flex wrapping and smaller fonts */
+@media screen and (max-width: 480px) {
+  #useful_forks_table {
+    font-size: 0.8em;
+    min-width: 500px;
+  }
+  #useful_forks_data::after {
+    content: "← swipe to see more →";
+    display: block;
+    text-align: center;
+    font-size: 0.75em;
+    color: #888;
+    margin-top: 6px;
+  }
+  /* Make repo name flex-friendly with spans */
+  .useful_forks_repo td:first-child {
+    max-width: 160px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
