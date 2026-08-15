@@ -151,7 +151,17 @@ function onRateLimitExceeded() {
 }
 
 function allRequestsAreDone() {
-  return ONGOING_REQUESTS_COUNTER <= 0 && TOTAL_API_CALLS_COUNTER >= TOTAL_FORKS;
+  // Fix #77: For massive fork volumes (>100k), TOTAL_FORKS is brittle.
+  // - GitHub may rate-limit / secondary rate-limit and abort pagination,
+  //   leaving TOTAL_API_CALLS < TOTAL_FORKS and UI stuck "scanning".
+  // - Forks-of-forks spawn extra API calls beyond parent TOTAL_FORKS,
+  //   making >= check semantically wrong.
+  // - Finally, recursive pagination + 100 compare calls per page creates
+  //   huge concurrency that triggers secondary rate-limits; the throttling
+  //   plugin keeps promises pending, so ONGOING stays >0 while stalled.
+  // Robust completion = no ongoing requests. Pagination chains keep ONGOING>0
+  // because next page is queued inside success before finally decrementing.
+  return ONGOING_REQUESTS_COUNTER <= 0;
 }
 
 /** Detection of final request. */
@@ -395,12 +405,22 @@ function request_fork_page(page_number, user, repo, defaultBranch) {
 
     sortTable();
 
-    /* Pagination (beyond 100 forks). */
-    const link_header = responseHeaders["link"];
+    /* Pagination (beyond 100 forks).
+       GitHub's Link header may be lowercased or missing due to Octokit version.
+       We handle both `link` and `Link` keys for robustness.
+       For massive volumes (>100k forks), this recursion plus fork-of-fork expansion
+       creates thousands of pages. The throttling plugin retries on secondary rate
+       limits, but UI previously hung because allRequestsAreDone required
+       TOTAL_API_CALLS >= TOTAL_FORKS. With ONGOING-only completion, we still
+       correctly chain pages: next page is queued synchronously inside success
+       before finally() decrements current ONGOING, so ONGOING never hits 0
+       prematurely while pagination continues.
+    */
+    const link_header = responseHeaders["link"] || responseHeaders["Link"] || responseHeaders.link;
     if (link_header) {
-      let contains_next_page = link_header.indexOf('>; rel="next"');
-      if (contains_next_page !== -1) {
-        request_fork_page(++page_number, user, repo, defaultBranch);
+      let contains_next_page = link_header.indexOf('>; rel="next"') !== -1 || link_header.includes('rel="next"');
+      if (contains_next_page) {
+        request_fork_page(page_number + 1, user, repo, defaultBranch);
       }
     }
 
