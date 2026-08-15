@@ -16,6 +16,7 @@ Sometimes, a project might be abandoned, or someone had a different idea of how 
 * [Releases](#releases)
   * [Online tool](#online-tool)
   * [Chrome extension](#chrome-extension)
+  * [Userscript](#userscript)
   * [Bookmarklet](#bookmarklet)
 * [How it works](#how-it-works)
 * [Contributing](#contributing)
@@ -26,7 +27,7 @@ Sometimes, a project might be abandoned, or someone had a different idea of how 
 ## Releases
 There are several ways to access the tool.
 
-If you use Chrome, your best option would be to download the [Chrome extension](#chrome-extension). For other browsers, you may want to use the [bookmarklet](#bookmarklet).
+If you use Chrome, your best option would be to download the [Chrome extension](#chrome-extension). For Firefox or other browsers, you may want to use the [userscript](#userscript) or the [bookmarklet](#bookmarklet).
 
 ### Online tool
 The project is [available online](https://useful-forks.github.io/) for free thanks to GitHub Pages.
@@ -51,6 +52,31 @@ Here is what happens when you click it:
 This button will only appear when you visit GitHub repositories, and clicking it opens a new tab that will automatically trigger a search using [the online tool](#online-tool).
 
 Please note that this project will not be updating the [GitHub Releases](https://github.com/useful-forks/useful-forks.github.io/releases) page anymore. We will now go through Chrome's Web Store to publish updates.
+
+### Userscript
+
+A userscript version is available for Firefox and other browsers via Violentmonkey, Tampermonkey, or Greasemonkey.
+
+#### Installation
+
+1. Install a userscript manager:
+   - Firefox: [Violentmonkey](https://addons.mozilla.org/en-US/firefox/addon/violentmonkey/) or [Tampermonkey](https://addons.mozilla.org/en-US/firefox/addon/tampermonkey/)
+   - Chrome: [Tampermonkey](https://chrome.google.com/webstore/detail/tampermonkey/dhdgffkkebhmkfjojejmpbldmpobfkfo) or [Violentmonkey](https://chrome.google.com/webstore/detail/violentmonkey/jmojpeeagmghmblngooipkmgncbdfdop)
+
+2. Install the script:
+   - Direct link: [`plugin/useful-forks.user.js`](plugin/useful-forks.user.js) (or raw: `https://raw.githubusercontent.com/useful-forks/useful-forks.github.io/master/plugin/useful-forks.user.js`)
+   - Or manually create a new userscript and copy the contents of `plugin/useful-forks.user.js`
+
+3. Visit any GitHub repository page – the "Useful" button will appear next to the fork counter, just like the Chrome extension.
+
+The userscript uses the same logic as the Chrome extension and is tested with Violentmonkey on Firefox (thanks to @ issue #20).
+
+UserScript header includes:
+```
+ // @match *://github.com/*/* 
+ // @grant none
+ // @require https://code.jquery.com/jquery-3.5.1.min.js
+```
 
 ### Bookmarklet
 
