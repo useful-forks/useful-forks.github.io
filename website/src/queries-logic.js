@@ -102,25 +102,132 @@ function getBehindUrl(aheadUrl) {
   return split.join('/');
 }
 
+/* Sorting state for column sorting feature #48 */
+let SORT_STATE = { column: 1, direction: 'desc' };
+
+function getTdRawValue(rows, index, col) {
+  let td = rows.item(index).getElementsByTagName('td').item(col);
+  if (!td) return "";
+  let attr = td.getAttribute("value");
+  return attr === null ? "" : attr;
+}
+
 function getTdValue(rows, index, col) {
-  return Number(rows.item(index).getElementsByTagName('td').item(col).getAttribute("value"));
+  let raw = getTdRawValue(rows, index, col);
+  // numeric columns: 1,2,4,6
+  if ([1,2,4,6].includes(col)) {
+    let n = Number(raw);
+    return isNaN(n) ? -1 : n;
+  }
+  if (col === 7) { // date column YYYY-MM-DD
+    let t = Date.parse(raw);
+    return isNaN(t) ? 0 : t;
+  }
+  if (col === 0) {
+    return raw.toString().toLowerCase();
+  }
+  // fallback for separator or others
+  return raw.toString().toLowerCase();
+}
+
+function compareForSort(a, b, dir) {
+  // handle numbers and strings uniformly; JS < and > work for both
+  if (dir === 'desc') {
+    if (a < b) return 1;
+    if (a > b) return -1;
+    return 0;
+  } else {
+    if (a > b) return 1;
+    if (a < b) return -1;
+    return 0;
+  }
 }
 
 function sortTable() {
-  sortTableColumn(UF_ID_TABLE, 1);
+  sortTableColumn(UF_ID_TABLE, SORT_STATE.column, SORT_STATE.direction);
 }
 
-/** 'sortColumn' index starts at 0.   https://stackoverflow.com/a/37814596/9768291 */
-function sortTableColumn(table_id, sortColumn){
-  let tableData = document.getElementById(table_id).getElementsByTagName('tbody').item(0);
+function sortTableColumn(table_id, sortColumn, direction){
+  // allow caller to omit direction -> toggle if same column, else use stored or default
+  let tableEl = document.getElementById(table_id);
+  if (!tableEl) return;
+  let tableData = tableEl.getElementsByTagName('tbody').item(0);
+  if (!tableData) return;
   let rows = tableData.getElementsByTagName('tr');
+  if (rows.length <= 1) return;
+
+  let dir = direction;
+  if (!dir) {
+    if (SORT_STATE.column === sortColumn) {
+      dir = SORT_STATE.direction === 'desc' ? 'asc' : 'desc';
+    } else {
+      // sensible defaults: numeric cols desc, string col asc, date desc
+      dir = (sortColumn === 0) ? 'asc' : 'desc';
+    }
+  }
+  SORT_STATE = { column: sortColumn, direction: dir };
+
+  // bubble sort kept simple per original, but now generic and direction-aware
   for(let i = 0; i < rows.length - 1; i++) {
     for(let j = 0; j < rows.length - (i + 1); j++) {
-      if(getTdValue(rows, j, sortColumn) < getTdValue(rows, j+1, sortColumn)) {
+      let a = getTdValue(rows, j, sortColumn);
+      let b = getTdValue(rows, j+1, sortColumn);
+      let cmp = compareForSort(a, b, 'desc'); // we want to know if a should be after b when desc
+      // For descending, we want larger first: if a < b then swap
+      // For ascending, if a > b then swap
+      let shouldSwap = false;
+      if (dir === 'desc') {
+        shouldSwap = (a < b);
+        // special case for string type reverse logic still same because < means alphabetical earlier
+        if (typeof a === 'string' && typeof b === 'string') {
+          shouldSwap = a.localeCompare(b) < 0;
+        }
+      } else {
+        shouldSwap = (a > b);
+        if (typeof a === 'string' && typeof b === 'string') {
+          shouldSwap = a.localeCompare(b) > 0;
+        }
+      }
+      // NaN handling already mapped; keep generic also for numbers via compareForSort fallback for edge
+      if (shouldSwap) {
         tableData.insertBefore(rows.item(j+1), rows.item(j));
       }
     }
   }
+  updateSortIndicators(sortColumn, dir);
+}
+
+function updateSortIndicators(col, dir) {
+  // visual cue on header: append ▲ / ▼
+  try {
+    let $ths = $('#' + UF_ID_TABLE + ' thead th');
+    $ths.each(function() {
+      let $th = $(this);
+      let c = parseInt($th.attr('data-col'));
+      let baseText = $th.attr('data-base') || $th.text().replace(/ [▲▼]/g,'').trim();
+      if (!$th.attr('data-base')) $th.attr('data-base', baseText);
+      if (c === col && !isNaN(c) && [0,1,2,4,6,7].includes(c)) {
+        $th.text(baseText + (dir === 'desc' ? ' ▼' : ' ▲'));
+        $th.addClass('is-sorted');
+      } else {
+        if ([0,1,2,4,6,7].includes(c)) {
+          $th.text(baseText);
+          $th.removeClass('is-sorted');
+        }
+      }
+    });
+  } catch(e) { /* jQuery may not be ready in some contexts */ }
+}
+
+function setupSortableHeaders() {
+  // bind click handlers to thead th.sortable
+  try {
+    $('#' + UF_ID_TABLE + ' thead th.sortable').off('click.sortable').on('click.sortable', function() {
+      let col = parseInt($(this).attr('data-col'));
+      if (isNaN(col)) return;
+      sortTableColumn(UF_ID_TABLE, col);
+    });
+  } catch(e) {}
 }
 
 function isEmpty(aList) {
@@ -583,3 +690,16 @@ if (JQ_REPO_FIELD.val()) {
 
 /* User updated the filters, so we refresh the table. */
 JQ_FILTER_FIELD.on('input', update_filter);
+
+// Initialize sortable headers once DOM is ready (supports #48)
+if (typeof setupSortableHeaders === 'function') {
+  try { setupSortableHeaders(); } catch(e) {}
+} else {
+  // if called before function hoisted, defer
+  setTimeout(function(){
+    if (typeof setupSortableHeaders === 'function') {
+      try { setupSortableHeaders(); } catch(e) {}
+    }
+  }, 300);
+}
+

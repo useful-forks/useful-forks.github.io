@@ -98,3 +98,23 @@ table {
     padding-top: 0 !important; /* settings popup fields misaligned */
   }
 }
+
+/* Sortable columns – Fix #48 */
+th.sortable {
+  user-select: none;
+  transition: background-color 0.15s ease;
+}
+th.sortable:hover {
+  background-color: #e8e8e8 !important;
+  color: #000;
+}
+th.sortable.is-sorted {
+  background-color: #e0e0e0 !important;
+  font-weight: bold;
+}
+#useful_forks_table thead th {
+  white-space: nowrap;
+  font-weight: bold;
+  border-bottom: 2px solid #ccc;
+  text-align: left;
+}
