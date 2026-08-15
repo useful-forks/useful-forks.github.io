@@ -4,6 +4,8 @@ const JQ_REPO_FIELD  = $('#repo');
 const JQ_FILTER_FIELD = $('#filter');
 const JQ_FILTER_CONTAINER = $('#filterContainer');
 const JQ_SEARCH_BTN  = $('#searchBtn');
+const JQ_ABORT_BTN   = $('#abortBtn');
+const JQ_RESUME_BTN  = $('#resumeBtn');
 const JQ_TOTAL_CALLS = $('#totalApiCalls');
 
 const UF_MSG_NO_FORKS     = "No one forked this specific repository.";
@@ -19,6 +21,9 @@ const UF_MSG_API_RATE     = "<b>GitHub API rate-limits exceeded.</b> Consider pr
     + "The amount of API calls you are allowed to do will re-accumulate over time: you can try again later on.<br>"
     + "It's also possible that the queried repository has so many forks that it's impossible to scan it completely without running out of API calls.<br>"
     + ":(";
+const UF_MSG_ABORTED      = "Search aborted. Preserved existing results.";
+const UF_MSG_CACHED_RESTORED = "Restored cached results from earlier scan.";
+const UF_MSG_RESUMED      = "Resuming scan...";
 
 // list of messages which should not be cleared when the request ends
 const UF_PRESERVED_MSGS = [
@@ -151,15 +156,19 @@ function enableQueryFields() {
   JQ_REPO_FIELD.prop('disabled', false);
   JQ_SEARCH_BTN.prop('disabled', false);
   JQ_SEARCH_BTN.removeClass('is-loading');
+  hideAbortBtn();
 }
 function setQueryFieldsAsLoading() {
   JQ_REPO_FIELD.prop('disabled', true);
   JQ_SEARCH_BTN.addClass('is-loading');
+  showAbortBtn();
+  hideResumeBtn();
 }
 function disableQueryFields() {
   JQ_REPO_FIELD.prop('disabled', true);
   JQ_SEARCH_BTN.prop('disabled', true);
   JQ_SEARCH_BTN.removeClass('is-loading');
+  hideAbortBtn();
 }
 
 function setQuery(query) {
@@ -190,6 +199,91 @@ function getFilterOrDefault(defaultVal) {
 
 function setApiCallsLabel(total) {
   JQ_TOTAL_CALLS.html(total + " calls");
+}
+
+function showAbortBtn() {
+  if (JQ_ABORT_BTN && JQ_ABORT_BTN.length) JQ_ABORT_BTN.show();
+  // Turn search button red when abort is possible (bonus for #16)
+  if (JQ_SEARCH_BTN && JQ_SEARCH_BTN.hasClass('is-loading')) {
+    JQ_SEARCH_BTN.addClass('is-danger');
+  }
+}
+function hideAbortBtn() {
+  if (JQ_ABORT_BTN && JQ_ABORT_BTN.length) JQ_ABORT_BTN.hide();
+  if (JQ_SEARCH_BTN) JQ_SEARCH_BTN.removeClass('is-danger');
+}
+function showResumeBtn() {
+  if (JQ_RESUME_BTN && JQ_RESUME_BTN.length) JQ_RESUME_BTN.show();
+}
+function hideResumeBtn() {
+  if (JQ_RESUME_BTN && JQ_RESUME_BTN.length) JQ_RESUME_BTN.hide();
+}
+
+/** Save current results to localStorage for caching (#39) */
+function saveCache() {
+  // Delegate to full implementation in queries-logic.js if available
+  if (typeof window !== 'undefined' && window.saveCacheToStorage && window.saveCacheToStorage !== saveCache) {
+    try { window.saveCacheToStorage(); } catch(e) {}
+    return;
+  }
+  // Fallback simple (no-op without TABLE_DATA access)
+  try {
+    console.warn('saveCache fallback: no TABLE_DATA access in init');
+  } catch (e) {}
+}
+function loadCache(repo) {
+  try {
+    const key = 'uf-cache-' + repo.toLowerCase();
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    const data = JSON.parse(raw);
+    // fresh < 1 hour
+    if (Date.now() - data.timestamp > 3600000) return null;
+    return data;
+  } catch (e) {
+    return null;
+  }
+}
+function restoreCache(repo) {
+  // If full implementation exists in queries-logic bundle, use it (it has TABLE_DATA access)
+  if (typeof window !== 'undefined' && window.restoreCache && window.restoreCache.length >=0) {
+    // window.restoreCache may be this same function during early load; check for dedicated storage version
+    if (window.restoreCacheFromStorage) {
+      return window.restoreCacheFromStorage(repo);
+    }
+    // if window.restoreCache is itself the bundle version (different id), call it but avoid recursion
+    // heuristic: bundle version expects repo param and has TABLE_DATA in its closure
+    // we can't detect easily, so attempt loadCache + manual restore only if bundle not yet loaded
+  }
+  const cached = loadCache(repo);
+  if (!cached) return false;
+  // Minimal restore without TABLE_DATA? can't fully restore here, show message
+  if (typeof setMsg === 'function') {
+    setMsg(`Found cache for ${repo} (${cached.tableData?cached.tableData.length:0} forks) – loading full table requires page reload with bundle ready. Click <a href="?repo=${encodeURIComponent(repo)}">scan again</a> or wait for full restore.`);
+  }
+  return false;
+}
+
+/** Try to auto-offer cached results on page load */
+function tryOfferCache() {
+  const repo = JQ_REPO_FIELD.val();
+  if (!repo) return;
+  const cached = loadCache(repo);
+  if (cached) {
+    // Show a non-blocking banner with restore option
+    const ageMin = Math.round((Date.now()-cached.timestamp)/60000);
+    const msg = `Found cached results for <b>${repo}</b> from ${ageMin} min ago (${cached.tableData.length} forks). <button class="button is-small is-info ml-2" onclick="window.restoreCache && window.restoreCache('${repo.replace(/'/g,"\\'")}')">Restore cache</button>`;
+    // Only show if no automatic scan triggered (i.e., msg empty or landing)
+    if (isMsgEmpty() || JQ_ID_MSG.html().includes('Introducing')) {
+      // Don't overwrite landing if scan will start; defer
+      setTimeout(() => {
+        try {
+          if (typeof ONGOING_REQUESTS_COUNTER !== 'undefined' && ONGOING_REQUESTS_COUNTER === 0) setMsg(msg);
+          else if (typeof ONGOING_REQUESTS_COUNTER === 'undefined') setMsg(msg);
+        } catch(e) { setMsg(msg); }
+      }, 500);
+    }
+  }
 }
 
 
