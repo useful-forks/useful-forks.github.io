@@ -410,6 +410,84 @@ function request_fork_page(page_number, user, repo, defaultBranch) {
   send(requestPromise, onSuccess, onFailure);
 }
 
+/**
+ * Exploratory fallback for detached forks (Issue #76).
+ *
+ * GitHub now allows intentional detachment of a fork network:
+ * - https://stackoverflow.com/questions/16052477/delete-fork-dependency-of-a-github-repository/79633266#79633266
+ * - GH Support "detach fork" option at https://support.github.com/request/fork
+ *
+ * Once detached, a repository becomes standalone (fork:false, source:null, parent:null)
+ * and is no longer returned by the listForks API nor by the forks insights page.
+ * Example: dirk-thomas/vcstool (root, 104 forks) vs ros-infrastructure/vcs2l
+ * (originally ros-infrastructure/vcstool, a fork of dirk-thomas/vcstool, renamed to vcs2l
+ * and detached). It is now impossible to discover via:
+ *   https://github.com/dirk-thomas/vcstool/forks?include=active,archived,inactive,network
+ *   https://api.github.com/repos/dirk-thomas/vcstool/forks
+ * resulting in segmentation of the fork tree.
+ *
+ * See GitHub Community discussion:
+ *   https://github.com/orgs/community/discussions/173970
+ *
+ * This function attempts best-effort discovery via Search API:
+ * - Searches for repositories with the same repo name (e.g., "vcstool in:name")
+ * - Filters out the queried repo itself and already-known forks
+ * - Tries to validate sharing history via compareCommits in update_table_data
+ *
+ * LIMITATIONS:
+ * - Renamed detached forks (vcstool -> vcs2l) will NOT be found by name search.
+ *   There is no GitHub API to find renamed detached forks without an external index
+ *   (e.g., GH Archive, or maintaining a database of known forks).
+ * - Search API has stricter rate limits (10 req/min unauth) and returns at most 1000 results.
+ * - Forks that were detached and then heavily rewritten may no longer share commit history
+ *   and will be filtered out as unrelated by compareCommits.
+ *
+ * Therefore this fallback is opportunistic and may still miss some detached forks.
+ * For complete reliability, users would need to manually track parent links
+ * or use an external fork-index service.
+ */
+function request_detached_forks_via_search(user, repo, defaultBranch) {
+  if (RATE_LIMIT_EXCEEDED)
+    return;
+
+  // Avoid excessive API usage for very common repo names (e.g., "test" would match thousands)
+  // Limit to repos whose name contains the queried repo name – a reasonable heuristic for forks
+  // that kept the same repo name (most common case).
+  const searchQuery = `${repo} in:name fork:true`;
+  const requestPromise = () => octokit.search.repos({
+    q: searchQuery,
+    per_page: 30,
+    sort: "stars",
+    order: "desc"
+  });
+
+  const onSuccess = (responseHeaders, responseData) => {
+    if (isEmpty(responseData.items))
+      return;
+
+    // Convert search results to a shape compatible with update_table_data's expected fork objects
+    const candidates = responseData.items
+      .filter(r => r.full_name.toLowerCase() !== `${user}/${repo}`.toLowerCase())
+      .filter(r => !is_duplicate_repo(r.full_name))
+      .map(r => ({
+        full_name: r.full_name,
+        stargazers_count: r.stargazers_count,
+        forks_count: r.forks_count,
+        pushed_at: r.pushed_at || new Date().toISOString(),
+        owner: { login: r.owner.login },
+        name: r.name,
+        default_branch: r.default_branch || defaultBranch
+      }));
+
+    if (candidates.length > 0) {
+      update_table_data(candidates, user, repo, defaultBranch);
+    }
+  };
+
+  const onFailure = () => { /* silent – this is best-effort */ };
+  send(requestPromise, onSuccess, onFailure);
+}
+
 /** Updates header with Queried Repo info, and initiates forks scan. */
 function initial_request(user, repo) {
   const requestPromise = () => octokit.repos.get({
@@ -456,6 +534,25 @@ function initial_request(user, repo) {
       setMsg(UF_MSG_NO_FORKS);
       enableQueryFields();
     }
+
+    // Fix #76 mitigation: detached forks segmentation
+    // If queried repo is itself a fork, also scan its source and parent fork networks
+    // to capture sibling forks that may have been missed due to network segmentation.
+    if (responseData.source) {
+      const sourceParts = responseData.source.full_name.split('/');
+      if (sourceParts.length === 2 && (sourceParts[0] !== user || sourceParts[1] !== repo)) {
+        request_fork_page(1, sourceParts[0], sourceParts[1], responseData.source.default_branch || responseData.default_branch);
+      }
+      if (responseData.parent && responseData.parent.full_name !== responseData.source.full_name) {
+        const parentParts = responseData.parent.full_name.split('/');
+        if (parentParts.length === 2) {
+          request_fork_page(1, parentParts[0], parentParts[1], responseData.parent.default_branch || responseData.default_branch);
+        }
+      }
+    }
+
+    // Best-effort search for detached forks that kept the same repo name (see detailed comment above)
+    request_detached_forks_via_search(user, repo, responseData.default_branch);
   };
   const onFailure = () => displayConditionalErrorMsg();
   send(requestPromise, onSuccess, onFailure);
