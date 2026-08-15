@@ -102,6 +102,87 @@ function getBehindUrl(aheadUrl) {
   return split.join('/');
 }
 
+/* --- Feature #65: Search additionally not-forked repository copies --- */
+function strip_trailing_numbers(name) {
+  // Suggested in #65: strip trailing numbers, e.g., vcstool2 -> vcstool
+  // Also trim trailing separators after stripping.
+  return name.replace(/\d+$/, '').replace(/[-_\.]$/, '').trim() || name;
+}
+
+function search_similar_repos(user, repo, parentDefaultBranch) {
+  const base = strip_trailing_numbers(repo);
+  const query = base.length >= 3 ? base : repo;
+
+  const requestPromise = () => octokit.search.repos({
+    q: `${query} in:name`,
+    sort: 'stars',
+    order: 'desc',
+    per_page: 10
+  });
+
+  const onSuccess = (responseHeaders, responseData) => {
+    const items = responseData.items || [];
+    for (const item of items) {
+      if (!item || !item.full_name) continue;
+      if (item.full_name.toLowerCase() === `${user}/${repo}`.toLowerCase()) continue;
+      if (is_duplicate_repo(item.full_name)) continue;
+
+      // Skip if this repo is already a known fork? We keep it if not duplicate; GitHub search includes forks, but duplicate check handles fork list.
+      // Flag as copy (not forked) for UI distinction.
+      let datum = {
+        'name': item.full_name,
+        'stars': item.stargazers_count,
+        'forks': item.forks_count,
+        'ahead_by': 0,
+        'ahead_url': `https://github.com/${item.full_name}`,
+        'behind_by': 0,
+        'behind_url': `https://github.com/${item.full_name}`,
+        'pushed_at': getOnlyDate(item.pushed_at || item.updated_at || new Date().toISOString()),
+        'is_copy': true
+      };
+
+      // Attempt to compute commits ahead/behind against original if possible (best-effort)
+      // This reuses compareCommits logic similar to forks; if it fails we still show the copy.
+      const comparePromise = () => octokit.repos.compareCommits({
+        owner: user,
+        repo: repo,
+        base: parentDefaultBranch,
+        head: `${item.owner.login}:${item.default_branch}`
+      });
+      const onCompareSuccess = (cmpHeaders, cmpData) => {
+        if (cmpData.total_commits > 0) {
+          datum['ahead_by'] = cmpData.ahead_by;
+          datum['ahead_url'] = cmpData.html_url;
+          datum['behind_by'] = cmpData.behind_by;
+          datum['behind_url'] = getBehindUrl(cmpData.html_url);
+        }
+        TABLE_DATA.push(datum);
+        if (TABLE_DATA.length > 1) showFilterContainer();
+        update_table_trying_use_filter();
+      };
+      const onCompareFailure = () => {
+        // Push anyway as copy even if compare fails (e.g., unrelated histories)
+        TABLE_DATA.push(datum);
+        if (TABLE_DATA.length > 1) showFilterContainer();
+        update_table_trying_use_filter();
+      };
+      // Use send to respect rate limiting; if rate limited, fallback to direct push
+      if (!RATE_LIMIT_EXCEEDED) {
+        send(comparePromise, onCompareSuccess, onCompareFailure);
+      } else {
+        TABLE_DATA.push(datum);
+        update_table_trying_use_filter();
+      }
+    }
+  };
+
+  const onFailure = () => {
+    // Silent failure for similar repos search – not critical
+  };
+
+  send(requestPromise, onSuccess, onFailure);
+}
+
 function getTdValue(rows, index, col) {
   return Number(rows.item(index).getElementsByTagName('td').item(col).getAttribute("value"));
 }
@@ -293,18 +374,19 @@ function update_filter() {
 
 /**
  * Rewrites the table with the specified data.
- * @param {Array} data - Array of objects with the following keys: name, stars, forks, ahead_by, ahead_url, behind_by, behind_url, pushed_at
+ * @param {Array} data - Array of objects with the following keys: name, stars, forks, ahead_by, ahead_url, behind_by, behind_url, pushed_at, is_copy
  */
 function update_table(data) {
   clearTable();
   let table_body = getTableBody();
   for (const currFork of data) {
-    const { name, stars, forks, ahead_by, ahead_url, behind_by, behind_url, pushed_at } = currFork;
+    const { name, stars, forks, ahead_by, ahead_url, behind_by, behind_url, pushed_at, is_copy } = currFork;
     const date_txt = compareDates(pushed_at, getDateCol(pushed_at));
+    const repo_col = is_copy ? getRepoCol(name, false) + ' <span class="tag is-light is-small" title="Not a GitHub fork, but a copy with similar name (see #65)">copy</span>' : getRepoCol(name, false);
 
     const NEW_ROW = $('<tr>', { id: extract_username_from_fork(name), class: "useful_forks_repo" });
     NEW_ROW.append(
-      $('<td>').html(getRepoCol(name, false)).attr("value", name),
+      $('<td>').html(repo_col).attr("value", name),
       $('<td>').html(UF_TABLE_SEPARATOR + getStarCol(stars)).attr("value", stars),
       $('<td>').html(UF_TABLE_SEPARATOR + getForkCol(forks)).attr("value", forks),
       $('<td>').html(UF_TABLE_SEPARATOR),
@@ -449,6 +531,13 @@ function initial_request(user, repo) {
     }
 
     setHeader(html_txt);
+
+    // Feature #65: after main repo info, also search for not-forked copies with similar name
+    try {
+      search_similar_repos(user, repo, responseData.default_branch);
+    } catch (e) {
+      console.warn('[useful-forks] similar repos search failed', e);
+    }
 
     if (TOTAL_FORKS > 0) {
       request_fork_page(1, user, repo, responseData.default_branch);
