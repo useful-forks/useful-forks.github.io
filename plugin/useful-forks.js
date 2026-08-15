@@ -5,22 +5,22 @@ function getRepoUrl() {
 }
 
 function setBtnUrl() {
-  const button = document.getElementById(UF_BTN_ID);
-  button.addEventListener("click", () => {
-    window.open(getRepoUrl(), "_blank");
-  });
+  const btn = document.getElementById(UF_BTN_ID);
+  if (btn) {
+    btn.href = getRepoUrl();
+  }
 }
 
 function createUsefulBtn() {
   const li = document.createElement("li");
   const content = `
   <div class="float-left">
-    <button id="${UF_BTN_ID}" class="btn-sm btn" aria-describedby="${UF_TIP_ID}">
+    <a id="${UF_BTN_ID}" class="btn-sm btn" href="${getRepoUrl()}" target="_blank" rel="noopener noreferrer" aria-describedby="${UF_TIP_ID}">
       <svg aria-hidden="true" height="16" viewBox="0 0 16 16" version="1.1" width="16" data-view-component="true" class="octicon octicon-search">
           <path d="M10.68 11.74a6 6 0 0 1-7.922-8.982 6 6 0 0 1 8.982 7.922l3.04 3.04a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215ZM11.5 7a4.499 4.499 0 1 0-8.997 0A4.499 4.499 0 0 0 11.5 7Z"></path>
       </svg>
       Useful
-    </button>
+    </a>
     <tool-tip for="${UF_BTN_ID}" id="${UF_TIP_ID}" popover="manual" class="position-absolute sr-only">
       Search for useful forks in a new tab
     </tool-tip>
