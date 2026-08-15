@@ -98,3 +98,141 @@ table {
     padding-top: 0 !important; /* settings popup fields misaligned */
   }
 }
+
+/* Dark Theme – Fix #34
+   Supports both OS preference and manual toggle via body.dark */
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+  }
+  body {
+    background: #121212 !important;
+    color: #e0e0e0 !important;
+  }
+  .footer {
+    background-color: #121212 !important;
+    color: #e0e0e0 !important;
+  }
+  #useful_forks_msg.box.has-background-info-light {
+    background-color: #1a2a3a !important;
+    color: #cde4ff !important;
+    border-color: #2a4a6a !important;
+  }
+  .title, h1, strong, b {
+    color: #f0f0f0 !important;
+  }
+  a {
+    color: #8ab4f8;
+  }
+  a:hover {
+    color: #a8c7fa;
+  }
+  table {
+    background-color: #1e1e1e !important;
+    color: #e0e0e0 !important;
+  }
+  tr:nth-child(odd) {
+    background-color: #2a2a2a !important;
+  }
+  tr:hover {
+    background-color: #3a3a3a !important;
+  }
+  th {
+    background-color: #1e1e1e !important;
+    color: #e0e0e0 !important;
+    border-color: #444 !important;
+  }
+  .input, .textarea, .select select {
+    background-color: #2b2b2b !important;
+    color: #e0e0e0 !important;
+    border-color: #444 !important;
+  }
+  .input::placeholder {
+    color: #888 !important;
+  }
+  .modal-card-head, .modal-card-body, .modal-card-foot {
+    background-color: #1e1e1e !important;
+    color: #e0e0e0 !important;
+  }
+  .modal-card-title {
+    color: #e0e0e0 !important;
+  }
+  .button.is-dark.is-outlined {
+    border-color: #888 !important;
+    color: #e0e0e0 !important;
+  }
+  .button.is-dark.is-outlined:hover {
+    background-color: #333 !important;
+  }
+  #button-group {
+    background: transparent !important;
+  }
+  .badge {
+    filter: brightness(0.9);
+  }
+}
+
+/* Manual toggle: body.dark class mirrors prefers-color-scheme */
+body.dark {
+  background: #121212 !important;
+  color: #e0e0e0 !important;
+}
+body.dark .footer {
+  background-color: #121212 !important;
+  color: #e0e0e0 !important;
+}
+body.dark #useful_forks_msg.box.has-background-info-light {
+  background-color: #1a2a3a !important;
+  color: #cde4ff !important;
+  border-color: #2a4a6a !important;
+}
+body.dark .title,
+body.dark h1,
+body.dark strong,
+body.dark b {
+  color: #f0f0f0 !important;
+}
+body.dark a {
+  color: #8ab4f8;
+}
+body.dark a:hover {
+  color: #a8c7fa;
+}
+body.dark table {
+  background-color: #1e1e1e !important;
+  color: #e0e0e0 !important;
+}
+body.dark tr:nth-child(odd) {
+  background-color: #2a2a2a !important;
+}
+body.dark tr:hover {
+  background-color: #3a3a3a !important;
+}
+body.dark th {
+  background-color: #1e1e1e !important;
+  color: #e0e0e0 !important;
+  border-color: #444 !important;
+}
+body.dark th.sortable:hover {
+  background-color: #333 !important;
+  color: #fff !important;
+}
+body.dark th.sortable.is-sorted {
+  background-color: #2e2e2e !important;
+}
+body.dark .input,
+body.dark .textarea,
+body.dark .select select {
+  background-color: #2b2b2b !important;
+  color: #e0e0e0 !important;
+  border-color: #444 !important;
+}
+body.dark .modal-card-head,
+body.dark .modal-card-body,
+body.dark .modal-card-foot {
+  background-color: #1e1e1e !important;
+  color: #e0e0e0 !important;
+}
+body.dark .modal-card-title {
+  color: #e0e0e0 !important;
+}
