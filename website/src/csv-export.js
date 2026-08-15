@@ -11,14 +11,38 @@ function displayCsvExportBtn() {
   if (!UF_SETTINGS_CSV_DISPLAY) {
     return;
   }
+  // avoid duplicate
+  if (getJqId_$(EXPORT_DIV_ID).length > 0) {
+    return;
+  }
   JQ_ID_HEADER.append(EXPORT_DIV);
   setClickEvent();
 }
 function hideExportCsvBtn() {
-  if (!UF_SETTINGS_CSV_DISPLAY) {
-    return;
-  }
+  // Always attempt to remove regardless of setting – allows dynamic toggle #60
+  // Original guard prevented removal when setting disabled, leaving stale button.
   getJqId_$(EXPORT_DIV_ID).remove();
+}
+function forceHideCsvBtn() {
+  getJqId_$(EXPORT_DIV_ID).remove();
+}
+function updateCsvBtnVisibility() {
+  // central helper for #60: respects setting and table emptiness
+  try {
+    const empty = (typeof tableIsEmpty === 'function' ? tableIsEmpty() : (getTableBody && getTableBody().children().length === 0));
+    if (UF_SETTINGS_CSV_DISPLAY && !empty) {
+      displayCsvExportBtn();
+    } else {
+      hideExportCsvBtn();
+    }
+  } catch(e) {
+    // fallback: just toggle based on setting alone
+    if (UF_SETTINGS_CSV_DISPLAY) {
+      displayCsvExportBtn();
+    } else {
+      hideExportCsvBtn();
+    }
+  }
 }
 function setClickEvent() {
   EXPORT_BTN.on('click', function (event) {
