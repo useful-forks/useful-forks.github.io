@@ -30,6 +30,18 @@ let TOTAL_API_CALLS_COUNTER;
 let ONGOING_REQUESTS_COUNTER = 0;
 let IS_USEFUL_FORK; // function that determines if a fork is useful or not
 
+// Root repo tracking for accurate second-order fork diff (Fix #74, #18)
+// GitHub's fork network is recursive: request_fork_page is called for forks-of-forks
+// with currFork.owner/login as the "user,repo" base. Previously compareCommits used
+// that immediate parent as base, which made second-order forks appear to have the
+// same ahead/behind numbers as if they were immediate forks (e.g., teamgram/teamgram-server -> fedigram).
+// Issue #18 / #74 expects the diff to relate to the queried source repo, not the intermediate parent.
+// We store the original queried repo globally and compare second-order forks against it.
+// If that compare fails (no common history, 404, detached network), we fallback to parent.
+let ORIGINAL_OWNER = null;
+let ORIGINAL_REPO = null;
+let ORIGINAL_DEFAULT_BRANCH = null;
+
 
 /** Used to reset the state for a brand new query. */
 function clear_old_data() {
@@ -46,6 +58,9 @@ function clear_old_data() {
   TOTAL_API_CALLS_COUNTER = 0;
   ONGOING_REQUESTS_COUNTER = 0;
   shouldTriggerQueryOnTokenSave = false;
+  ORIGINAL_OWNER = null;
+  ORIGINAL_REPO = null;
+  ORIGINAL_DEFAULT_BRANCH = null;
 }
 
 function getOnlyDate(full) {
@@ -61,11 +76,14 @@ function badge_width(number) {
 }
 
 /** Credits to https://shields.io/ */
-function ahead_badge(amount, url) {
+function ahead_badge(amount, url, comparedAgainstOriginal = false) {
+  const title = comparedAgainstOriginal
+    ? "How far ahead this fork's default branch is compared to the queried repository's default branch (second-order fork)"
+    : "How far ahead this fork's default branch is compared to its parent's default branch";
   return `
   <a href="${url}" target="_blank" rel="noopener noreferrer">
     <svg xmlns="http://www.w3.org/2000/svg" width="88" height="24" role="img">
-      <title>How far ahead this fork's default branch is compared to its parent's default branch</title>
+      <title>${title}</title>
       <linearGradient id="s" x2="0" y2="100%"><stop offset="0" stop-color="#fff" stop-opacity=".7"/><stop offset=".1" stop-color="#aaa" stop-opacity=".1"/><stop offset=".9" stop-color="#000" stop-opacity=".3"/><stop offset="1" stop-color="#000" stop-opacity=".5"/></linearGradient><clipPath id="r"><rect width="88" height="18" rx="4" fill="#fff"/></clipPath><g clip-path="url(#r)"><rect width="43" height="18" fill="#555"/><rect x="43" width="45" height="18" fill="#007ec6"/><rect width="88" height="18" fill="url(#s)"/></g>
       <g fill="#fff" text-anchor="middle" font-family="Verdana,Geneva,DejaVu Sans,sans-serif" text-rendering="geometricPrecision" font-size="110">
         <text aria-hidden="true" x="225" y="140" fill="#010101" fill-opacity=".3" transform="scale(.1)" textLength="330">ahead</text>
@@ -77,12 +95,15 @@ function ahead_badge(amount, url) {
 }
 
 /** Credits to https://shields.io/ */
-function behind_badge(amount, url) {
+function behind_badge(amount, url, comparedAgainstOriginal = false) {
   const color = amount === 0 ? '#4c1' : '#007ec6'; // green only when not behind, blue otherwise
+  const title = comparedAgainstOriginal
+    ? "How far behind this fork's default branch is compared to the queried repository's default branch (second-order fork)"
+    : "How far behind this fork's default branch is compared to its parent's default branch";
   return `
   <a href="${url}" target="_blank" rel="noopener noreferrer">
     <svg xmlns="http://www.w3.org/2000/svg" width="92" height="24" role="img">
-      <title>How far behind this fork's default branch is compared to its parent's default branch</title>
+      <title>${title}</title>
       <linearGradient id="s" x2="0" y2="100%"><stop offset="0" stop-color="#fff" stop-opacity=".7"/><stop offset=".1" stop-color="#aaa" stop-opacity=".1"/><stop offset=".9" stop-color="#000" stop-opacity=".3"/><stop offset="1" stop-color="#000" stop-opacity=".5"/></linearGradient><clipPath id="r"><rect width="92" height="18" rx="4" fill="#fff"/></clipPath><g clip-path="url(#r)"><rect width="47" height="18" fill="#555"/>
       <rect x="47" width="45" height="18" fill="${color}"/><rect width="92" height="18" fill="url(#s)"/></g>
       <g fill="#fff" text-anchor="middle" font-family="Verdana,Geneva,DejaVu Sans,sans-serif" text-rendering="geometricPrecision" font-size="110">
@@ -231,6 +252,10 @@ function update_table_data(responseData, user, repo, parentDefaultBranch) {
     removeProgressBar();
   }
 
+  // Determine if forks in this page are second-order (or deeper) relative to original query.
+  // If ORIGINAL is not yet set (edge), treat as first-order.
+  const isSecondOrderContext = ORIGINAL_OWNER && ORIGINAL_REPO && (user !== ORIGINAL_OWNER || repo !== ORIGINAL_REPO);
+
   for (const currFork of responseData) {
     if (RATE_LIMIT_EXCEEDED) // we can skip everything below because they are only requests
       continue;
@@ -242,13 +267,36 @@ function update_table_data(responseData, user, repo, parentDefaultBranch) {
       'name': currFork.full_name,
       'stars': currFork.stargazers_count,
       'forks': currFork.forks_count,
+      'is_second_order': isSecondOrderContext,
     };
 
-    /* Commits diff data (ahead/behind). */
+    /* Commits diff data (ahead/behind). 
+     * Fix #74 & #18: For second-order forks, compare against ORIGINAL repo's default branch
+     * instead of immediate parent to avoid showing misleading numbers identical to immediate forks.
+     * Example: teamgram/teamgram-server -> fedigram/fedigram-server numbers looked like immediate fork
+     * but were second-order. Likewise CouchPotato second-order forks were marked behind=0 when they
+     * were behind root by 3611.
+     * We track ORIGINAL_OWNER/REPO/DEFAULT_BRANCH in initial_request(). If we're in a second-order
+     * context we compare against original; otherwise we compare against immediate parent.
+     * On failure (no common history, detached fork, 404) we fallback to parent comparison.
+     */
+    let compareOwner, compareRepo, compareBase, compareAgainstOriginal;
+    if (isSecondOrderContext && ORIGINAL_DEFAULT_BRANCH) {
+      compareOwner = ORIGINAL_OWNER;
+      compareRepo = ORIGINAL_REPO;
+      compareBase = ORIGINAL_DEFAULT_BRANCH;
+      compareAgainstOriginal = true;
+    } else {
+      compareOwner = user;
+      compareRepo = repo;
+      compareBase = parentDefaultBranch;
+      compareAgainstOriginal = false;
+    }
+
     const requestPromise = () => octokit.repos.compareCommits({
-      owner: user,
-      repo: repo,
-      base: parentDefaultBranch,
+      owner: compareOwner,
+      repo: compareRepo,
+      base: compareBase,
       head: `${extract_username_from_fork(currFork.full_name)}:${currFork.default_branch}`
     });
     const onSuccess = (responseHeaders, responseData) => {
@@ -258,17 +306,45 @@ function update_table_data(responseData, user, repo, parentDefaultBranch) {
         datum['behind_by'] = responseData.behind_by;
         datum['behind_url'] = getBehindUrl(responseData.html_url);
         datum['pushed_at'] = getOnlyDate(currFork.pushed_at);
+        datum['compared_against_original'] = compareAgainstOriginal;
         TABLE_DATA.push(datum);
         if (TABLE_DATA.length > 1) showFilterContainer();
         
         update_table_trying_use_filter();
       }
     };
-    const onFailure = () => { }; // do nothing
+    const onFailure = () => {
+      // Fallback: if we attempted original comparison and failed, retry against immediate parent.
+      if (compareAgainstOriginal) {
+        const fallbackPromise = () => octokit.repos.compareCommits({
+          owner: user,
+          repo: repo,
+          base: parentDefaultBranch,
+          head: `${extract_username_from_fork(currFork.full_name)}:${currFork.default_branch}`
+        });
+        const onFallbackSuccess = (rh, rd) => {
+          if (rd.total_commits > 0) {
+            datum['ahead_by'] = rd.ahead_by;
+            datum['ahead_url'] = rd.html_url;
+            datum['behind_by'] = rd.behind_by;
+            datum['behind_url'] = getBehindUrl(rd.html_url);
+            datum['pushed_at'] = getOnlyDate(currFork.pushed_at);
+            datum['compared_against_original'] = false;
+            TABLE_DATA.push(datum);
+            if (TABLE_DATA.length > 1) showFilterContainer();
+            update_table_trying_use_filter();
+          }
+        };
+        const onFallbackFailure = () => { }; // do nothing
+        send(fallbackPromise, onFallbackSuccess, onFallbackFailure);
+      }
+      // else: do nothing (original parent compare failed)
+    };
     send(requestPromise, onSuccess, onFailure);
 
     /* Forks of forks. */
     if (currFork.forks_count > 0) {
+      // Propagate original context via globals; third-order forks still compare against root.
       request_fork_page(1, currFork.owner.login, currFork.name, currFork.default_branch);
     }
   }
@@ -299,7 +375,7 @@ function update_table(data) {
   clearTable();
   let table_body = getTableBody();
   for (const currFork of data) {
-    const { name, stars, forks, ahead_by, ahead_url, behind_by, behind_url, pushed_at } = currFork;
+    const { name, stars, forks, ahead_by, ahead_url, behind_by, behind_url, pushed_at, compared_against_original } = currFork;
     const date_txt = compareDates(pushed_at, getDateCol(pushed_at));
 
     const NEW_ROW = $('<tr>', { id: extract_username_from_fork(name), class: "useful_forks_repo" });
@@ -308,9 +384,9 @@ function update_table(data) {
       $('<td>').html(UF_TABLE_SEPARATOR + getStarCol(stars)).attr("value", stars),
       $('<td>').html(UF_TABLE_SEPARATOR + getForkCol(forks)).attr("value", forks),
       $('<td>').html(UF_TABLE_SEPARATOR),
-      $('<td>', { class: "uf_badge" }).html(ahead_badge(ahead_by, ahead_url)).attr("value", ahead_by),
+      $('<td>', { class: "uf_badge" }).html(ahead_badge(ahead_by, ahead_url, !!compared_against_original)).attr("value", ahead_by),
       $('<td>').html(UF_TABLE_SEPARATOR),
-      $('<td>', { class: "uf_badge" }).html(behind_badge(behind_by, behind_url)).attr("value", behind_by),
+      $('<td>', { class: "uf_badge" }).html(behind_badge(behind_by, behind_url, !!compared_against_original)).attr("value", behind_by),
       $('<td>').html(UF_TABLE_SEPARATOR + date_txt).attr("value", pushed_at)
     );
     table_body.append(NEW_ROW);
@@ -412,6 +488,11 @@ function request_fork_page(page_number, user, repo, defaultBranch) {
 
 /** Updates header with Queried Repo info, and initiates forks scan. */
 function initial_request(user, repo) {
+  // Store original query for second-order diff fix (#74, #18)
+  ORIGINAL_OWNER = user;
+  ORIGINAL_REPO = repo;
+  // ORIGINAL_DEFAULT_BRANCH will be set once we know it from the repo GET response
+
   const requestPromise = () => octokit.repos.get({
     owner: user,
     repo: repo
@@ -423,6 +504,7 @@ function initial_request(user, repo) {
     const onlyDate = getOnlyDate(responseData.pushed_at);
     REPO_DATE = new Date(onlyDate);
     TOTAL_FORKS = responseData.forks_count;
+    ORIGINAL_DEFAULT_BRANCH = responseData.default_branch;
 
     let html_txt = '<b>Queried repository</b>:&nbsp;&nbsp;&nbsp;';
     html_txt += getRepoCol(responseData.full_name, true);
