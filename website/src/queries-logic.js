@@ -292,82 +292,151 @@ function update_table_data(responseData, user, repo, parentDefaultBranch) {
   }
 }
 
-/** Fix #33 & #38: Check non-default branches for useful commits. */
-function checkOtherBranchesForUsefulCommits(currFork, datum, user, repo, parentDefaultBranch) {
-  // List branches of the fork (up to 100, paginated handling minimal – most repos <100 branches)
-  const listPromise = () => octokit.repos.listBranches({
-    owner: currFork.owner.login,
-    repo: currFork.name,
-    per_page: 100,
-    page: 1
-  });
-
-  const onListSuccess = (headers, branchesData) => {
-    if (isEmpty(branchesData)) return;
-
-    let allowedList = null;
-    if (typeof getAllowedBranchesList === 'function') {
-      allowedList = getAllowedBranchesList(); // null = allow all, or array lowercased
+/** Fix #33 & #38: Check non-default branches for useful commits.
+ * Low-risk hardening: cap 5 branches per fork, concurrency 3, full pagination recursion,
+ * clone datum per branch, encode branch, wildcard filter lower-case, safe TDZ.
+ */
+const BRANCH_MAX_PER_FORK = 5;
+let BRANCH_ACTIVE = 0;
+const BRANCH_QUEUE = [];
+function encodeBranchName(name) {
+  // preserve slashes, encode each segment
+  return name.split('/').map(s => encodeURIComponent(s)).join('/');
+}
+function isBranchCheckEnabledSafe() {
+  try {
+    // avoid TDZ – try window/global first
+    if (typeof UF_SETTINGS_CHECK_ALL_BRANCHES !== 'undefined') return !!UF_SETTINGS_CHECK_ALL_BRANCHES;
+  } catch (e) {
+    // TDZ => settings not ready
+    try {
+      if (typeof window !== 'undefined' && typeof window.UF_SETTINGS_CHECK_ALL_BRANCHES !== 'undefined') return !!window.UF_SETTINGS_CHECK_ALL_BRANCHES;
+    } catch {}
+    return false;
+  }
+  return false;
+}
+function matchesAllowedList(branchLower, allowedList) {
+  // allowedList already lowercased trimmed, may contain wildcards * prefix/suffix
+  if (!allowedList) return true;
+  const b = branchLower.toLowerCase();
+  for (const pat of allowedList) {
+    if (!pat) continue;
+    if (pat.includes('*')) {
+      // simple wildcard: convert to regex
+      const reStr = '^' + pat.split('*').map(s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('.*') + '$';
+      try { if (new RegExp(reStr).test(b)) return true; } catch { /* invalid pattern skip */ }
+    } else {
+      if (b === pat) return true;
+      // also support partial contains? strict equality primary
     }
+  }
+  return false;
+}
+function scheduleBranchTask(taskFn) {
+  if (BRANCH_ACTIVE < 3) {
+    BRANCH_ACTIVE++;
+    taskFn(() => {
+      BRANCH_ACTIVE--;
+      if (BRANCH_QUEUE.length) {
+        const next = BRANCH_QUEUE.shift();
+        scheduleBranchTask(next);
+      }
+    });
+  } else {
+    BRANCH_QUEUE.push(taskFn);
+  }
+}
+function checkOtherBranchesForUsefulCommits(currFork, datum, user, repo, parentDefaultBranch) {
+  if (!isBranchCheckEnabledSafe()) return;
 
-    // Optionally filter out empty allowedList case? null means all.
-    for (const br of branchesData) {
-      if (br.name === currFork.default_branch) continue; // already checked
+  let branchesChecked = 0;
+  const seenBranches = new Set();
 
-      if (allowedList !== null) {
-        // Fix #38: allow filter branches – only check selected branches
-        if (!allowedList.includes(br.name.toLowerCase())) continue;
+  function listBranchesPage(pageNum) {
+    const listPromise = () => octokit.repos.listBranches({
+      owner: currFork.owner.login,
+      repo: currFork.name,
+      per_page: 100,
+      page: pageNum
+    });
+
+    const onListSuccess = (headers, branchesData) => {
+      if (isEmpty(branchesData)) return;
+
+      let allowedList = null;
+      if (typeof getAllowedBranchesList === 'function') {
+        allowedList = getAllowedBranchesList(); // null = allow all, or array lowercased
       }
 
-      // For each eligible branch, compare against parent default
-      const compPromise = () => octokit.repos.compareCommits({
-        owner: user,
-        repo: repo,
-        base: parentDefaultBranch,
-        head: `${extract_username_from_fork(currFork.full_name)}:${br.name}`
-      });
+      for (const br of branchesData) {
+        if (branchesChecked >= BRANCH_MAX_PER_FORK) break; // cap 5
+        if (!br || !br.name) continue;
+        if (br.name === currFork.default_branch) continue;
+        const brLower = br.name.toLowerCase();
+        if (seenBranches.has(brLower)) continue;
+        seenBranches.add(brLower);
 
-      const onCompSuccess = (h, d) => {
-        if (d.total_commits > 0 && d.ahead_by > 0) {
-          // Avoid duplicate push if already added via another branch race
-          if (is_duplicate_repo(currFork.full_name)) return;
-
-          // If datum already has ahead_by from previous branch, keep max ahead?
-          // Use current branch's data as it is useful.
-          datum['ahead_by'] = d.ahead_by;
-          datum['ahead_url'] = d.html_url;
-          datum['behind_by'] = d.behind_by;
-          datum['behind_url'] = getBehindUrl(d.html_url);
-          datum['pushed_at'] = getOnlyDate(currFork.pushed_at);
-          // Annotate branch name in pushed data for debugging? Store as extra but not displayed.
-          datum['checked_branch'] = br.name;
-
-          TABLE_DATA.push({...datum}); // clone to avoid mutation issues
-          if (TABLE_DATA.length > 1) showFilterContainer();
-          update_table_trying_use_filter();
+        if (allowedList !== null) {
+          if (!matchesAllowedList(brLower, allowedList)) continue;
         }
-      };
-      const onCompFailure = () => { /* ignore branch not found etc */ };
-      send(compPromise, onCompSuccess, onCompFailure);
-    }
 
-    // Pagination for branches >100 (rare): check Link header for next
-    const link_header = headers["link"] || headers["Link"] || headers.link;
-    if (link_header && (link_header.includes('rel="next"'))) {
-      // Simple handling: fetch page 2 recursively (most repos won't need >2 pages)
-      const nextPagePromise = () => octokit.repos.listBranches({
-        owner: currFork.owner.login,
-        repo: currFork.name,
-        per_page: 100,
-        page: 2
-      });
-      // reuse same onListSuccess for page2 data (without further pagination chaining for brevity)
-      send(nextPagePromise, onListSuccess, () => {});
-    }
-  };
+        if (branchesChecked >= BRANCH_MAX_PER_FORK) break;
+        branchesChecked++;
 
-  const onListFailure = () => { /* ignore */ };
-  send(listPromise, onListSuccess, onListFailure);
+        // Clone datum early to avoid race
+        const branchDatum = { ...datum };
+
+        const login = extract_username_from_fork(currFork.full_name);
+        const encodedBranch = encodeBranchName(br.name);
+        const headRef = `${login}:${encodedBranch}`;
+
+        const compTask = (done) => {
+          const compPromise = () => octokit.repos.compareCommits({
+            owner: user,
+            repo: repo,
+            base: parentDefaultBranch,
+            head: headRef
+          });
+
+          const onCompSuccess = (h, d) => {
+            if (d.total_commits > 0 && d.ahead_by > 0) {
+              if (is_duplicate_repo(currFork.full_name)) { done(); return; }
+              branchDatum['ahead_by'] = d.ahead_by;
+              branchDatum['ahead_url'] = d.html_url;
+              branchDatum['behind_by'] = d.behind_by;
+              branchDatum['behind_url'] = getBehindUrl(d.html_url);
+              branchDatum['pushed_at'] = getOnlyDate(currFork.pushed_at);
+              branchDatum['checked_branch'] = br.name;
+
+              TABLE_DATA.push({ ...branchDatum });
+              if (TABLE_DATA.length > 1) showFilterContainer();
+              update_table_trying_use_filter();
+            }
+            done();
+          };
+          const onCompFailure = () => { done(); };
+          send(compPromise, onCompSuccess, onCompFailure);
+        };
+
+        scheduleBranchTask(compTask);
+      }
+
+      // Full pagination recursion, not just 2 pages
+      const link_header = headers["link"] || headers["Link"] || headers.link;
+      if (link_header && (link_header.includes('rel="next"'))) {
+        // Continue only if we still need more branches and under cap handling for remaining pages still worth scanning
+        if (branchesChecked < BRANCH_MAX_PER_FORK) {
+          listBranchesPage(pageNum + 1);
+        }
+      }
+    };
+
+    const onListFailure = () => { /* ignore */ };
+    send(listPromise, onListSuccess, onListFailure);
+  }
+
+  listBranchesPage(1);
 }
 
 function update_filter_appearance() {
