@@ -23,12 +23,16 @@ const mapTable = {
 
 /* Variables that should be cleared for every new query (defaults are set in "clear_old_data"). */
 let TABLE_DATA = [];
+let TABLE_DATA_GIST = [];
 let REPO_DATE;
 let TOTAL_FORKS;
 let RATE_LIMIT_EXCEEDED;
 let TOTAL_API_CALLS_COUNTER;
 let ONGOING_REQUESTS_COUNTER = 0;
 let IS_USEFUL_FORK; // function that determines if a fork is useful or not
+let GIST_DONE = false;
+let SEEN_GISTS = new Set();
+const GIST_ID_REGEX = /^[a-f0-9]{5,32}$/i;
 
 
 /** Used to reset the state for a brand new query. */
@@ -37,6 +41,9 @@ function clear_old_data() {
   clearMsg();
   removeProgressBar();
   TABLE_DATA = []; // clear the table data
+  TABLE_DATA_GIST = [];
+  SEEN_GISTS = new Set();
+  GIST_DONE = false;
   clearTable(); // clear the table DOM
   setApiCallsLabel(0);
   hideExportCsvBtn();
@@ -100,6 +107,189 @@ function getBehindUrl(aheadUrl) {
   const behind_suffix = split[split.length - 1].split('...').reverse().join('...');
   split[split.length - 1] = behind_suffix;
   return split.join('/');
+}
+
+/* --- Feature #69: Useful gists support --- */
+function validateGistId(gist_id) {
+  if (!gist_id) return false;
+  return GIST_ID_REGEX.test(gist_id);
+}
+function parse_gist_query(queryString) {
+  // Detect gist URLs via gist.github.com host, and also support direct gist id via ?gist=
+  // If queryString is just a gist id (hex), support that as well when called via ?gist= param outside
+  if (validateGistId(queryString.trim())) {
+    return { gist_id: queryString.trim(), user: null };
+  }
+  let url;
+  try {
+    url = new URL(queryString);
+  } catch {
+    return null;
+  }
+  if (!url.hostname.includes('gist.github.com')) {
+    return null;
+  }
+  const values = url.pathname.split('/').filter(s => s.length > 0);
+  if (values.length === 0) return null;
+  // Patterns: /<gist_id> or /<user>/<gist_id> or /<user>/<gist_id>/revisions
+  let gist_id;
+  let user = null;
+  if (values.length === 1) {
+    gist_id = values[0];
+  } else {
+    // First segment is username, second is gist_id
+    user = values[0];
+    gist_id = values[1];
+  }
+  // Validate gist_id strictly hex 5-32 chars
+  if (!validateGistId(gist_id)) return null;
+  return { gist_id, user };
+}
+
+function buildGistUrl(gist_id_or_full) {
+  // gist_id may be full id; url is https://gist.github.com/<id>
+  // If passed owner/id format, extract id part
+  const id = gist_id_or_full.includes('/') ? gist_id_or_full.split('/')[1] : gist_id_or_full;
+  return `https://gist.github.com/${id}`;
+}
+
+function getGistCol(gist_id, owner_login) {
+  const display = owner_login ? `${owner_login}/${gist_id}` : gist_id;
+  return `${SVG_FORK} <a href="${buildGistUrl(gist_id)}" target="_blank" rel="noopener noreferrer">${display}</a>`;
+}
+
+function update_table_gist(data) {
+  clearTable();
+  let table_body = getTableBody();
+  for (const curr of data) {
+    const { gist_id, owner_login, files_count, updated_at, html_url } = curr;
+    const date_txt = compareDates(updated_at, getDateCol(updated_at));
+    const NEW_ROW = $('<tr>', { id: owner_login || gist_id, class: "useful_forks_gist" });
+    NEW_ROW.append(
+      $('<td>').html(getGistCol(gist_id, owner_login)).attr("value", gist_id),
+      $('<td>').html(UF_TABLE_SEPARATOR + SVG_FORK + ' × ' + files_count).attr("value", files_count),
+      $('<td>').html(UF_TABLE_SEPARATOR + date_txt).attr("value", updated_at)
+    );
+    table_body.append(NEW_ROW);
+  }
+  sortTable();
+}
+
+function update_table_data_gist(responseData, original_gist_id) {
+  if (isEmpty(responseData)) return;
+  if (!RATE_LIMIT_EXCEEDED) {
+    clearNonErrorMsg();
+    removeProgressBar();
+  }
+  for (const currFork of responseData) {
+    if (RATE_LIMIT_EXCEEDED) continue;
+    // Isolate gists dedup via SEEN_GISTS, lower-case normalized if hex is case-insensitive
+    const gid = (currFork.id || '').toLowerCase();
+    if (SEEN_GISTS.has(gid)) continue;
+    SEEN_GISTS.add(gid);
+
+    let datum = {
+      'name': currFork.id, // for duplicate detection
+      'gist_id': currFork.id,
+      'owner_login': currFork.owner ? currFork.owner.login : 'anonymous',
+      'files_count': currFork.files ? Object.keys(currFork.files).length : 0,
+      'updated_at': getOnlyDate(currFork.updated_at || currFork.created_at),
+      'html_url': currFork.html_url || buildGistUrl(currFork.id),
+      'is_gist': true
+    };
+    TABLE_DATA_GIST.push(datum);
+    // Keep legacy TABLE_DATA for compatibility but also separate
+    TABLE_DATA.push(datum);
+    if (TABLE_DATA_GIST.length > 1) showFilterContainer();
+    // Reuse filter attempt but gist table is separate
+    if (typeof IS_USEFUL_FORK === 'function') {
+      // For gists, filter may not apply; we still render via gist table
+      update_table_gist(TABLE_DATA_GIST.filter(IS_USEFUL_FORK));
+    } else {
+      update_table_gist(TABLE_DATA_GIST);
+    }
+  }
+}
+
+function request_gist_fork_page(page_number, gist_id) {
+  if (RATE_LIMIT_EXCEEDED) return;
+
+  const requestPromise = () => octokit.gists.listForks({
+    gist_id: gist_id,
+    per_page: 100,
+    page: page_number
+  });
+  const onSuccess = (responseHeaders, responseData) => {
+    removeProgressBar();
+    if (isEmpty(responseData)) {
+      if (TABLE_DATA_GIST.length === 0) {
+        setMsg(UF_MSG_NO_FORKS);
+        enableQueryFields();
+      } else {
+        GIST_DONE = true;
+        if (allRequestsAreDone()) {
+          clearNonErrorMsg();
+          removeProgressBar();
+          updateBasedOnTable();
+          enableQueryFields();
+        }
+      }
+      return;
+    }
+    sortTable();
+    const link_header = responseHeaders["link"] || responseHeaders["Link"] || responseHeaders.link;
+    if (link_header) {
+      let contains_next_page = link_header.indexOf('>; rel="next"') !== -1 || link_header.includes('rel="next"');
+      if (contains_next_page) {
+        request_gist_fork_page(page_number + 1, gist_id);
+      } else {
+        GIST_DONE = true;
+      }
+    } else {
+      // no link header → single page
+      GIST_DONE = true;
+    }
+    update_table_data_gist(responseData, gist_id);
+    if (allRequestsAreDone() && GIST_DONE) {
+      // For gists, we handle completion separately
+      clearNonErrorMsg();
+      removeProgressBar();
+      updateBasedOnTable();
+      enableQueryFields();
+    }
+  };
+  const onFailure = () => displayConditionalErrorMsg();
+  send(requestPromise, onSuccess, onFailure);
+}
+
+function initial_request_gist(gist_id) {
+  const requestPromise = () => octokit.gists.get({
+    gist_id: gist_id
+  });
+  const onSuccess = (responseHeaders, responseData) => {
+    if (isEmpty(responseData)) return;
+
+    const onlyDate = getOnlyDate(responseData.updated_at || responseData.created_at);
+    REPO_DATE = new Date(onlyDate);
+    // Gist forks count not directly given; we will discover via listForks
+    // Do not touch TOTAL_FORKS – keep separate GIST_DONE flag
+
+    let html_txt = '<b>Queried gist</b>:&nbsp;&nbsp;&nbsp;';
+    const owner = responseData.owner ? responseData.owner.login : 'anonymous';
+    html_txt += `${SVG_FORK} <a href="${responseData.html_url}" target="_blank" rel="noopener noreferrer">${owner}/${gist_id}</a>`;
+    html_txt += UF_TABLE_SEPARATOR + getDateCol(onlyDate);
+    if (responseData.files) {
+      html_txt += UF_TABLE_SEPARATOR + `Files: ${Object.keys(responseData.files).length}`;
+    }
+
+    setHeader(html_txt);
+
+    // Gist forks
+    GIST_DONE = false;
+    request_gist_fork_page(1, gist_id);
+  };
+  const onFailure = () => displayConditionalErrorMsg();
+  send(requestPromise, onSuccess, onFailure);
 }
 
 function getTdValue(rows, index, col) {
@@ -494,11 +684,51 @@ function initiate_search() {
 
   clear_old_data();
 
+  // Support explicit ?gist= param for separate table type
+  let gistParam = null;
+  try {
+    const sp = new URLSearchParams(location.search);
+    gistParam = sp.get('gist');
+  } catch {}
+  if (gistParam && validateGistId(gistParam)) {
+    const gist_id = gistParam.trim();
+    setUpOctokitWithLatestToken();
+    setQuery(`https://gist.github.com/${gist_id}`);
+    setQueryFieldsAsLoading();
+    hideFilterContainer();
+    setMsg(UF_MSG_SCANNING);
+    if (history.replaceState) {
+      history.replaceState({}, document.title, `?gist=${gist_id}`);
+    }
+    try { ga_searchQuery('gist', gist_id); } catch {}
+    initial_request_gist(gist_id);
+    return;
+  }
+
   let queryString = getQueryOrDefault("payne911/PieMenu");
+
+  // Feature #69: detect gist URLs first
+  const gistQuery = parse_gist_query(queryString);
+  if (gistQuery) {
+    const { gist_id } = gistQuery;
+    setUpOctokitWithLatestToken();
+    setQuery(queryString); // keep original gist URL in field for clarity
+    setQueryFieldsAsLoading();
+    hideFilterContainer();
+    setMsg(UF_MSG_SCANNING);
+
+    if (history.replaceState) {
+      history.replaceState({}, document.title, `?gist=${gist_id}`);
+    }
+    ga_searchQuery('gist', gist_id);
+    initial_request_gist(gist_id);
+    return;
+  }
+
   const queryValues = parse_query(queryString);
 
   if (!queryValues) {
-    setMsg('Please enter a valid query: it should contain two strings separated by a "/", or the full URL to a GitHub repo');
+    setMsg('Please enter a valid query: it should contain two strings separated by a "/", or the full URL to a GitHub repo or gist');
     ga_faultyQuery(queryString);
     return; // abort
   }
