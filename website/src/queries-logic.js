@@ -102,17 +102,51 @@ function getBehindUrl(aheadUrl) {
   return split.join('/');
 }
 
-/* Sorting state for column sorting feature #48 */
+/* Sorting state for column sorting feature #48 – fixed bubble-sort -> Array.sort + fragment */
 let SORT_STATE = { column: 1, direction: 'desc' };
+let SORT_DEBOUNCE_TIMER = null;
 
 function getTdRawValue(rows, index, col) {
+  // legacy signature: rows is HTMLCollection, index numeric
+  // also support direct row element overload via second param object check
+  if (rows && rows.getElementsByTagName) {
+    // called as (rowElement, col) – compat shim
+    let td = rows.getElementsByTagName('td').item(index);
+    if (!td) return "";
+    let attr = td.getAttribute("value");
+    return attr === null ? "" : attr;
+  }
   let td = rows.item(index).getElementsByTagName('td').item(col);
   if (!td) return "";
   let attr = td.getAttribute("value");
   return attr === null ? "" : attr;
 }
 
+function getRowValue(row, col) {
+  let td = row.getElementsByTagName('td').item(col);
+  if (!td) return "";
+  let attr = td.getAttribute("value");
+  let raw = attr === null ? "" : attr;
+  if ([1,2,4,6].includes(col)) {
+    let n = Number(raw);
+    return isNaN(n) ? -1 : n;
+  }
+  if (col === 7) {
+    let t = Date.parse(raw);
+    return isNaN(t) ? 0 : t;
+  }
+  if (col === 0) {
+    return raw.toString().toLowerCase();
+  }
+  return raw.toString().toLowerCase();
+}
+
 function getTdValue(rows, index, col) {
+  // support both signatures for backward compat
+  if (rows && rows.length === undefined && rows.getElementsByTagName) {
+    // overload row element case – index is actually col
+    return getRowValue(rows, index);
+  }
   let raw = getTdRawValue(rows, index, col);
   // numeric columns: 1,2,4,6
   if ([1,2,4,6].includes(col)) {
@@ -148,84 +182,111 @@ function sortTable() {
 }
 
 function sortTableColumn(table_id, sortColumn, direction){
-  // allow caller to omit direction -> toggle if same column, else use stored or default
   let tableEl = document.getElementById(table_id);
   if (!tableEl) return;
   let tableData = tableEl.getElementsByTagName('tbody').item(0);
   if (!tableData) return;
-  let rows = tableData.getElementsByTagName('tr');
-  if (rows.length <= 1) return;
+  let rowsCollection = tableData.getElementsByTagName('tr');
+  if (rowsCollection.length <= 1) return;
 
   let dir = direction;
   if (!dir) {
     if (SORT_STATE.column === sortColumn) {
       dir = SORT_STATE.direction === 'desc' ? 'asc' : 'desc';
     } else {
-      // sensible defaults: numeric cols desc, string col asc, date desc
       dir = (sortColumn === 0) ? 'asc' : 'desc';
     }
   }
   SORT_STATE = { column: sortColumn, direction: dir };
 
-  // bubble sort kept simple per original, but now generic and direction-aware
-  for(let i = 0; i < rows.length - 1; i++) {
-    for(let j = 0; j < rows.length - (i + 1); j++) {
-      let a = getTdValue(rows, j, sortColumn);
-      let b = getTdValue(rows, j+1, sortColumn);
-      let cmp = compareForSort(a, b, 'desc'); // we want to know if a should be after b when desc
-      // For descending, we want larger first: if a < b then swap
-      // For ascending, if a > b then swap
-      let shouldSwap = false;
-      if (dir === 'desc') {
-        shouldSwap = (a < b);
-        // special case for string type reverse logic still same because < means alphabetical earlier
-        if (typeof a === 'string' && typeof b === 'string') {
-          shouldSwap = a.localeCompare(b) < 0;
-        }
-      } else {
-        shouldSwap = (a > b);
-        if (typeof a === 'string' && typeof b === 'string') {
-          shouldSwap = a.localeCompare(b) > 0;
-        }
-      }
-      // NaN handling already mapped; keep generic also for numbers via compareForSort fallback for edge
-      if (shouldSwap) {
-        tableData.insertBefore(rows.item(j+1), rows.item(j));
-      }
+  // O(n log n) stable sort with DocumentFragment – fixes O(n²) freeze + live HTMLCollection bug
+  let rows = Array.from(rowsCollection);
+  rows.sort((rowA, rowB) => {
+    let a = getRowValue(rowA, sortColumn);
+    let b = getRowValue(rowB, sortColumn);
+    let cmp = 0;
+    if (typeof a === 'string' && typeof b === 'string') {
+      cmp = a.localeCompare(b);
+    } else {
+      if (a < b) cmp = -1;
+      else if (a > b) cmp = 1;
+      else cmp = 0;
     }
-  }
+    if (cmp !== 0) {
+      return dir === 'desc' ? -cmp : cmp;
+    }
+    // secondary repo key for stable deterministic ordering
+    let aRepo = getRowValue(rowA, 0);
+    let bRepo = getRowValue(rowB, 0);
+    // aRepo/bRepo already lowercased via getRowValue; fallback to attr
+    if (typeof aRepo === 'string' && typeof bRepo === 'string') {
+      let sec = aRepo.localeCompare(bRepo);
+      return sec;
+    }
+    return 0;
+  });
+
+  // re-append in fragment – single DOM operation
+  let frag = document.createDocumentFragment();
+  rows.forEach(r => frag.appendChild(r));
+  tableData.appendChild(frag);
+
   updateSortIndicators(sortColumn, dir);
 }
 
 function updateSortIndicators(col, dir) {
-  // visual cue on header: append ▲ / ▼
   try {
     let $ths = $('#' + UF_ID_TABLE + ' thead th');
     $ths.each(function() {
       let $th = $(this);
       let c = parseInt($th.attr('data-col'));
-      let baseText = $th.attr('data-base') || $th.text().replace(/ [▲▼]/g,'').trim();
-      if (!$th.attr('data-base')) $th.attr('data-base', baseText);
+      let baseText = $th.attr('data-base');
+      if (!baseText) {
+        // recover base without arrows – guard against accumulated ▼▼
+        baseText = $th.text().replace(/[\s▲▼]+$/g,'').trim();
+        $th.attr('data-base', baseText);
+      }
       if (c === col && !isNaN(c) && [0,1,2,4,6,7].includes(c)) {
         $th.text(baseText + (dir === 'desc' ? ' ▼' : ' ▲'));
         $th.addClass('is-sorted');
+        $th.attr('aria-sort', dir === 'desc' ? 'descending' : 'ascending');
+        $th.attr('tabindex', '0');
+        $th.attr('role', 'columnheader');
       } else {
         if ([0,1,2,4,6,7].includes(c)) {
           $th.text(baseText);
           $th.removeClass('is-sorted');
+          $th.removeAttr('aria-sort');
+          $th.attr('tabindex', '0');
+          $th.attr('role', 'columnheader');
         }
       }
     });
-  } catch(e) { /* jQuery may not be ready in some contexts */ }
+  } catch(e) {}
 }
 
 function setupSortableHeaders() {
-  // bind click handlers to thead th.sortable
   try {
-    $('#' + UF_ID_TABLE + ' thead th.sortable').off('click.sortable').on('click.sortable', function() {
+    let $headers = $('#' + UF_ID_TABLE + ' thead th.sortable');
+    $headers.attr('tabindex','0').attr('role','columnheader').attr('aria-sort', function(){
+      let c = parseInt($(this).attr('data-col'));
+      return (c === SORT_STATE.column) ? (SORT_STATE.direction === 'desc' ? 'descending' : 'ascending') : null;
+    });
+
+    $headers.off('click.sortable keydown.sortable').on('click.sortable', function(e){
       let col = parseInt($(this).attr('data-col'));
       if (isNaN(col)) return;
-      sortTableColumn(UF_ID_TABLE, col);
+      // debounce rapid clicks 100ms
+      clearTimeout(SORT_DEBOUNCE_TIMER);
+      SORT_DEBOUNCE_TIMER = setTimeout(() => sortTableColumn(UF_ID_TABLE, col), 80);
+    }).on('keydown.sortable', function(e){
+      if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') {
+        e.preventDefault();
+        let col = parseInt($(this).attr('data-col'));
+        if (isNaN(col)) return;
+        clearTimeout(SORT_DEBOUNCE_TIMER);
+        SORT_DEBOUNCE_TIMER = setTimeout(() => sortTableColumn(UF_ID_TABLE, col), 80);
+      }
     });
   } catch(e) {}
 }
