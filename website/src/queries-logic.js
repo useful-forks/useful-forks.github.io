@@ -102,25 +102,193 @@ function getBehindUrl(aheadUrl) {
   return split.join('/');
 }
 
+/* Sorting state for column sorting feature #48 – fixed bubble-sort -> Array.sort + fragment */
+let SORT_STATE = { column: 1, direction: 'desc' };
+let SORT_DEBOUNCE_TIMER = null;
+
+function getTdRawValue(rows, index, col) {
+  // legacy signature: rows is HTMLCollection, index numeric
+  // also support direct row element overload via second param object check
+  if (rows && rows.getElementsByTagName) {
+    // called as (rowElement, col) – compat shim
+    let td = rows.getElementsByTagName('td').item(index);
+    if (!td) return "";
+    let attr = td.getAttribute("value");
+    return attr === null ? "" : attr;
+  }
+  let td = rows.item(index).getElementsByTagName('td').item(col);
+  if (!td) return "";
+  let attr = td.getAttribute("value");
+  return attr === null ? "" : attr;
+}
+
+function getRowValue(row, col) {
+  let td = row.getElementsByTagName('td').item(col);
+  if (!td) return "";
+  let attr = td.getAttribute("value");
+  let raw = attr === null ? "" : attr;
+  if ([1,2,4,6].includes(col)) {
+    let n = Number(raw);
+    return isNaN(n) ? -1 : n;
+  }
+  if (col === 7) {
+    let t = Date.parse(raw);
+    return isNaN(t) ? 0 : t;
+  }
+  if (col === 0) {
+    return raw.toString().toLowerCase();
+  }
+  return raw.toString().toLowerCase();
+}
+
 function getTdValue(rows, index, col) {
-  return Number(rows.item(index).getElementsByTagName('td').item(col).getAttribute("value"));
+  // support both signatures for backward compat
+  if (rows && rows.length === undefined && rows.getElementsByTagName) {
+    // overload row element case – index is actually col
+    return getRowValue(rows, index);
+  }
+  let raw = getTdRawValue(rows, index, col);
+  // numeric columns: 1,2,4,6
+  if ([1,2,4,6].includes(col)) {
+    let n = Number(raw);
+    return isNaN(n) ? -1 : n;
+  }
+  if (col === 7) { // date column YYYY-MM-DD
+    let t = Date.parse(raw);
+    return isNaN(t) ? 0 : t;
+  }
+  if (col === 0) {
+    return raw.toString().toLowerCase();
+  }
+  // fallback for separator or others
+  return raw.toString().toLowerCase();
+}
+
+function compareForSort(a, b, dir) {
+  // handle numbers and strings uniformly; JS < and > work for both
+  if (dir === 'desc') {
+    if (a < b) return 1;
+    if (a > b) return -1;
+    return 0;
+  } else {
+    if (a > b) return 1;
+    if (a < b) return -1;
+    return 0;
+  }
 }
 
 function sortTable() {
-  sortTableColumn(UF_ID_TABLE, 1);
+  sortTableColumn(UF_ID_TABLE, SORT_STATE.column, SORT_STATE.direction);
 }
 
-/** 'sortColumn' index starts at 0.   https://stackoverflow.com/a/37814596/9768291 */
-function sortTableColumn(table_id, sortColumn){
-  let tableData = document.getElementById(table_id).getElementsByTagName('tbody').item(0);
-  let rows = tableData.getElementsByTagName('tr');
-  for(let i = 0; i < rows.length - 1; i++) {
-    for(let j = 0; j < rows.length - (i + 1); j++) {
-      if(getTdValue(rows, j, sortColumn) < getTdValue(rows, j+1, sortColumn)) {
-        tableData.insertBefore(rows.item(j+1), rows.item(j));
-      }
+function sortTableColumn(table_id, sortColumn, direction){
+  let tableEl = document.getElementById(table_id);
+  if (!tableEl) return;
+  let tableData = tableEl.getElementsByTagName('tbody').item(0);
+  if (!tableData) return;
+  let rowsCollection = tableData.getElementsByTagName('tr');
+  if (rowsCollection.length <= 1) return;
+
+  let dir = direction;
+  if (!dir) {
+    if (SORT_STATE.column === sortColumn) {
+      dir = SORT_STATE.direction === 'desc' ? 'asc' : 'desc';
+    } else {
+      dir = (sortColumn === 0) ? 'asc' : 'desc';
     }
   }
+  SORT_STATE = { column: sortColumn, direction: dir };
+
+  // O(n log n) stable sort with DocumentFragment – fixes O(n²) freeze + live HTMLCollection bug
+  let rows = Array.from(rowsCollection);
+  rows.sort((rowA, rowB) => {
+    let a = getRowValue(rowA, sortColumn);
+    let b = getRowValue(rowB, sortColumn);
+    let cmp = 0;
+    if (typeof a === 'string' && typeof b === 'string') {
+      cmp = a.localeCompare(b);
+    } else {
+      if (a < b) cmp = -1;
+      else if (a > b) cmp = 1;
+      else cmp = 0;
+    }
+    if (cmp !== 0) {
+      return dir === 'desc' ? -cmp : cmp;
+    }
+    // secondary repo key for stable deterministic ordering
+    let aRepo = getRowValue(rowA, 0);
+    let bRepo = getRowValue(rowB, 0);
+    // aRepo/bRepo already lowercased via getRowValue; fallback to attr
+    if (typeof aRepo === 'string' && typeof bRepo === 'string') {
+      let sec = aRepo.localeCompare(bRepo);
+      return sec;
+    }
+    return 0;
+  });
+
+  // re-append in fragment – single DOM operation
+  let frag = document.createDocumentFragment();
+  rows.forEach(r => frag.appendChild(r));
+  tableData.appendChild(frag);
+
+  updateSortIndicators(sortColumn, dir);
+}
+
+function updateSortIndicators(col, dir) {
+  try {
+    let $ths = $('#' + UF_ID_TABLE + ' thead th');
+    $ths.each(function() {
+      let $th = $(this);
+      let c = parseInt($th.attr('data-col'));
+      let baseText = $th.attr('data-base');
+      if (!baseText) {
+        // recover base without arrows – guard against accumulated ▼▼
+        baseText = $th.text().replace(/[\s▲▼]+$/g,'').trim();
+        $th.attr('data-base', baseText);
+      }
+      if (c === col && !isNaN(c) && [0,1,2,4,6,7].includes(c)) {
+        $th.text(baseText + (dir === 'desc' ? ' ▼' : ' ▲'));
+        $th.addClass('is-sorted');
+        $th.attr('aria-sort', dir === 'desc' ? 'descending' : 'ascending');
+        $th.attr('tabindex', '0');
+        $th.attr('role', 'columnheader');
+      } else {
+        if ([0,1,2,4,6,7].includes(c)) {
+          $th.text(baseText);
+          $th.removeClass('is-sorted');
+          $th.removeAttr('aria-sort');
+          $th.attr('tabindex', '0');
+          $th.attr('role', 'columnheader');
+        }
+      }
+    });
+  } catch(e) {}
+}
+
+function setupSortableHeaders() {
+  try {
+    let $headers = $('#' + UF_ID_TABLE + ' thead th.sortable');
+    $headers.attr('tabindex','0').attr('role','columnheader').attr('aria-sort', function(){
+      let c = parseInt($(this).attr('data-col'));
+      return (c === SORT_STATE.column) ? (SORT_STATE.direction === 'desc' ? 'descending' : 'ascending') : null;
+    });
+
+    $headers.off('click.sortable keydown.sortable').on('click.sortable', function(e){
+      let col = parseInt($(this).attr('data-col'));
+      if (isNaN(col)) return;
+      // debounce rapid clicks 100ms
+      clearTimeout(SORT_DEBOUNCE_TIMER);
+      SORT_DEBOUNCE_TIMER = setTimeout(() => sortTableColumn(UF_ID_TABLE, col), 80);
+    }).on('keydown.sortable', function(e){
+      if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') {
+        e.preventDefault();
+        let col = parseInt($(this).attr('data-col'));
+        if (isNaN(col)) return;
+        clearTimeout(SORT_DEBOUNCE_TIMER);
+        SORT_DEBOUNCE_TIMER = setTimeout(() => sortTableColumn(UF_ID_TABLE, col), 80);
+      }
+    });
+  } catch(e) {}
 }
 
 function isEmpty(aList) {
@@ -583,3 +751,16 @@ if (JQ_REPO_FIELD.val()) {
 
 /* User updated the filters, so we refresh the table. */
 JQ_FILTER_FIELD.on('input', update_filter);
+
+// Initialize sortable headers once DOM is ready (supports #48)
+if (typeof setupSortableHeaders === 'function') {
+  try { setupSortableHeaders(); } catch(e) {}
+} else {
+  // if called before function hoisted, defer
+  setTimeout(function(){
+    if (typeof setupSortableHeaders === 'function') {
+      try { setupSortableHeaders(); } catch(e) {}
+    }
+  }, 300);
+}
+

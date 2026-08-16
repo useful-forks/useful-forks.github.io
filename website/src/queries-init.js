@@ -224,7 +224,19 @@ $('#useful_forks_inject').append(
         $('<div>', {id: UF_ID_HEADER}),
         $('<div>', {id: UF_ID_MSG}).html(landingPageTrigger()),
         $('<div>', {id: UF_ID_DATA}).append(
-            $('<table>', {id: UF_ID_TABLE}).append(
+            $('<table>', {id: UF_ID_TABLE, class: 'table'}).append(
+                $('<thead>').append(
+                    $('<tr>').append(
+                        $('<th>', {text: 'Repository', 'data-col': 0, class: 'sortable', 'data-base': 'Repository'}).css({'cursor':'pointer','white-space':'nowrap'}).attr('title','Sort by repository'),
+                        $('<th>', {text: 'Stars ▼', 'data-col': 1, class: 'sortable is-sorted', 'data-base': 'Stars'}).css('cursor','pointer').attr('title','Sort by stars'),
+                        $('<th>', {text: 'Forks', 'data-col': 2, class: 'sortable', 'data-base': 'Forks'}).css('cursor','pointer').attr('title','Sort by forks'),
+                        $('<th>', {'data-col': 3, 'data-base': ''}).css('width','10px'),
+                        $('<th>', {text: 'Ahead', 'data-col': 4, class: 'sortable', 'data-base': 'Ahead'}).css('cursor','pointer').attr('title','Sort by ahead'),
+                        $('<th>', {'data-col': 5, 'data-base': ''}).css('width','10px'),
+                        $('<th>', {text: 'Behind', 'data-col': 6, class: 'sortable', 'data-base': 'Behind'}).css('cursor','pointer').attr('title','Sort by behind'),
+                        $('<th>', {text: 'Last Push', 'data-col': 7, class: 'sortable', 'data-base': 'Last Push'}).css({'cursor':'pointer','white-space':'nowrap'}).attr('title','Sort by date')
+                    )
+                ),
                 $('<tbody>')
             )
         )
@@ -236,3 +248,16 @@ function getJqId_$(id) {
 const JQ_ID_HEADER  = getJqId_$(UF_ID_HEADER);
 const JQ_ID_MSG     = getJqId_$(UF_ID_MSG);
 const JQ_ID_TABLE   = getJqId_$(UF_ID_TABLE);
+// Single binding point – idempotent, debounce handled inside setupSortableHeaders.
+// Keep fallback for late load of queries-logic.js.
+if (typeof setupSortableHeaders === 'function') {
+  try { setupSortableHeaders(); } catch(e){}
+} else {
+  $(document).ready(function(){
+    setTimeout(function(){
+      if (typeof setupSortableHeaders === 'function') {
+        try { setupSortableHeaders(); } catch(e){}
+      }
+    }, 220);
+  });
+}
