@@ -36,6 +36,15 @@ let PAUSED = false;
 let PENDING_REQUESTS = []; // queue of {user, repo, defaultBranch, page}
 let LAST_QUERY = null; // {user, repo, defaultBranch}
 let CURRENT_REPO_KEY = null; // for caching (#39)
+let CURRENT_ABORT_CTRL = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+function resetAbortCtrl() {
+  if (typeof AbortController !== 'undefined') {
+    try { if (CURRENT_ABORT_CTRL) CURRENT_ABORT_CTRL.abort(); } catch(e) {}
+    CURRENT_ABORT_CTRL = new AbortController();
+    return CURRENT_ABORT_CTRL.signal;
+  }
+  return null;
+}
 
 /** Used to reset the state for a brand new query. */
 function clear_old_data() {
@@ -55,6 +64,8 @@ function clear_old_data() {
   ABORTED = false;
   PAUSED = false;
   PENDING_REQUESTS = [];
+  try { if (CURRENT_ABORT_CTRL) CURRENT_ABORT_CTRL.abort(); } catch(e) {}
+  resetAbortCtrl();
   if (typeof hideAbortBtn === 'function') hideAbortBtn();
   if (typeof hideResumeBtn === 'function') hideResumeBtn();
 }
@@ -153,7 +164,21 @@ function onRateLimitExceeded() {
   if (!RATE_LIMIT_EXCEEDED) {
     console.warn('[useful-forks] GitHub API rate-limit exceeded. (Since useful-forks sends many requests at once, you might have a lot of `Error Code 403` in your browser Console Logs.)');
     RATE_LIMIT_EXCEEDED = true;
-    setMsg(UF_MSG_API_RATE + '<br><br><button id="resumeBtnInline" class="button is-warning is-small mt-2" onclick="resumeSearch()">Resume scan</button>');
+    setMsg(UF_MSG_API_RATE + '<br><br>');
+    // safe button creation without inline handler
+    try {
+      const msgEl = document.getElementById(UF_ID_MSG);
+      if (msgEl) {
+        const btn = document.createElement('button');
+        btn.id = 'resumeBtnInline';
+        btn.className = 'button is-warning is-small mt-2';
+        btn.textContent = 'Resume scan';
+        btn.addEventListener('click', resumeSearch);
+        msgEl.appendChild(document.createElement('br'));
+        msgEl.appendChild(document.createElement('br'));
+        msgEl.appendChild(btn);
+      }
+    } catch(e) {}
     disableQueryFields();
     if (typeof hideAbortBtn === 'function') hideAbortBtn();
     if (typeof showResumeBtn === 'function') showResumeBtn();
@@ -184,7 +209,18 @@ function decrementCounters() {
   }
   if (PAUSED) {
     if (ONGOING_REQUESTS_COUNTER <= 0) {
-      setMsg(`Paused. ${TABLE_DATA.length} useful forks found so far. <button class="button is-small is-info" onclick="resumeSearch()">Resume</button>`);
+      setMsg(`Paused. ${TABLE_DATA.length} useful forks found so far. `);
+      try {
+        const msgEl = document.getElementById(UF_ID_MSG);
+        if (msgEl) {
+          const btn = document.createElement('button');
+          btn.className = 'button is-small is-info ml-2';
+          btn.textContent = 'Resume';
+          btn.addEventListener('click', resumeSearch);
+          msgEl.appendChild(document.createTextNode(' '));
+          msgEl.appendChild(btn);
+        }
+      } catch(e) {}
       enableQueryFields();
     }
     return;
@@ -229,12 +265,27 @@ function send(requestPromise, successFn, failureFn) {
     failureFn();
     return;
   }
+  if (CURRENT_ABORT_CTRL && CURRENT_ABORT_CTRL.signal && CURRENT_ABORT_CTRL.signal.aborted) {
+    failureFn();
+    return;
+  }
 
   incrementCounters();
-  requestPromise()
+  // attempt to pass abort signal via Octokit if supported
+  let promise;
+  try {
+    promise = requestPromise(CURRENT_ABORT_CTRL ? CURRENT_ABORT_CTRL.signal : undefined);
+    if (!promise || typeof promise.then !== 'function') {
+      // requestPromise ignored signal arg (original signature) – call without arg
+      promise = requestPromise();
+    }
+  } catch(e) {
+    promise = requestPromise();
+  }
+  promise
   .then(
       response => {
-        if (ABORTED) return;
+        if (ABORTED || (CURRENT_ABORT_CTRL && CURRENT_ABORT_CTRL.signal && CURRENT_ABORT_CTRL.signal.aborted)) return;
         successFn(response.headers, response.data);
       }) // wrapped in a { data, headers, status, url } object
   .catch(
@@ -250,6 +301,9 @@ function abortSearch() {
   PAUSED = false;
   console.warn('[useful-forks] Search aborted by user, preserving', TABLE_DATA.length, 'results');
   ONGOING_REQUESTS_COUNTER = 0;
+  PENDING_REQUESTS = []; // clear queue on abort – prevents flood on later resume
+  try { if (CURRENT_ABORT_CTRL) CURRENT_ABORT_CTRL.abort(); } catch(e) {}
+  resetAbortCtrl();
   removeProgressBar();
   enableQueryFields();
   if (typeof hideAbortBtn === 'function') hideAbortBtn();
@@ -290,13 +344,23 @@ function resumeSearch() {
   setQueryFieldsAsLoading();
   saveCacheToStorage();
 
-  // Re-trigger queued fork pages
+  // Re-trigger queued fork pages – throttled p-limit 3 style to avoid secondary rate-limit
   if (PENDING_REQUESTS.length > 0) {
     const queueCopy = [...PENDING_REQUESTS];
     PENDING_REQUESTS = [];
-    for (const req of queueCopy) {
-      request_fork_page(req.page, req.user, req.repo, req.defaultBranch);
+    // simple throttling: 3 concurrent, staggered 350ms
+    let idx = 0;
+    function nextBatch() {
+      const batch = queueCopy.slice(idx, idx+3);
+      idx += 3;
+      for (const req of batch) {
+        request_fork_page(req.page, req.user, req.repo, req.defaultBranch);
+      }
+      if (idx < queueCopy.length) {
+        setTimeout(nextBatch, 350);
+      }
     }
+    nextBatch();
   } else if (LAST_QUERY && wasAborted) {
     // Fallback: if aborted without explicit queue, resume remaining fork pages from last known state is hard;
     // we at least clear abort flag so a manual re-search can continue, and show message.
@@ -331,15 +395,26 @@ function saveCacheToStorage() {
       timestamp: Date.now(),
       repo: CURRENT_REPO_KEY,
       tableData: TABLE_DATA,
-      header: (typeof JQ_ID_HEADER !== 'undefined' && JQ_ID_HEADER.html) ? JQ_ID_HEADER.html() : '',
+      header: '', // store raw data only, never HTML (prevents persisted XSS)
       totalCalls: TOTAL_API_CALLS_COUNTER,
       totalForks: TOTAL_FORKS
     };
-    localStorage.setItem(key, JSON.stringify(payload));
+    const serialized = JSON.stringify(payload);
+    // size cap 2MB – skip cache if too large (prevents QuotaExceededError loop)
+    if (serialized.length > 2*1024*1024) {
+      console.warn('[useful-forks] cache too large (>2MB), skipping save for', CURRENT_REPO_KEY, serialized.length);
+      return;
+    }
+    localStorage.setItem(key, serialized);
     localStorage.setItem('uf-cache-last-repo', CURRENT_REPO_KEY);
     // console.log('cache saved', key, payload.tableData.length);
   } catch (e) {
-    console.warn('cache save failed', e);
+    if (e && e.name === 'QuotaExceededError') {
+      console.warn('cache save failed – quota exceeded, clearing last-repo marker', e);
+      try { localStorage.removeItem('uf-cache-last-repo'); } catch(e2) {}
+    } else {
+      console.warn('cache save failed', e);
+    }
   }
 }
 function loadCacheFromStorage(repo) {
@@ -833,7 +908,41 @@ if (JQ_REPO_FIELD.val()) {
       // Show offer then proceed with normal scan after short delay if not restored
       if (typeof setMsg === 'function') {
         const ageMin = Math.round((Date.now()-cached.timestamp)/60000);
-        setMsg(`Found cached results for <b>${repoVal}</b> from ${ageMin} min ago (${cached.tableData.length} forks). <button class="button is-small is-info ml-2" onclick="restoreCacheFromStorage('${repoVal.replace(/'/g,"\\'")}')">Restore cache</button> <span class="ml-2">or wait for fresh scan...</span>`);
+        // safe construction – avoid inline onclick + HTML injection via repoVal
+        setMsg('');
+        try {
+          const msgEl = document.getElementById(UF_ID_MSG);
+          if (msgEl) {
+            // container
+            const frag = document.createDocumentFragment();
+            const b = document.createElement('b');
+            b.textContent = repoVal;
+            frag.appendChild(document.createTextNode('Found cached results for '));
+            frag.appendChild(b);
+            frag.appendChild(document.createTextNode(` from ${ageMin} min ago (${cached.tableData.length} forks). `));
+            const btn = document.createElement('button');
+            btn.className = 'button is-small is-info ml-2';
+            btn.textContent = 'Restore cache';
+            // closure captures repoVal safely
+            btn.addEventListener('click', () => restoreCacheFromStorage(repoVal));
+            frag.appendChild(btn);
+            const span = document.createElement('span');
+            span.className = 'ml-2';
+            span.textContent = 'or wait for fresh scan...';
+            frag.appendChild(span);
+            // use jQuery html already cleared by setMsg(''), append via DOM
+            msgEl.appendChild(frag);
+            // re-apply box styling that setMsg normally adds
+            msgEl.classList.add('box','has-background-info-light');
+            msgEl.style.borderWidth = 'thin';
+            msgEl.style.borderColor = 'rgba(0,0,0,0.25)';
+            msgEl.style.borderStyle = 'solid';
+          } else {
+            setMsg(`Found cached results for ${repoVal} from ${ageMin} min ago.`);
+          }
+        } catch(e) {
+          setMsg(`Found cached results for ${repoVal} from ${ageMin} min ago.`);
+        }
         setTimeout(()=>{ if (ONGOING_REQUESTS_COUNTER===0 && TABLE_DATA.length===0) JQ_SEARCH_BTN.click(); }, 1500);
       } else {
         JQ_SEARCH_BTN.click();
@@ -864,6 +973,7 @@ JQ_FILTER_FIELD.on('input', update_filter);
 /* Pause button handling – optional keyboard shortcut (Space to pause) */
 if (typeof window !== 'undefined') {
   document.addEventListener('keydown', (e)=>{
+    if (e.target && (e.target.tagName==='INPUT' || e.target.tagName==='TEXTAREA' || e.target.isContentEditable)) return;
     if (e.code==='Escape' && JQ_SEARCH_BTN.hasClass('is-loading')) {
       abortSearch();
     }

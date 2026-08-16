@@ -270,17 +270,41 @@ function tryOfferCache() {
   if (!repo) return;
   const cached = loadCache(repo);
   if (cached) {
-    // Show a non-blocking banner with restore option
+    // safe banner – no inline onclick, use textContent + addEventListener
     const ageMin = Math.round((Date.now()-cached.timestamp)/60000);
-    const msg = `Found cached results for <b>${repo}</b> from ${ageMin} min ago (${cached.tableData.length} forks). <button class="button is-small is-info ml-2" onclick="window.restoreCache && window.restoreCache('${repo.replace(/'/g,"\\'")}')">Restore cache</button>`;
     // Only show if no automatic scan triggered (i.e., msg empty or landing)
     if (isMsgEmpty() || JQ_ID_MSG.html().includes('Introducing')) {
-      // Don't overwrite landing if scan will start; defer
       setTimeout(() => {
         try {
-          if (typeof ONGOING_REQUESTS_COUNTER !== 'undefined' && ONGOING_REQUESTS_COUNTER === 0) setMsg(msg);
-          else if (typeof ONGOING_REQUESTS_COUNTER === 'undefined') setMsg(msg);
-        } catch(e) { setMsg(msg); }
+          if (typeof ONGOING_REQUESTS_COUNTER !== 'undefined' && ONGOING_REQUESTS_COUNTER !== 0) return;
+          // build safe DOM instead of HTML string with repo injection
+          setMsg('');
+          const msgEl = document.getElementById(UF_ID_MSG);
+          if (msgEl) {
+            const frag = document.createDocumentFragment();
+            frag.appendChild(document.createTextNode('Found cached results for '));
+            const b = document.createElement('b');
+            b.textContent = repo;
+            frag.appendChild(b);
+            frag.appendChild(document.createTextNode(` from ${ageMin} min ago (${cached.tableData.length} forks). `));
+            const btn = document.createElement('button');
+            btn.className = 'button is-small is-info ml-2';
+            btn.textContent = 'Restore cache';
+            btn.addEventListener('click', () => {
+              if (window.restoreCache) window.restoreCache(repo);
+              else if (window.restoreCacheFromStorage) window.restoreCacheFromStorage(repo);
+            });
+            frag.appendChild(btn);
+            msgEl.appendChild(frag);
+            msgEl.classList.add('box','has-background-info-light');
+            msgEl.style.borderWidth='thin';
+            msgEl.style.borderColor='rgba(0,0,0,0.25)';
+            msgEl.style.borderStyle='solid';
+          }
+        } catch(e) {
+          // fallback minimal
+          setMsg(`Found cached results for ${repo} from ${ageMin} min ago (${cached.tableData.length} forks).`);
+        }
       }, 500);
     }
   }
