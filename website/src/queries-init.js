@@ -195,6 +195,8 @@ function setApiCallsLabel(total) {
 
 /** Grabs the URL Param used for automatic queries. */
 function getRepoNameFromUrl() {
+  let gist = new URLSearchParams(location.search).get('gist');
+  if (gist) return `https://gist.github.com/${gist}`;
   let repo = new URLSearchParams(location.search).get('repo');
   if (!repo) {
     repo = new URLSearchParams(location.search).get('repository');

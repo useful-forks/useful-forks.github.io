@@ -23,12 +23,16 @@ const mapTable = {
 
 /* Variables that should be cleared for every new query (defaults are set in "clear_old_data"). */
 let TABLE_DATA = [];
+let TABLE_DATA_GIST = [];
 let REPO_DATE;
 let TOTAL_FORKS;
 let RATE_LIMIT_EXCEEDED;
 let TOTAL_API_CALLS_COUNTER;
 let ONGOING_REQUESTS_COUNTER = 0;
 let IS_USEFUL_FORK; // function that determines if a fork is useful or not
+let GIST_DONE = false;
+let SEEN_GISTS = new Set();
+const GIST_ID_REGEX = /^[a-f0-9]{5,32}$/i;
 
 
 /** Used to reset the state for a brand new query. */
@@ -37,6 +41,9 @@ function clear_old_data() {
   clearMsg();
   removeProgressBar();
   TABLE_DATA = []; // clear the table data
+  TABLE_DATA_GIST = [];
+  SEEN_GISTS = new Set();
+  GIST_DONE = false;
   clearTable(); // clear the table DOM
   setApiCallsLabel(0);
   hideExportCsvBtn();
@@ -103,8 +110,16 @@ function getBehindUrl(aheadUrl) {
 }
 
 /* --- Feature #69: Useful gists support --- */
+function validateGistId(gist_id) {
+  if (!gist_id) return false;
+  return GIST_ID_REGEX.test(gist_id);
+}
 function parse_gist_query(queryString) {
-  // Detect gist URLs via gist.github.com host
+  // Detect gist URLs via gist.github.com host, and also support direct gist id via ?gist=
+  // If queryString is just a gist id (hex), support that as well when called via ?gist= param outside
+  if (validateGistId(queryString.trim())) {
+    return { gist_id: queryString.trim(), user: null };
+  }
   let url;
   try {
     url = new URL(queryString);
@@ -126,8 +141,8 @@ function parse_gist_query(queryString) {
     user = values[0];
     gist_id = values[1];
   }
-  // Validate gist_id loosely: alphanumeric hex, at least 5 chars
-  if (!gist_id || gist_id.length < 5) return null;
+  // Validate gist_id strictly hex 5-32 chars
+  if (!validateGistId(gist_id)) return null;
   return { gist_id, user };
 }
 
@@ -168,7 +183,10 @@ function update_table_data_gist(responseData, original_gist_id) {
   }
   for (const currFork of responseData) {
     if (RATE_LIMIT_EXCEEDED) continue;
-    if (is_duplicate_repo(currFork.id)) continue; // reuse duplicate check for gist ids
+    // Isolate gists dedup via SEEN_GISTS, lower-case normalized if hex is case-insensitive
+    const gid = (currFork.id || '').toLowerCase();
+    if (SEEN_GISTS.has(gid)) continue;
+    SEEN_GISTS.add(gid);
 
     let datum = {
       'name': currFork.id, // for duplicate detection
@@ -179,14 +197,16 @@ function update_table_data_gist(responseData, original_gist_id) {
       'html_url': currFork.html_url || buildGistUrl(currFork.id),
       'is_gist': true
     };
+    TABLE_DATA_GIST.push(datum);
+    // Keep legacy TABLE_DATA for compatibility but also separate
     TABLE_DATA.push(datum);
-    if (TABLE_DATA.length > 1) showFilterContainer();
+    if (TABLE_DATA_GIST.length > 1) showFilterContainer();
     // Reuse filter attempt but gist table is separate
     if (typeof IS_USEFUL_FORK === 'function') {
       // For gists, filter may not apply; we still render via gist table
-      update_table_gist(TABLE_DATA.filter(IS_USEFUL_FORK));
+      update_table_gist(TABLE_DATA_GIST.filter(IS_USEFUL_FORK));
     } else {
-      update_table_gist(TABLE_DATA);
+      update_table_gist(TABLE_DATA_GIST);
     }
   }
 }
@@ -202,22 +222,35 @@ function request_gist_fork_page(page_number, gist_id) {
   const onSuccess = (responseHeaders, responseData) => {
     removeProgressBar();
     if (isEmpty(responseData)) {
-      if (TABLE_DATA.length === 0) {
+      if (TABLE_DATA_GIST.length === 0) {
         setMsg(UF_MSG_NO_FORKS);
         enableQueryFields();
+      } else {
+        GIST_DONE = true;
+        if (allRequestsAreDone()) {
+          clearNonErrorMsg();
+          removeProgressBar();
+          updateBasedOnTable();
+          enableQueryFields();
+        }
       }
       return;
     }
     sortTable();
-    const link_header = responseHeaders["link"];
+    const link_header = responseHeaders["link"] || responseHeaders["Link"] || responseHeaders.link;
     if (link_header) {
-      let contains_next_page = link_header.indexOf('>; rel="next"');
-      if (contains_next_page !== -1) {
-        request_gist_fork_page(++page_number, gist_id);
+      let contains_next_page = link_header.indexOf('>; rel="next"') !== -1 || link_header.includes('rel="next"');
+      if (contains_next_page) {
+        request_gist_fork_page(page_number + 1, gist_id);
+      } else {
+        GIST_DONE = true;
       }
+    } else {
+      // no link header → single page
+      GIST_DONE = true;
     }
     update_table_data_gist(responseData, gist_id);
-    if (allRequestsAreDone()) {
+    if (allRequestsAreDone() && GIST_DONE) {
       // For gists, we handle completion separately
       clearNonErrorMsg();
       removeProgressBar();
@@ -239,7 +272,7 @@ function initial_request_gist(gist_id) {
     const onlyDate = getOnlyDate(responseData.updated_at || responseData.created_at);
     REPO_DATE = new Date(onlyDate);
     // Gist forks count not directly given; we will discover via listForks
-    TOTAL_FORKS = 0; // will be updated via ongoing requests logic but set to 0 to allow gist completion via custom logic
+    // Do not touch TOTAL_FORKS – keep separate GIST_DONE flag
 
     let html_txt = '<b>Queried gist</b>:&nbsp;&nbsp;&nbsp;';
     const owner = responseData.owner ? responseData.owner.login : 'anonymous';
@@ -252,6 +285,7 @@ function initial_request_gist(gist_id) {
     setHeader(html_txt);
 
     // Gist forks
+    GIST_DONE = false;
     request_gist_fork_page(1, gist_id);
   };
   const onFailure = () => displayConditionalErrorMsg();
@@ -650,6 +684,27 @@ function initiate_search() {
 
   clear_old_data();
 
+  // Support explicit ?gist= param for separate table type
+  let gistParam = null;
+  try {
+    const sp = new URLSearchParams(location.search);
+    gistParam = sp.get('gist');
+  } catch {}
+  if (gistParam && validateGistId(gistParam)) {
+    const gist_id = gistParam.trim();
+    setUpOctokitWithLatestToken();
+    setQuery(`https://gist.github.com/${gist_id}`);
+    setQueryFieldsAsLoading();
+    hideFilterContainer();
+    setMsg(UF_MSG_SCANNING);
+    if (history.replaceState) {
+      history.replaceState({}, document.title, `?gist=${gist_id}`);
+    }
+    try { ga_searchQuery('gist', gist_id); } catch {}
+    initial_request_gist(gist_id);
+    return;
+  }
+
   let queryString = getQueryOrDefault("payne911/PieMenu");
 
   // Feature #69: detect gist URLs first
@@ -663,7 +718,7 @@ function initiate_search() {
     setMsg(UF_MSG_SCANNING);
 
     if (history.replaceState) {
-      history.replaceState({}, document.title, `?repo=${gist_id}`); // reuse param for gist
+      history.replaceState({}, document.title, `?gist=${gist_id}`);
     }
     ga_searchQuery('gist', gist_id);
     initial_request_gist(gist_id);
