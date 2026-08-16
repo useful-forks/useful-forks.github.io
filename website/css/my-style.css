@@ -3,6 +3,66 @@
   --uf-orange-dark: #c97e11;
   --uf-blue: #14213d;
   --uf-blue-dark: #0d1624;
+  --bg: #ffffff;
+  --fg: #222222;
+  --border: #dbdbdb;
+  --table-bg: #ffffff;
+  --table-odd: #f5f5f5;
+  --table-hover: #e2e2e2;
+  --input-bg: #ffffff;
+  --footer-bg: #ffffff;
+  --msg-bg: #eff5fb;
+  --msg-fg: #296fa8;
+  --msg-border: #b8d8f0;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark light;
+    --bg: #121212;
+    --fg: #e0e0e0;
+    --border: #444;
+    --table-bg: #1e1e1e;
+    --table-odd: #2a2a2a;
+    --table-hover: #3a3a3a;
+    --input-bg: #2b2b2b;
+    --footer-bg: #121212;
+    --msg-bg: #1a2a3a;
+    --msg-fg: #cde4ff;
+    --msg-border: #2a4a6a;
+  }
+}
+
+[data-theme="dark"] {
+  --bg: #121212;
+  --fg: #e0e0e0;
+  --border: #444;
+  --table-bg: #1e1e1e;
+  --table-odd: #2a2a2a;
+  --table-hover: #3a3a3a;
+  --input-bg: #2b2b2b;
+  --footer-bg: #121212;
+  --msg-bg: #1a2a3a;
+  --msg-fg: #cde4ff;
+  --msg-border: #2a4a6a;
+  color-scheme: dark;
+}
+[data-theme="light"] {
+  --bg: #ffffff;
+  --fg: #222222;
+  --border: #dbdbdb;
+  --table-bg: #ffffff;
+  --table-odd: #f5f5f5;
+  --table-hover: #e2e2e2;
+  --input-bg: #ffffff;
+  --footer-bg: #ffffff;
+  --msg-bg: #eff5fb;
+  --msg-fg: #296fa8;
+  --msg-border: #b8d8f0;
+  color-scheme: light;
+}
+[data-theme="auto"] {
+  /* relies on @media prefers-color-scheme */
 }
 
 .button.is-uf-orange {
@@ -26,11 +86,27 @@
   color: #fff;
 }
 
+body {
+  background: var(--bg);
+  color: var(--fg);
+}
+
+.footer {
+  background-color: var(--footer-bg) !important;
+  color: var(--fg);
+}
+
 #useful_forks_msg {
   text-align: center;
   margin-top: 20px;
   margin-bottom: 20px;
 }
+#useful_forks_msg.box.has-background-info-light {
+  background-color: var(--msg-bg);
+  color: var(--msg-fg);
+  border-color: var(--msg-border);
+}
+
 #useful_forks_header {
   text-align: center;
   margin-bottom: 35px;
@@ -44,14 +120,73 @@
   padding-top: 3px;
 }
 
-tr:hover {
-  background-color: #e2e2e2 !important;
+table {
+  margin: 0 auto;
+  background-color: var(--table-bg);
+  color: var(--fg);
 }
 tr:nth-child(odd) {
-  background-color: #f5f5f5;
+  background-color: var(--table-odd);
 }
-table {
-  margin: 0 auto !important;
+tr:hover {
+  background-color: var(--table-hover);
+}
+th {
+  background-color: var(--table-bg);
+  color: var(--fg);
+  border-color: var(--border);
+}
+th.sortable:hover {
+  background-color: var(--table-hover);
+}
+th.sortable.is-sorted {
+  background-color: var(--table-odd);
+}
+
+.input, .textarea, .select select {
+  background-color: var(--input-bg);
+  color: var(--fg);
+  border-color: var(--border);
+}
+.input::placeholder {
+  color: #888;
+}
+
+.modal-card-head, .modal-card-body, .modal-card-foot {
+  background-color: var(--table-bg);
+  color: var(--fg);
+}
+.modal-card-title {
+  color: var(--fg);
+}
+
+#useful_forks_msg.box.has-background-info-light,
+.title, h1, strong, b {
+  color: var(--fg);
+}
+a {
+  color: #3273dc;
+}
+[data-theme="dark"] a,
+:root[data-theme="dark"] a {
+  color: #8ab4f8;
+}
+[data-theme="dark"] a:hover,
+:root[data-theme="dark"] a:hover {
+  color: #a8c7fa;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) a {
+    color: #8ab4f8;
+  }
+  :root:not([data-theme]) a:hover {
+    color: #a8c7fa;
+  }
+}
+
+/* reduce badge brightness filter – keep readable */
+.badge {
+  filter: none;
 }
 
 #button-group {
@@ -72,167 +207,29 @@ table {
   margin-right: 8px;
 }
 .navbar-item {
-  display: flex !important;
-  align-items: center !important;
+  display: flex;
+  align-items: center;
 }
 
 @media screen and (max-width: 1023px) {
   .navbar-menu {
-    background-color: #f5f5f5 !important; /* dropdown background */
-    padding: 0 !important;
+    background-color: var(--table-odd);
+    padding: 0;
   }
   .navbar-menu .navbar-item:hover {
-    background-color: #4a4a4a !important; /* dropdown hovered row */
-    color: #f8f8f8 !important; /* hovered text color */
+    background-color: #4a4a4a;
+    color: #f8f8f8;
   }
 }
 
 @media screen and (min-width: 769px) {
   .modal-card, .modal-content {
-    width: 660px !important; /* dialogs width */
+    width: 660px;
   }
 }
 
 @media screen and (min-width: 769px) {
   .field-label.is-normal {
-    padding-top: 0 !important; /* settings popup fields misaligned */
+    padding-top: 0;
   }
-}
-
-/* Dark Theme – Fix #34
-   Supports both OS preference and manual toggle via body.dark */
-@media (prefers-color-scheme: dark) {
-  :root {
-    color-scheme: dark;
-  }
-  body {
-    background: #121212 !important;
-    color: #e0e0e0 !important;
-  }
-  .footer {
-    background-color: #121212 !important;
-    color: #e0e0e0 !important;
-  }
-  #useful_forks_msg.box.has-background-info-light {
-    background-color: #1a2a3a !important;
-    color: #cde4ff !important;
-    border-color: #2a4a6a !important;
-  }
-  .title, h1, strong, b {
-    color: #f0f0f0 !important;
-  }
-  a {
-    color: #8ab4f8;
-  }
-  a:hover {
-    color: #a8c7fa;
-  }
-  table {
-    background-color: #1e1e1e !important;
-    color: #e0e0e0 !important;
-  }
-  tr:nth-child(odd) {
-    background-color: #2a2a2a !important;
-  }
-  tr:hover {
-    background-color: #3a3a3a !important;
-  }
-  th {
-    background-color: #1e1e1e !important;
-    color: #e0e0e0 !important;
-    border-color: #444 !important;
-  }
-  .input, .textarea, .select select {
-    background-color: #2b2b2b !important;
-    color: #e0e0e0 !important;
-    border-color: #444 !important;
-  }
-  .input::placeholder {
-    color: #888 !important;
-  }
-  .modal-card-head, .modal-card-body, .modal-card-foot {
-    background-color: #1e1e1e !important;
-    color: #e0e0e0 !important;
-  }
-  .modal-card-title {
-    color: #e0e0e0 !important;
-  }
-  .button.is-dark.is-outlined {
-    border-color: #888 !important;
-    color: #e0e0e0 !important;
-  }
-  .button.is-dark.is-outlined:hover {
-    background-color: #333 !important;
-  }
-  #button-group {
-    background: transparent !important;
-  }
-  .badge {
-    filter: brightness(0.9);
-  }
-}
-
-/* Manual toggle: body.dark class mirrors prefers-color-scheme */
-body.dark {
-  background: #121212 !important;
-  color: #e0e0e0 !important;
-}
-body.dark .footer {
-  background-color: #121212 !important;
-  color: #e0e0e0 !important;
-}
-body.dark #useful_forks_msg.box.has-background-info-light {
-  background-color: #1a2a3a !important;
-  color: #cde4ff !important;
-  border-color: #2a4a6a !important;
-}
-body.dark .title,
-body.dark h1,
-body.dark strong,
-body.dark b {
-  color: #f0f0f0 !important;
-}
-body.dark a {
-  color: #8ab4f8;
-}
-body.dark a:hover {
-  color: #a8c7fa;
-}
-body.dark table {
-  background-color: #1e1e1e !important;
-  color: #e0e0e0 !important;
-}
-body.dark tr:nth-child(odd) {
-  background-color: #2a2a2a !important;
-}
-body.dark tr:hover {
-  background-color: #3a3a3a !important;
-}
-body.dark th {
-  background-color: #1e1e1e !important;
-  color: #e0e0e0 !important;
-  border-color: #444 !important;
-}
-body.dark th.sortable:hover {
-  background-color: #333 !important;
-  color: #fff !important;
-}
-body.dark th.sortable.is-sorted {
-  background-color: #2e2e2e !important;
-}
-body.dark .input,
-body.dark .textarea,
-body.dark .select select {
-  background-color: #2b2b2b !important;
-  color: #e0e0e0 !important;
-  border-color: #444 !important;
-}
-body.dark .modal-card-head,
-body.dark .modal-card-body,
-body.dark .modal-card-foot {
-  background-color: #1e1e1e !important;
-  color: #e0e0e0 !important;
-}
-body.dark .modal-card-title {
-  color: #e0e0e0 !important;
 }

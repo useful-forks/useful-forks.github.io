@@ -1,24 +1,36 @@
-/* Dark theme toggle – Fix #34 */
+/* Dark theme toggle – Fix #34 – CSS vars + 3-state auto/light/dark */
 const LOCAL_STORAGE_THEME = "useful-forks-theme";
 let UF_THEME = null;
 
 function applyTheme(theme) {
   UF_THEME = theme;
-  if (theme === 'dark') {
-    document.body.classList.add('dark');
-  } else if (theme === 'light') {
-    document.body.classList.remove('dark');
+  const html = document.documentElement;
+  const body = document.body;
+  // normalize
+  const t = ['dark','light','auto'].includes(theme) ? theme : 'auto';
+  // set data-theme for CSS vars
+  if (t === 'auto') {
+    html.removeAttribute('data-theme');
+    if (body) body.removeAttribute('data-theme');
+    html.dataset.theme = 'auto'; // keep for JS but CSS falls back to @media
   } else {
-    // auto: respect system
-    document.body.classList.remove('dark');
-    if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-      // CSS media query will handle auto; we don't need class unless user forced dark
+    html.setAttribute('data-theme', t);
+    if (body) body.setAttribute('data-theme', t);
+  }
+  // legacy body.dark class for compat but now vars driven
+  if (body) {
+    if (t === 'dark') body.classList.add('dark');
+    else if (t === 'light') body.classList.remove('dark');
+    else {
+      // auto: no class, rely on media query
+      body.classList.remove('dark');
     }
   }
-  // update icon if button exists
   const btn = document.getElementById('themeToggleBtn');
   if (btn) {
-    btn.innerHTML = theme === 'dark' ? '☀️ Light' : theme === 'light' ? '🌙 Dark' : '🌓 Auto';
+    const label = t === 'dark' ? '☀️ Light' : t === 'light' ? '🌙 Dark' : '🌓 Auto';
+    btn.textContent = label;
+    btn.setAttribute('aria-label', `Theme: ${t}, click to toggle auto→dark→light`);
   }
 }
 
@@ -37,27 +49,24 @@ function setStoredTheme(t) {
 
 function toggleTheme() {
   let curr = getStoredTheme();
-  let next;
-  if (curr === 'auto') next = 'dark';
-  else if (curr === 'dark') next = 'light';
-  else next = 'auto';
+  let next = curr === 'auto' ? 'dark' : curr === 'dark' ? 'light' : 'auto';
   setStoredTheme(next);
 }
 
 function initTheme() {
   let stored = getStoredTheme();
   applyTheme(stored);
-  // watch system changes if auto
   if (window.matchMedia) {
-    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e => {
+    const mq = window.matchMedia('(prefers-color-scheme: dark)');
+    // modern addEventListener, fallback addListener
+    const handler = () => {
       if (getStoredTheme() === 'auto') {
-        // CSS will adapt automatically
-        // force reflow if needed
-        document.body.style.display='none';
-        document.body.offsetHeight;
-        document.body.style.display='';
+        // force var recompute – no DOM hack needed, just re-apply to trigger
+        applyTheme('auto');
       }
-    });
+    };
+    if (mq.addEventListener) mq.addEventListener('change', handler);
+    else if (mq.addListener) mq.addListener(handler);
   }
 }
 

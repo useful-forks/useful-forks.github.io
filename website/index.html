@@ -17,6 +17,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="description" content="Find useful forks of GitHub projects" />
+  <meta name="color-scheme" content="light dark" />
 
   <meta property="og:type" content="website">
   <meta property="og:locale" content="en_US">
@@ -86,8 +87,10 @@
         <div class="navbar-end">
           <a id="themeToggleBtn" class="navbar-item has-text-weight-bold"
              onclick="toggleTheme();"
+             role="button" tabindex="0"
+             aria-label="Toggle theme auto → dark → light"
              title="Toggle dark theme: auto → dark → light">
-            🌓 Theme
+            🌓 Auto
           </a>
           <a id="addTokenBtn" class="navbar-item has-text-weight-bold"
              onclick="openTokenDialog();">
