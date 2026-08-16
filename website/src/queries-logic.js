@@ -30,17 +30,9 @@ let TOTAL_API_CALLS_COUNTER;
 let ONGOING_REQUESTS_COUNTER = 0;
 let IS_USEFUL_FORK; // function that determines if a fork is useful or not
 
-// Root repo tracking for accurate second-order fork diff (Fix #74, #18)
-// GitHub's fork network is recursive: request_fork_page is called for forks-of-forks
-// with currFork.owner/login as the "user,repo" base. Previously compareCommits used
-// that immediate parent as base, which made second-order forks appear to have the
-// same ahead/behind numbers as if they were immediate forks (e.g., teamgram/teamgram-server -> fedigram).
-// Issue #18 / #74 expects the diff to relate to the queried source repo, not the intermediate parent.
-// We store the original queried repo globally and compare second-order forks against it.
-// If that compare fails (no common history, 404, detached network), we fallback to parent.
-let ORIGINAL_OWNER = null;
-let ORIGINAL_REPO = null;
-let ORIGINAL_DEFAULT_BRANCH = null;
+// Dedup Set – prevents race-induced duplicates (PR98). Lower-case to handle GitHub case-insensitivity.
+// Shared with PR96 to dedup second-order path before send.
+let SEEN_FORKS = new Set();
 
 
 /** Used to reset the state for a brand new query. */
@@ -58,9 +50,7 @@ function clear_old_data() {
   TOTAL_API_CALLS_COUNTER = 0;
   ONGOING_REQUESTS_COUNTER = 0;
   shouldTriggerQueryOnTokenSave = false;
-  ORIGINAL_OWNER = null;
-  ORIGINAL_REPO = null;
-  ORIGINAL_DEFAULT_BRANCH = null;
+  SEEN_FORKS.clear();
 }
 
 function getOnlyDate(full) {
@@ -234,15 +224,19 @@ function update_table_trying_use_filter() {
 }
 
 function is_duplicate_repo(name) {
+  const lower = (name || '').toLowerCase();
+  if (SEEN_FORKS.has(lower)) return true;
   for (const fork of TABLE_DATA) {
-    if (fork['name'] === name)
+    if (fork['name'].toLowerCase() === lower)
       return true;
   }
   return false;
 }
 
-/** Updates table data, then calls function to update the table. */
-function update_table_data(responseData, user, repo, parentDefaultBranch) {
+/** Updates table data, then calls function to update the table. 
+ * OrigInfo carries original queried repo {owner, repo, branch} via closure (not globals) to avoid concurrency race.
+ */
+function update_table_data(responseData, user, repo, parentDefaultBranch, origInfo) {
   if (isEmpty(responseData)) {
     return;
   }
@@ -252,39 +246,40 @@ function update_table_data(responseData, user, repo, parentDefaultBranch) {
     removeProgressBar();
   }
 
-  // Determine if forks in this page are second-order (or deeper) relative to original query.
-  // If ORIGINAL is not yet set (edge), treat as first-order.
-  const isSecondOrderContext = ORIGINAL_OWNER && ORIGINAL_REPO && (user !== ORIGINAL_OWNER || repo !== ORIGINAL_REPO);
+  const isSecondOrderContext = origInfo && (user !== origInfo.owner || repo !== origInfo.repo);
 
   for (const currFork of responseData) {
     if (RATE_LIMIT_EXCEEDED) // we can skip everything below because they are only requests
       continue;
 
+    const lowerName = (currFork.full_name || '').toLowerCase();
+    // dedup SEEN before send – synchronous guard prevents race-induced duplicates & double-path
+    if (SEEN_FORKS.has(lowerName))
+      continue;
     if (is_duplicate_repo(currFork.full_name))
       continue; // abort because repo is already listed
 
-    let datum = {
+    SEEN_FORKS.add(lowerName);
+
+    // clone datum per iteration for async safety
+    let baseDatum = {
       'name': currFork.full_name,
       'stars': currFork.stargazers_count,
       'forks': currFork.forks_count,
-      'is_second_order': isSecondOrderContext,
+      'is_second_order': !!isSecondOrderContext,
     };
+    let datum = {...baseDatum};
 
     /* Commits diff data (ahead/behind). 
-     * Fix #74 & #18: For second-order forks, compare against ORIGINAL repo's default branch
-     * instead of immediate parent to avoid showing misleading numbers identical to immediate forks.
-     * Example: teamgram/teamgram-server -> fedigram/fedigram-server numbers looked like immediate fork
-     * but were second-order. Likewise CouchPotato second-order forks were marked behind=0 when they
-     * were behind root by 3611.
-     * We track ORIGINAL_OWNER/REPO/DEFAULT_BRANCH in initial_request(). If we're in a second-order
-     * context we compare against original; otherwise we compare against immediate parent.
-     * On failure (no common history, detached fork, 404) we fallback to parent comparison.
+     * Fix #74 & #18: For second-order forks, compare against origInfo repo's default branch
+     * instead of immediate parent to avoid showing misleading numbers.
+     * On failure (no common history, 404) we fallback to parent comparison.
      */
     let compareOwner, compareRepo, compareBase, compareAgainstOriginal;
-    if (isSecondOrderContext && ORIGINAL_DEFAULT_BRANCH) {
-      compareOwner = ORIGINAL_OWNER;
-      compareRepo = ORIGINAL_REPO;
-      compareBase = ORIGINAL_DEFAULT_BRANCH;
+    if (isSecondOrderContext && origInfo && origInfo.branch) {
+      compareOwner = origInfo.owner;
+      compareRepo = origInfo.repo;
+      compareBase = origInfo.branch;
       compareAgainstOriginal = true;
     } else {
       compareOwner = user;
@@ -301,13 +296,15 @@ function update_table_data(responseData, user, repo, parentDefaultBranch) {
     });
     const onSuccess = (responseHeaders, responseData) => {
       if (responseData.total_commits > 0) {
-        datum['ahead_by'] = responseData.ahead_by;
-        datum['ahead_url'] = responseData.html_url;
-        datum['behind_by'] = responseData.behind_by;
-        datum['behind_url'] = getBehindUrl(responseData.html_url);
-        datum['pushed_at'] = getOnlyDate(currFork.pushed_at);
-        datum['compared_against_original'] = compareAgainstOriginal;
-        TABLE_DATA.push(datum);
+        // clone again to avoid mutation race if datum reused elsewhere
+        const finalDatum = {...datum};
+        finalDatum['ahead_by'] = responseData.ahead_by;
+        finalDatum['ahead_url'] = responseData.html_url;
+        finalDatum['behind_by'] = responseData.behind_by;
+        finalDatum['behind_url'] = getBehindUrl(responseData.html_url);
+        finalDatum['pushed_at'] = getOnlyDate(currFork.pushed_at);
+        finalDatum['compared_against_original'] = compareAgainstOriginal;
+        TABLE_DATA.push(finalDatum);
         if (TABLE_DATA.length > 1) showFilterContainer();
         
         update_table_trying_use_filter();
@@ -324,13 +321,14 @@ function update_table_data(responseData, user, repo, parentDefaultBranch) {
         });
         const onFallbackSuccess = (rh, rd) => {
           if (rd.total_commits > 0) {
-            datum['ahead_by'] = rd.ahead_by;
-            datum['ahead_url'] = rd.html_url;
-            datum['behind_by'] = rd.behind_by;
-            datum['behind_url'] = getBehindUrl(rd.html_url);
-            datum['pushed_at'] = getOnlyDate(currFork.pushed_at);
-            datum['compared_against_original'] = false;
-            TABLE_DATA.push(datum);
+            const finalDatum = {...datum};
+            finalDatum['ahead_by'] = rd.ahead_by;
+            finalDatum['ahead_url'] = rd.html_url;
+            finalDatum['behind_by'] = rd.behind_by;
+            finalDatum['behind_url'] = getBehindUrl(rd.html_url);
+            finalDatum['pushed_at'] = getOnlyDate(currFork.pushed_at);
+            finalDatum['compared_against_original'] = false;
+            TABLE_DATA.push(finalDatum);
             if (TABLE_DATA.length > 1) showFilterContainer();
             update_table_trying_use_filter();
           }
@@ -344,11 +342,12 @@ function update_table_data(responseData, user, repo, parentDefaultBranch) {
 
     /* Forks of forks. */
     if (currFork.forks_count > 0) {
-      // Propagate original context via globals; third-order forks still compare against root.
-      request_fork_page(1, currFork.owner.login, currFork.name, currFork.default_branch);
+      // Propagate original context via closure, not globals; third-order forks still compare against root.
+      request_fork_page(1, currFork.owner.login, currFork.name, currFork.default_branch, origInfo);
     }
   }
 }
+
 
 function update_filter_appearance() {
   const filter = getFilterOrDefault();
@@ -380,7 +379,7 @@ function update_table(data) {
 
     const NEW_ROW = $('<tr>', { id: extract_username_from_fork(name), class: "useful_forks_repo" });
     NEW_ROW.append(
-      $('<td>').html(getRepoCol(name, false)).attr("value", name),
+      $('<td>').html(getRepoCol(name, false) + (compared_against_original ? ' <sup title="compared against queried repo" aria-label="second-order">²</sup>' : '')).attr("value", name),
       $('<td>').html(UF_TABLE_SEPARATOR + getStarCol(stars)).attr("value", stars),
       $('<td>').html(UF_TABLE_SEPARATOR + getForkCol(forks)).attr("value", forks),
       $('<td>').html(UF_TABLE_SEPARATOR),
@@ -452,7 +451,7 @@ function updateFilterFunction() {
 }
 
 /** Paginated (index starts at 1) recursive forks scan. */
-function request_fork_page(page_number, user, repo, defaultBranch) {
+function request_fork_page(page_number, user, repo, defaultBranch, origInfo) {
   if (RATE_LIMIT_EXCEEDED)
     return;
 
@@ -476,11 +475,11 @@ function request_fork_page(page_number, user, repo, defaultBranch) {
     if (link_header) {
       let contains_next_page = link_header.indexOf('>; rel="next"');
       if (contains_next_page !== -1) {
-        request_fork_page(++page_number, user, repo, defaultBranch);
+        request_fork_page(page_number+1, user, repo, defaultBranch, origInfo);
       }
     }
 
-    update_table_data(responseData, user, repo, defaultBranch);
+    update_table_data(responseData, user, repo, defaultBranch, origInfo);
   };
   const onFailure = () => displayConditionalErrorMsg();
   send(requestPromise, onSuccess, onFailure);
@@ -488,10 +487,8 @@ function request_fork_page(page_number, user, repo, defaultBranch) {
 
 /** Updates header with Queried Repo info, and initiates forks scan. */
 function initial_request(user, repo) {
-  // Store original query for second-order diff fix (#74, #18)
-  ORIGINAL_OWNER = user;
-  ORIGINAL_REPO = repo;
-  // ORIGINAL_DEFAULT_BRANCH will be set once we know it from the repo GET response
+  // Pass original via closure object, not globals, to avoid concurrency race
+  let origInfo = {owner: user, repo: repo, branch: null};
 
   const requestPromise = () => octokit.repos.get({
     owner: user,
@@ -504,7 +501,7 @@ function initial_request(user, repo) {
     const onlyDate = getOnlyDate(responseData.pushed_at);
     REPO_DATE = new Date(onlyDate);
     TOTAL_FORKS = responseData.forks_count;
-    ORIGINAL_DEFAULT_BRANCH = responseData.default_branch;
+    origInfo.branch = responseData.default_branch;
 
     let html_txt = '<b>Queried repository</b>:&nbsp;&nbsp;&nbsp;';
     html_txt += getRepoCol(responseData.full_name, true);
@@ -533,7 +530,7 @@ function initial_request(user, repo) {
     setHeader(html_txt);
 
     if (TOTAL_FORKS > 0) {
-      request_fork_page(1, user, repo, responseData.default_branch);
+      request_fork_page(1, user, repo, responseData.default_branch, origInfo);
     } else {
       setMsg(UF_MSG_NO_FORKS);
       enableQueryFields();
