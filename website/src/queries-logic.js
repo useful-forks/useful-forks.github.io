@@ -102,6 +102,143 @@ function getBehindUrl(aheadUrl) {
   return split.join('/');
 }
 
+/* --- Feature #65: Search additionally not-forked repository copies ---
+   Fixed per adversarial review: opt-in checkbox default off, per_page 5,
+   base length >=4, 5-copy cap, debounce, filter >5 stars or >0 ahead, sanitized query.
+*/
+let SEARCH_SIMILAR_DEBOUNCE_TIMER = null;
+let SIMILAR_COPIES_COUNT = 0;
+const SIMILAR_COPIES_MAX = 5;
+
+function isCopiesOptIn() {
+  try {
+    if (typeof window !== 'undefined' && window.getCopiesSetting) {
+      return !!window.getCopiesSetting();
+    }
+    let raw = localStorage.getItem('useful-forks-search-copies');
+    if (raw == null) return false;
+    return !!JSON.parse(raw);
+  } catch(e) { return false; }
+}
+
+function strip_trailing_numbers(name) {
+  // Suggested in #65: strip trailing numbers, e.g., vcstool2 -> vcstool
+  // Also trim trailing separators after stripping.
+  return name.replace(/\d+$/, '').replace(/[-_\.]$/, '').trim() || name;
+}
+
+function debouncedSearchSimilar(user, repo, defaultBranch) {
+  clearTimeout(SEARCH_SIMILAR_DEBOUNCE_TIMER);
+  SEARCH_SIMILAR_DEBOUNCE_TIMER = setTimeout(() => {
+    search_similar_repos(user, repo, defaultBranch);
+  }, 500);
+}
+
+function search_similar_repos(user, repo, parentDefaultBranch) {
+  if (!isCopiesOptIn()) {
+    // opt-in required – silent skip to avoid quota blow-up
+    return;
+  }
+  const base = strip_trailing_numbers(repo);
+  if (!base || base.length < 4) {
+    // skip common short names – prevents broad queries like "test"
+    return;
+  }
+  // Sanitize: only alphanumeric, ., -, _, length >=4, avoid quote injection in q
+  if (!/^[A-Za-z0-9._-]{4,}$/.test(base)) {
+    return;
+  }
+  const query = base;
+
+  SIMILAR_COPIES_COUNT = 0;
+
+  const requestPromise = () => octokit.search.repos({
+    q: `${query} in:name`,
+    sort: 'stars',
+    order: 'desc',
+    per_page: 5
+  });
+
+  const onSuccess = (responseHeaders, responseData) => {
+    const items = responseData.items || [];
+    for (const item of items) {
+      if (SIMILAR_COPIES_COUNT >= SIMILAR_COPIES_MAX) break;
+      if (!item || !item.full_name) continue;
+      if (item.full_name.toLowerCase() === `${user}/${repo}`.toLowerCase()) continue;
+      if (is_duplicate_repo(item.full_name)) continue;
+      // Pre-filter: >5 stars preferred – otherwise likely noise; still allow if compare later shows ahead>0
+      if ((item.stargazers_count || 0) <= 5) {
+        // keep candidate for compare-check but mark low-star; we will drop if compare shows 0 ahead
+        // to reduce noise, we still count but allow compare to decide
+      }
+
+      let datum = {
+        'name': item.full_name,
+        'stars': item.stargazers_count,
+        'forks': item.forks_count,
+        'ahead_by': 0,
+        'ahead_url': `https://github.com/${item.full_name}`,
+        'behind_by': 0,
+        'behind_url': `https://github.com/${item.full_name}`,
+        'pushed_at': getOnlyDate(item.pushed_at || item.updated_at || new Date().toISOString()),
+        'is_copy': true
+      };
+
+      const comparePromise = () => octokit.repos.compareCommits({
+        owner: user,
+        repo: repo,
+        base: parentDefaultBranch,
+        head: `${item.owner.login}:${item.default_branch}`
+      });
+      const onCompareSuccess = (cmpHeaders, cmpData) => {
+        if (SIMILAR_COPIES_COUNT >= SIMILAR_COPIES_MAX) return;
+        let useful = false;
+        if (cmpData && cmpData.total_commits > 0) {
+          datum['ahead_by'] = cmpData.ahead_by || 0;
+          datum['ahead_url'] = cmpData.html_url || datum['ahead_url'];
+          datum['behind_by'] = cmpData.behind_by || 0;
+          datum['behind_url'] = getBehindUrl(cmpData.html_url || datum['ahead_url']);
+          if (datum['ahead_by'] > 0) useful = true;
+        }
+        if (datum['stars'] > 5) useful = true;
+        if (!useful) {
+          // drop low-value copy – prevents pollution
+          return;
+        }
+        TABLE_DATA.push(datum);
+        SIMILAR_COPIES_COUNT++;
+        if (TABLE_DATA.length > 1) showFilterContainer();
+        update_table_trying_use_filter();
+      };
+      const onCompareFailure = () => {
+        // On failure (unrelated histories) only keep if stars >5 – avoids pollution
+        if (SIMILAR_COPIES_COUNT >= SIMILAR_COPIES_MAX) return;
+        if ((datum['stars'] || 0) <= 5) return;
+        TABLE_DATA.push(datum);
+        SIMILAR_COPIES_COUNT++;
+        if (TABLE_DATA.length > 1) showFilterContainer();
+        update_table_trying_use_filter();
+      };
+      if (!RATE_LIMIT_EXCEEDED) {
+        send(comparePromise, onCompareSuccess, onCompareFailure);
+      } else {
+        // rate-limited – only push if stars >5
+        if ((datum['stars'] || 0) > 5 && SIMILAR_COPIES_COUNT < SIMILAR_COPIES_MAX) {
+          TABLE_DATA.push(datum);
+          SIMILAR_COPIES_COUNT++;
+          update_table_trying_use_filter();
+        }
+      }
+    }
+  };
+
+  const onFailure = () => {
+    // Silent failure for similar repos search – not critical
+  };
+
+  send(requestPromise, onSuccess, onFailure);
+}
+
 function getTdValue(rows, index, col) {
   return Number(rows.item(index).getElementsByTagName('td').item(col).getAttribute("value"));
 }
@@ -293,18 +430,19 @@ function update_filter() {
 
 /**
  * Rewrites the table with the specified data.
- * @param {Array} data - Array of objects with the following keys: name, stars, forks, ahead_by, ahead_url, behind_by, behind_url, pushed_at
+ * @param {Array} data - Array of objects with the following keys: name, stars, forks, ahead_by, ahead_url, behind_by, behind_url, pushed_at, is_copy
  */
 function update_table(data) {
   clearTable();
   let table_body = getTableBody();
   for (const currFork of data) {
-    const { name, stars, forks, ahead_by, ahead_url, behind_by, behind_url, pushed_at } = currFork;
+    const { name, stars, forks, ahead_by, ahead_url, behind_by, behind_url, pushed_at, is_copy } = currFork;
     const date_txt = compareDates(pushed_at, getDateCol(pushed_at));
+    const repo_col = is_copy ? getRepoCol(name, false) + ' <span class="tag is-light is-small" title="Not a GitHub fork, but a copy with similar name (see #65)">copy</span>' : getRepoCol(name, false);
 
     const NEW_ROW = $('<tr>', { id: extract_username_from_fork(name), class: "useful_forks_repo" });
     NEW_ROW.append(
-      $('<td>').html(getRepoCol(name, false)).attr("value", name),
+      $('<td>').html(repo_col).attr("value", name),
       $('<td>').html(UF_TABLE_SEPARATOR + getStarCol(stars)).attr("value", stars),
       $('<td>').html(UF_TABLE_SEPARATOR + getForkCol(forks)).attr("value", forks),
       $('<td>').html(UF_TABLE_SEPARATOR),
@@ -449,6 +587,13 @@ function initial_request(user, repo) {
     }
 
     setHeader(html_txt);
+
+    // Feature #65: opt-in capped search for not-forked copies (debounced, length>=4, per_page 5, 5-copy cap)
+    try {
+      debouncedSearchSimilar(user, repo, responseData.default_branch);
+    } catch (e) {
+      console.warn('[useful-forks] similar repos search failed', e);
+    }
 
     if (TOTAL_FORKS > 0) {
       request_fork_page(1, user, repo, responseData.default_branch);
