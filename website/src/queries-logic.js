@@ -159,8 +159,22 @@ function allRequestsAreDone() {
   // - Finally, recursive pagination + 100 compare calls per page creates
   //   huge concurrency that triggers secondary rate-limits; the throttling
   //   plugin keeps promises pending, so ONGOING stays >0 while stalled.
+  //
   // Robust completion = no ongoing requests. Pagination chains keep ONGOING>0
   // because next page is queued inside success before finally decrementing.
+  // Ordering guarantee (critical):
+  //   send() => incrementCounters() *synchronously* before promise.
+  //   success callback (which queues next page via send()) runs *before* the
+  //   finally() that decrements current request. So ONGOING never dips to 0
+  //   between page N success and page N+1 enqueue – if we ever make next-page
+  //   queuing async (setTimeout/await), we must add a pagesInFlight guard.
+  //
+  // Optional hardening (not active, documented for future):
+  //   let PAGES_IN_FLIGHT = 0; increment when queuing page, decrement on done.
+  //   Then completion = ONGOING<=0 && PAGES_IN_FLIGHT<=0. Kept as comment to
+  //   stay low-risk. Backoff: throttling plugin already retries on 403/429
+  //   with exponential backoff – see setUpOctokitWithLatestToken(). For true
+  //   100k volumes we should add p-limit(3) concurrency cap.
   return ONGOING_REQUESTS_COUNTER <= 0;
 }
 
@@ -412,12 +426,19 @@ function request_fork_page(page_number, user, repo, defaultBranch) {
        creates thousands of pages. The throttling plugin retries on secondary rate
        limits, but UI previously hung because allRequestsAreDone required
        TOTAL_API_CALLS >= TOTAL_FORKS. With ONGOING-only completion, we still
-       correctly chain pages: next page is queued synchronously inside success
+       correctly chain pages: next page is queued *synchronously* inside success
        before finally() decrements current ONGOING, so ONGOING never hits 0
        prematurely while pagination continues.
+
+       Safety: request_fork_page(page_number + 1, ...) – never use ++page_number
+       which mutates and skips pages on retry. Increment (via send()) happens
+       before decrement (via finally()) guaranteeing ONGOING>0 during chain.
+       See allRequestsAreDone() for pagesInFlight guard discussion and backoff.
     */
     const link_header = responseHeaders["link"] || responseHeaders["Link"] || responseHeaders.link;
     if (link_header) {
+      // Robust next-page detection: Link: <url>; rel="next", <url>; rel="last"
+      // Use both exact and loose checks for Octokit variations.
       let contains_next_page = link_header.indexOf('>; rel="next"') !== -1 || link_header.includes('rel="next"');
       if (contains_next_page) {
         request_fork_page(page_number + 1, user, repo, defaultBranch);
