@@ -29,6 +29,7 @@ let RATE_LIMIT_EXCEEDED;
 let TOTAL_API_CALLS_COUNTER;
 let ONGOING_REQUESTS_COUNTER = 0;
 let IS_USEFUL_FORK; // function that determines if a fork is useful or not
+let SEEN_FORKS = new Set(); // dedup guard for detached/source scans
 
 
 /** Used to reset the state for a brand new query. */
@@ -46,6 +47,7 @@ function clear_old_data() {
   TOTAL_API_CALLS_COUNTER = 0;
   ONGOING_REQUESTS_COUNTER = 0;
   shouldTriggerQueryOnTokenSave = false;
+  if (typeof SEEN_FORKS !== 'undefined') SEEN_FORKS.clear();
 }
 
 function getOnlyDate(full) {
@@ -213,8 +215,10 @@ function update_table_trying_use_filter() {
 }
 
 function is_duplicate_repo(name) {
+  const lower = (name||'').toLowerCase();
+  if (typeof SEEN_FORKS !== 'undefined' && SEEN_FORKS.has(lower)) return true;
   for (const fork of TABLE_DATA) {
-    if (fork['name'] === name)
+    if (fork['name'].toLowerCase() === lower)
       return true;
   }
   return false;
@@ -410,6 +414,105 @@ function request_fork_page(page_number, user, repo, defaultBranch) {
   send(requestPromise, onSuccess, onFailure);
 }
 
+/**
+ * Exploratory fallback for detached forks (Issue #76).
+ *
+ * GitHub now allows intentional detachment of a fork network:
+ * - https://stackoverflow.com/questions/16052477/delete-fork-dependency-of-a-github-repository/79633266#79633266
+ * - GH Support "detach fork" option at https://support.github.com/request/fork
+ *
+ * Once detached, a repository becomes standalone (fork:false, source:null, parent:null)
+ * and is no longer returned by the listForks API nor by the forks insights page.
+ * Example: dirk-thomas/vcstool (root, 104 forks) vs ros-infrastructure/vcs2l
+ * (originally ros-infrastructure/vcstool, a fork of dirk-thomas/vcstool, renamed to vcs2l
+ * and detached). It is now impossible to discover via:
+ *   https://github.com/dirk-thomas/vcstool/forks?include=active,archived,inactive,network
+ *   https://api.github.com/repos/dirk-thomas/vcstool/forks
+ * resulting in segmentation of the fork tree.
+ *
+ * See GitHub Community discussion:
+ *   https://github.com/orgs/community/discussions/173970
+ *
+ * This function attempts best-effort discovery via Search API:
+ * - Searches for repositories with the same repo name (e.g., "vcstool in:name")
+ * - Filters out the queried repo itself and already-known forks
+ * - Tries to validate sharing history via compareCommits in update_table_data
+ *
+ * LIMITATIONS:
+ * - Renamed detached forks (vcstool -> vcs2l) will NOT be found by name search.
+ *   There is no GitHub API to find renamed detached forks without an external index
+ *   (e.g., GH Archive, or maintaining a database of known forks).
+ * - Search API has stricter rate limits (10 req/min unauth) and returns at most 1000 results.
+ * - Forks that were detached and then heavily rewritten may no longer share commit history
+ *   and will be filtered out as unrelated by compareCommits.
+ *
+ * Therefore this fallback is opportunistic and may still miss some detached forks.
+ * For complete reliability, users would need to manually track parent links
+ * or use an external fork-index service.
+ */
+let DETACHED_SEARCH_COUNT = 0;
+let DETACHED_PAGE_COUNT = 0;
+const DETACHED_MAX_SEARCHES = 10;
+const DETACHED_MAX_PAGES = 5;
+
+function request_detached_forks_via_search(user, repo, defaultBranch, parentLanguage) {
+  // Opt-in guard – default off (high risk)
+  if (typeof UF_SETTINGS_DETACHED !== 'undefined' && !UF_SETTINGS_DETACHED) return;
+  if (typeof UF_SETTINGS_DETACHED === 'undefined') return; // safe default – do not run if settings not loaded
+  if (RATE_LIMIT_EXCEEDED) return;
+  if (DETACHED_SEARCH_COUNT >= DETACHED_MAX_SEARCHES) return;
+
+  // Avoid excessive API usage for very common repo names
+  const searchQuery = `${repo} in:name fork:true`;
+  const requestPromise = () => {
+    DETACHED_SEARCH_COUNT++;
+    return octokit.search.repos({
+      q: searchQuery,
+      per_page: 10, // cap 10 results (was 30) to reduce noise & quota
+      sort: "stars",
+      order: "desc"
+    });
+  };
+
+  const onSuccess = (responseHeaders, responseData) => {
+    if (isEmpty(responseData.items)) return;
+
+    // language/stars filter & double-count guard
+    const candidates = responseData.items
+      .filter(r => r.full_name.toLowerCase() !== `${user}/${repo}`.toLowerCase())
+      .filter(r => !is_duplicate_repo(r.full_name))
+      .filter(r => {
+        if ((r.stargazers_count||0) < 3) return false;
+        if (parentLanguage && r.language && parentLanguage !== r.language) {
+          if ((r.stargazers_count||0) < 20) return false;
+        }
+        return true;
+      })
+      .slice(0,10) // cap 10
+      .map(r => {
+        const lower = (r.full_name||'').toLowerCase();
+        if (typeof SEEN_FORKS !== 'undefined') SEEN_FORKS.add(lower);
+        return {
+          full_name: r.full_name,
+          stargazers_count: r.stargazers_count,
+          forks_count: r.forks_count,
+          pushed_at: r.pushed_at || new Date().toISOString(),
+          owner: { login: r.owner.login },
+          name: r.name,
+          default_branch: r.default_branch || defaultBranch,
+          language: r.language
+        };
+      });
+
+    if (candidates.length > 0) {
+      update_table_data(candidates, user, repo, defaultBranch);
+    }
+  };
+
+  const onFailure = () => { console.warn('[detached] search fallback failed (best-effort)', searchQuery); };
+  send(requestPromise, onSuccess, onFailure);
+}
+
 /** Updates header with Queried Repo info, and initiates forks scan. */
 function initial_request(user, repo) {
   const requestPromise = () => octokit.repos.get({
@@ -455,6 +558,44 @@ function initial_request(user, repo) {
     } else {
       setMsg(UF_MSG_NO_FORKS);
       enableQueryFields();
+    }
+
+    // Fix #76 mitigation: detached forks segmentation – opt-in, capped, best-effort
+    // High risk (API blow-up, double scan). Gated behind UF_SETTINGS_DETACHED default off.
+    // Caps: max 5 extra pages for source/parent networks, depth 1 only (no recursive source-of-source).
+    // Documented limitation: renamed detached forks (vcstool->vcs2l) cannot be found by name search.
+    if (typeof UF_SETTINGS_DETACHED !== 'undefined' && UF_SETTINGS_DETACHED) {
+      if (responseData.source) {
+        const sourceParts = responseData.source.full_name.split('/');
+        const lowerSource = responseData.source.full_name.toLowerCase();
+        // double-count guard + depth 1 cap
+        if (sourceParts.length === 2 && (sourceParts[0] !== user || sourceParts[1] !== repo)) {
+          if (typeof SEEN_FORKS === 'undefined' || !SEEN_FORKS.has(lowerSource)) {
+            if (DETACHED_PAGE_COUNT < 5) {
+              DETACHED_PAGE_COUNT++;
+              if (typeof SEEN_FORKS !== 'undefined') SEEN_FORKS.add(lowerSource);
+              request_fork_page(1, sourceParts[0], sourceParts[1], responseData.source.default_branch || responseData.default_branch);
+            }
+          }
+        }
+        if (responseData.parent && responseData.parent.full_name !== responseData.source.full_name) {
+          const parentParts = responseData.parent.full_name.split('/');
+          const lowerParent = responseData.parent.full_name.toLowerCase();
+          if (parentParts.length === 2) {
+            if (typeof SEEN_FORKS === 'undefined' || !SEEN_FORKS.has(lowerParent)) {
+              if (DETACHED_PAGE_COUNT < 5) {
+                DETACHED_PAGE_COUNT++;
+                if (typeof SEEN_FORKS !== 'undefined') SEEN_FORKS.add(lowerParent);
+                request_fork_page(1, parentParts[0], parentParts[1], responseData.parent.default_branch || responseData.default_branch);
+              }
+            }
+          }
+        }
+      }
+
+      // Best-effort search for detached forks that kept the same repo name – cap 10 results, language+stars filter
+      const parentLang = responseData.language || null;
+      request_detached_forks_via_search(user, repo, responseData.default_branch, parentLang);
     }
   };
   const onFailure = () => displayConditionalErrorMsg();
