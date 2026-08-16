@@ -24,6 +24,9 @@ const mapTable = {
 /* Variables that should be cleared for every new query (defaults are set in "clear_old_data"). */
 let TABLE_DATA = [];
 let SEEN_FORKS = new Set();
+function normalizeRepoName(name){ return (name||"").trim().toLowerCase(); }
+function seenHas(name){ return SEEN_FORKS.has(normalizeRepoName(name)); }
+function seenAdd(name){ SEEN_FORKS.add(normalizeRepoName(name)); }
 let REPO_DATE;
 let TOTAL_FORKS;
 let RATE_LIMIT_EXCEEDED;
@@ -215,9 +218,10 @@ function update_table_trying_use_filter() {
 }
 
 function is_duplicate_repo(name) {
-  if (SEEN_FORKS.has(name)) return true;
+  const norm = normalizeRepoName(name);
+  if (SEEN_FORKS.has(norm)) return true;
   for (const fork of TABLE_DATA) {
-    if (fork['name'] === name)
+    if (normalizeRepoName(fork['name']) === norm)
       return true;
   }
   return false;
@@ -238,13 +242,15 @@ function update_table_data(responseData, user, repo, parentDefaultBranch) {
     if (RATE_LIMIT_EXCEEDED) // we can skip everything below because they are only requests
       continue;
 
-    if (SEEN_FORKS.has(currFork.full_name))
-      continue; // abort because repo already seen (synchronous dedup)
+    const normFull = normalizeRepoName(currFork.full_name);
+    if (SEEN_FORKS.has(normFull))
+      continue; // abort because repo already seen (synchronous dedup normalized)
     if (is_duplicate_repo(currFork.full_name))
       continue; // abort because repo is already listed
 
     // Mark as seen synchronously to prevent race conditions with concurrent async requests
-    SEEN_FORKS.add(currFork.full_name);
+    // Normalized add; will be kept even if not useful to avoid re-scanning, but persisted correctly
+    SEEN_FORKS.add(normFull);
 
     let datum = {
       'name': currFork.full_name,
@@ -261,15 +267,13 @@ function update_table_data(responseData, user, repo, parentDefaultBranch) {
     });
     const onSuccess = (responseHeaders, responseData) => {
       if (responseData.total_commits > 0) {
-        // Double-check duplicate before push (in case of race or forks-of-forks via multiple paths)
-        if (is_duplicate_repo(datum['name'])) {
-          // Already in TABLE_DATA via another path, but keep SEEN_FORKS consistent
-          // Skip pushing duplicate
+        // Double-check duplicate before push (normalized) – avoid race push
+        const normDatum = normalizeRepoName(datum['name']);
+        if (TABLE_DATA.some(e=>normalizeRepoName(e['name'])===normDatum)) {
           return;
         }
-        // Also check TABLE_DATA directly for same name to be extra safe against async race
-        for (const existing of TABLE_DATA) {
-          if (existing['name'] === datum['name']) return;
+        if (is_duplicate_repo(datum['name'])) {
+          return;
         }
         datum['ahead_by'] = responseData.ahead_by;
         datum['ahead_url'] = responseData.html_url;
