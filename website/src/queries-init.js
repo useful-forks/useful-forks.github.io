@@ -248,9 +248,16 @@ function getJqId_$(id) {
 const JQ_ID_HEADER  = getJqId_$(UF_ID_HEADER);
 const JQ_ID_MSG     = getJqId_$(UF_ID_MSG);
 const JQ_ID_TABLE   = getJqId_$(UF_ID_TABLE);
-// Initial binding for sortable headers, in case queries-logic.js already loaded; otherwise logic file will call setupSortableHeaders after load
-if (typeof setupSortableHeaders === 'function') { setupSortableHeaders(); } else { 
-  $(document).ready(function(){ 
-    setTimeout(function(){ if (typeof setupSortableHeaders === 'function') setupSortableHeaders(); }, 200);
+// Single binding point – idempotent, debounce handled inside setupSortableHeaders.
+// Keep fallback for late load of queries-logic.js.
+if (typeof setupSortableHeaders === 'function') {
+  try { setupSortableHeaders(); } catch(e){}
+} else {
+  $(document).ready(function(){
+    setTimeout(function(){
+      if (typeof setupSortableHeaders === 'function') {
+        try { setupSortableHeaders(); } catch(e){}
+      }
+    }, 220);
   });
 }
