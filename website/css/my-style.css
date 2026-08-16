@@ -100,15 +100,23 @@ table {
 }
 
 /* Responsive table – Fix #19: small screens get weird table */
+:root {
+  --sticky-bg: #fff;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --sticky-bg: #1e1e1e;
+  }
+}
+body.dark {
+  --sticky-bg: #1e1e1e;
+}
 #useful_forks_wrapper {
   width: 100%;
   overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
 }
 #useful_forks_data {
-  overflow-x: auto;
   width: 100%;
-  display: block;
 }
 #useful_forks_table {
   width: 100%;
@@ -120,8 +128,19 @@ table {
   white-space: nowrap;
   position: sticky;
   top: 0;
-  background: #fff;
+  background: var(--sticky-bg);
   z-index: 2;
+}
+#uf-swipe-hint {
+  display: none;
+  text-align: center;
+  margin-top: 6px;
+}
+#uf-swipe-hint.is-visible {
+  display: block;
+}
+#uf-swipe-hint button {
+  font-size: 0.8em;
 }
 
 @media screen and (max-width: 768px) {
@@ -160,14 +179,6 @@ table {
   #useful_forks_table {
     font-size: 0.8em;
     min-width: 500px;
-  }
-  #useful_forks_data::after {
-    content: "← swipe to see more →";
-    display: block;
-    text-align: center;
-    font-size: 0.75em;
-    color: #888;
-    margin-top: 6px;
   }
   /* Make repo name flex-friendly with spans */
   .useful_forks_repo td:first-child {

@@ -219,6 +219,7 @@ const UF_ID_HEADER  = 'useful_forks_header';
 const UF_ID_MSG     = 'useful_forks_msg';
 const UF_ID_DATA    = 'useful_forks_data';
 const UF_ID_TABLE   = 'useful_forks_table';
+const UF_ID_SWIPE_HINT = 'uf-swipe-hint';
 $('#useful_forks_inject').append(
     $('<div>', {id: UF_ID_WRAPPER}).append(
         $('<div>', {id: UF_ID_HEADER}),
@@ -227,6 +228,11 @@ $('#useful_forks_inject').append(
             $('<table>', {id: UF_ID_TABLE}).append(
                 $('<tbody>')
             )
+        ),
+        $('<div>', {id: UF_ID_SWIPE_HINT, role: 'status', 'aria-live': 'polite'}).append(
+            $('<button>', {type: 'button', class: 'button is-small is-light', 'aria-label': 'Scroll table to see more columns'})
+                .text('→ swipe to see more →')
+                .on('click', function(){ document.getElementById(UF_ID_WRAPPER).scrollBy({left: 120, behavior: 'smooth'}); })
         )
     )
 );
@@ -236,3 +242,23 @@ function getJqId_$(id) {
 const JQ_ID_HEADER  = getJqId_$(UF_ID_HEADER);
 const JQ_ID_MSG     = getJqId_$(UF_ID_MSG);
 const JQ_ID_TABLE   = getJqId_$(UF_ID_TABLE);
+const JQ_ID_SWIPE_HINT = getJqId_$(UF_ID_SWIPE_HINT);
+
+function updateSwipeHintVisibility() {
+  const wrapper = document.getElementById(UF_ID_WRAPPER);
+  const hint = document.getElementById(UF_ID_SWIPE_HINT);
+  if (!wrapper || !hint) return;
+  if (wrapper.scrollWidth > wrapper.clientWidth) {
+    hint.classList.add('is-visible');
+  } else {
+    hint.classList.remove('is-visible');
+  }
+}
+$(window).on('resize', updateSwipeHintVisibility);
+setTimeout(updateSwipeHintVisibility, 300);
+// also check after table updates (mutation observer)
+if (typeof MutationObserver !== 'undefined') {
+  const mo = new MutationObserver(() => updateSwipeHintVisibility());
+  const tbl = document.getElementById(UF_ID_TABLE);
+  if (tbl) mo.observe(tbl, {childList: true, subtree: true});
+}
