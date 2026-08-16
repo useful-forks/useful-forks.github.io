@@ -183,6 +183,24 @@
           </div>
         </div>
 
+        <!-- Detached forks fallback (Issue #76) – opt-in, high risk -->
+        <div class="field is-horizontal">
+          <div class="field-label is-normal">
+            <label class="label">Detached Forks:</label>
+          </div>
+          <div class="field-body">
+            <div class="field">
+              <div class="control">
+                <label class="checkbox">
+                  <input type="checkbox" id="uf_settings_detached">
+                  Enable detached-fork search (opt-in)
+                </label>
+              </div>
+              <p class="help mb-2"><strong>Default off – high risk / best-effort.</strong> When enabled, scans source/parent networks (cap 5 pages) and searches <code>name fork:true</code> (cap 10 results) filtered by language &amp; stars. Renamed detached forks (e.g., vcstool→vcs2l) cannot be found by name search – documented limitation. Search API has stricter rate-limits (10/min unauth) and is applied separately.</p>
+            </div>
+          </div>
+        </div>
+
       </section>
       <footer class="modal-card-foot">
         <a class="button is-uf-orange is-large is-fullwidth"

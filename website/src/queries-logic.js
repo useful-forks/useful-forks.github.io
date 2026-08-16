@@ -29,6 +29,7 @@ let RATE_LIMIT_EXCEEDED;
 let TOTAL_API_CALLS_COUNTER;
 let ONGOING_REQUESTS_COUNTER = 0;
 let IS_USEFUL_FORK; // function that determines if a fork is useful or not
+let SEEN_FORKS = new Set(); // dedup guard for detached/source scans
 
 
 /** Used to reset the state for a brand new query. */
@@ -46,6 +47,7 @@ function clear_old_data() {
   TOTAL_API_CALLS_COUNTER = 0;
   ONGOING_REQUESTS_COUNTER = 0;
   shouldTriggerQueryOnTokenSave = false;
+  if (typeof SEEN_FORKS !== 'undefined') SEEN_FORKS.clear();
 }
 
 function getOnlyDate(full) {
@@ -213,8 +215,10 @@ function update_table_trying_use_filter() {
 }
 
 function is_duplicate_repo(name) {
+  const lower = (name||'').toLowerCase();
+  if (typeof SEEN_FORKS !== 'undefined' && SEEN_FORKS.has(lower)) return true;
   for (const fork of TABLE_DATA) {
-    if (fork['name'] === name)
+    if (fork['name'].toLowerCase() === lower)
       return true;
   }
   return false;
@@ -446,45 +450,66 @@ function request_fork_page(page_number, user, repo, defaultBranch) {
  * For complete reliability, users would need to manually track parent links
  * or use an external fork-index service.
  */
-function request_detached_forks_via_search(user, repo, defaultBranch) {
-  if (RATE_LIMIT_EXCEEDED)
-    return;
+let DETACHED_SEARCH_COUNT = 0;
+let DETACHED_PAGE_COUNT = 0;
+const DETACHED_MAX_SEARCHES = 10;
+const DETACHED_MAX_PAGES = 5;
 
-  // Avoid excessive API usage for very common repo names (e.g., "test" would match thousands)
-  // Limit to repos whose name contains the queried repo name – a reasonable heuristic for forks
-  // that kept the same repo name (most common case).
+function request_detached_forks_via_search(user, repo, defaultBranch, parentLanguage) {
+  // Opt-in guard – default off (high risk)
+  if (typeof UF_SETTINGS_DETACHED !== 'undefined' && !UF_SETTINGS_DETACHED) return;
+  if (typeof UF_SETTINGS_DETACHED === 'undefined') return; // safe default – do not run if settings not loaded
+  if (RATE_LIMIT_EXCEEDED) return;
+  if (DETACHED_SEARCH_COUNT >= DETACHED_MAX_SEARCHES) return;
+
+  // Avoid excessive API usage for very common repo names
   const searchQuery = `${repo} in:name fork:true`;
-  const requestPromise = () => octokit.search.repos({
-    q: searchQuery,
-    per_page: 30,
-    sort: "stars",
-    order: "desc"
-  });
+  const requestPromise = () => {
+    DETACHED_SEARCH_COUNT++;
+    return octokit.search.repos({
+      q: searchQuery,
+      per_page: 10, // cap 10 results (was 30) to reduce noise & quota
+      sort: "stars",
+      order: "desc"
+    });
+  };
 
   const onSuccess = (responseHeaders, responseData) => {
-    if (isEmpty(responseData.items))
-      return;
+    if (isEmpty(responseData.items)) return;
 
-    // Convert search results to a shape compatible with update_table_data's expected fork objects
+    // language/stars filter & double-count guard
     const candidates = responseData.items
       .filter(r => r.full_name.toLowerCase() !== `${user}/${repo}`.toLowerCase())
       .filter(r => !is_duplicate_repo(r.full_name))
-      .map(r => ({
-        full_name: r.full_name,
-        stargazers_count: r.stargazers_count,
-        forks_count: r.forks_count,
-        pushed_at: r.pushed_at || new Date().toISOString(),
-        owner: { login: r.owner.login },
-        name: r.name,
-        default_branch: r.default_branch || defaultBranch
-      }));
+      .filter(r => {
+        if ((r.stargazers_count||0) < 3) return false;
+        if (parentLanguage && r.language && parentLanguage !== r.language) {
+          if ((r.stargazers_count||0) < 20) return false;
+        }
+        return true;
+      })
+      .slice(0,10) // cap 10
+      .map(r => {
+        const lower = (r.full_name||'').toLowerCase();
+        if (typeof SEEN_FORKS !== 'undefined') SEEN_FORKS.add(lower);
+        return {
+          full_name: r.full_name,
+          stargazers_count: r.stargazers_count,
+          forks_count: r.forks_count,
+          pushed_at: r.pushed_at || new Date().toISOString(),
+          owner: { login: r.owner.login },
+          name: r.name,
+          default_branch: r.default_branch || defaultBranch,
+          language: r.language
+        };
+      });
 
     if (candidates.length > 0) {
       update_table_data(candidates, user, repo, defaultBranch);
     }
   };
 
-  const onFailure = () => { /* silent – this is best-effort */ };
+  const onFailure = () => { console.warn('[detached] search fallback failed (best-effort)', searchQuery); };
   send(requestPromise, onSuccess, onFailure);
 }
 
@@ -535,24 +560,43 @@ function initial_request(user, repo) {
       enableQueryFields();
     }
 
-    // Fix #76 mitigation: detached forks segmentation
-    // If queried repo is itself a fork, also scan its source and parent fork networks
-    // to capture sibling forks that may have been missed due to network segmentation.
-    if (responseData.source) {
-      const sourceParts = responseData.source.full_name.split('/');
-      if (sourceParts.length === 2 && (sourceParts[0] !== user || sourceParts[1] !== repo)) {
-        request_fork_page(1, sourceParts[0], sourceParts[1], responseData.source.default_branch || responseData.default_branch);
-      }
-      if (responseData.parent && responseData.parent.full_name !== responseData.source.full_name) {
-        const parentParts = responseData.parent.full_name.split('/');
-        if (parentParts.length === 2) {
-          request_fork_page(1, parentParts[0], parentParts[1], responseData.parent.default_branch || responseData.default_branch);
+    // Fix #76 mitigation: detached forks segmentation – opt-in, capped, best-effort
+    // High risk (API blow-up, double scan). Gated behind UF_SETTINGS_DETACHED default off.
+    // Caps: max 5 extra pages for source/parent networks, depth 1 only (no recursive source-of-source).
+    // Documented limitation: renamed detached forks (vcstool->vcs2l) cannot be found by name search.
+    if (typeof UF_SETTINGS_DETACHED !== 'undefined' && UF_SETTINGS_DETACHED) {
+      if (responseData.source) {
+        const sourceParts = responseData.source.full_name.split('/');
+        const lowerSource = responseData.source.full_name.toLowerCase();
+        // double-count guard + depth 1 cap
+        if (sourceParts.length === 2 && (sourceParts[0] !== user || sourceParts[1] !== repo)) {
+          if (typeof SEEN_FORKS === 'undefined' || !SEEN_FORKS.has(lowerSource)) {
+            if (DETACHED_PAGE_COUNT < 5) {
+              DETACHED_PAGE_COUNT++;
+              if (typeof SEEN_FORKS !== 'undefined') SEEN_FORKS.add(lowerSource);
+              request_fork_page(1, sourceParts[0], sourceParts[1], responseData.source.default_branch || responseData.default_branch);
+            }
+          }
+        }
+        if (responseData.parent && responseData.parent.full_name !== responseData.source.full_name) {
+          const parentParts = responseData.parent.full_name.split('/');
+          const lowerParent = responseData.parent.full_name.toLowerCase();
+          if (parentParts.length === 2) {
+            if (typeof SEEN_FORKS === 'undefined' || !SEEN_FORKS.has(lowerParent)) {
+              if (DETACHED_PAGE_COUNT < 5) {
+                DETACHED_PAGE_COUNT++;
+                if (typeof SEEN_FORKS !== 'undefined') SEEN_FORKS.add(lowerParent);
+                request_fork_page(1, parentParts[0], parentParts[1], responseData.parent.default_branch || responseData.default_branch);
+              }
+            }
+          }
         }
       }
-    }
 
-    // Best-effort search for detached forks that kept the same repo name (see detailed comment above)
-    request_detached_forks_via_search(user, repo, responseData.default_branch);
+      // Best-effort search for detached forks that kept the same repo name – cap 10 results, language+stars filter
+      const parentLang = responseData.language || null;
+      request_detached_forks_via_search(user, repo, responseData.default_branch, parentLang);
+    }
   };
   const onFailure = () => displayConditionalErrorMsg();
   send(requestPromise, onSuccess, onFailure);
