@@ -183,6 +183,39 @@
           </div>
         </div>
 
+        <!-- Check all branches – Fix #33. -->
+        <div class="field is-horizontal">
+          <div class="field-label is-normal">
+            <label class="label">Branches:</label>
+          </div>
+          <div class="field-body">
+            <div class="field">
+              <div class="control">
+                <label class="checkbox">
+                  <input type="checkbox" id="uf_settings_branches_check">
+                  Check non-default branches (opt-in)
+                </label>
+              </div>
+              <p class="help mb-2"><strong>Default is unchecked.</strong> When checked, if a fork has 0 commits ahead on its default branch, we list its branches and check each for commits ahead of parent's default. Doubles API calls, so opt-in via Settings (mitigates #33 concern about massive forks).</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Branch filter – Fix #38. -->
+        <div class="field is-horizontal">
+          <div class="field-label is-normal">
+            <label class="label">Branch filter:</label>
+          </div>
+          <div class="field-body">
+            <div class="field">
+              <div class="control">
+                <input class="input" type="text" id="uf_settings_branches_filter" placeholder="e.g. main,dev,feature/xyz" />
+              </div>
+              <p class="help mb-2"><strong>Default empty = all.</strong> Comma-separated list of branch names to consider when &quot;Check non-default branches&quot; is enabled. Empty means check all branches. Allows positive filter for feature branches (Fix #38).</p>
+            </div>
+          </div>
+        </div>
+
       </section>
       <footer class="modal-card-foot">
         <a class="button is-uf-orange is-large is-fullwidth"

@@ -151,7 +151,9 @@ function onRateLimitExceeded() {
 }
 
 function allRequestsAreDone() {
-  return ONGOING_REQUESTS_COUNTER <= 0 && TOTAL_API_CALLS_COUNTER >= TOTAL_FORKS;
+  // Fix #77: ONGOING-only completion, see fix/77-massive-forks branch for details.
+  // Also needed for #33/#38 because branch-checking spawns extra calls beyond TOTAL_FORKS.
+  return ONGOING_REQUESTS_COUNTER <= 0;
 }
 
 /** Detection of final request. */
@@ -235,6 +237,10 @@ function update_table_data(responseData, user, repo, parentDefaultBranch) {
     if (RATE_LIMIT_EXCEEDED) // we can skip everything below because they are only requests
       continue;
 
+    // Fix #55: Ignore private repos
+    if (currFork.private === true)
+      continue;
+
     if (is_duplicate_repo(currFork.full_name))
       continue; // abort because repo is already listed
 
@@ -252,7 +258,7 @@ function update_table_data(responseData, user, repo, parentDefaultBranch) {
       head: `${extract_username_from_fork(currFork.full_name)}:${currFork.default_branch}`
     });
     const onSuccess = (responseHeaders, responseData) => {
-      if (responseData.total_commits > 0) {
+      if (responseData.total_commits > 0 && responseData.ahead_by > 0) {
         datum['ahead_by'] = responseData.ahead_by;
         datum['ahead_url'] = responseData.html_url;
         datum['behind_by'] = responseData.behind_by;
@@ -262,9 +268,21 @@ function update_table_data(responseData, user, repo, parentDefaultBranch) {
         if (TABLE_DATA.length > 1) showFilterContainer();
         
         update_table_trying_use_filter();
+      } else {
+        // Fix #33: Keep forks with commits to non-default branches
+        // If default branch has 0 ahead, optionally check other branches.
+        // This is opt-in via Settings to avoid doubling API calls.
+        if (typeof UF_SETTINGS_CHECK_ALL_BRANCHES !== 'undefined' && UF_SETTINGS_CHECK_ALL_BRANCHES) {
+          checkOtherBranchesForUsefulCommits(currFork, datum, user, repo, parentDefaultBranch);
+        }
       }
     };
-    const onFailure = () => { }; // do nothing
+    const onFailure = () => {
+      // Even on failure, try non-default branches if enabled – could be default branch deleted
+      if (typeof UF_SETTINGS_CHECK_ALL_BRANCHES !== 'undefined' && UF_SETTINGS_CHECK_ALL_BRANCHES) {
+        checkOtherBranchesForUsefulCommits(currFork, datum, user, repo, parentDefaultBranch);
+      }
+    };
     send(requestPromise, onSuccess, onFailure);
 
     /* Forks of forks. */
@@ -272,6 +290,153 @@ function update_table_data(responseData, user, repo, parentDefaultBranch) {
       request_fork_page(1, currFork.owner.login, currFork.name, currFork.default_branch);
     }
   }
+}
+
+/** Fix #33 & #38: Check non-default branches for useful commits.
+ * Low-risk hardening: cap 5 branches per fork, concurrency 3, full pagination recursion,
+ * clone datum per branch, encode branch, wildcard filter lower-case, safe TDZ.
+ */
+const BRANCH_MAX_PER_FORK = 5;
+let BRANCH_ACTIVE = 0;
+const BRANCH_QUEUE = [];
+function encodeBranchName(name) {
+  // preserve slashes, encode each segment
+  return name.split('/').map(s => encodeURIComponent(s)).join('/');
+}
+function isBranchCheckEnabledSafe() {
+  try {
+    // avoid TDZ – try window/global first
+    if (typeof UF_SETTINGS_CHECK_ALL_BRANCHES !== 'undefined') return !!UF_SETTINGS_CHECK_ALL_BRANCHES;
+  } catch (e) {
+    // TDZ => settings not ready
+    try {
+      if (typeof window !== 'undefined' && typeof window.UF_SETTINGS_CHECK_ALL_BRANCHES !== 'undefined') return !!window.UF_SETTINGS_CHECK_ALL_BRANCHES;
+    } catch {}
+    return false;
+  }
+  return false;
+}
+function matchesAllowedList(branchLower, allowedList) {
+  // allowedList already lowercased trimmed, may contain wildcards * prefix/suffix
+  if (!allowedList) return true;
+  const b = branchLower.toLowerCase();
+  for (const pat of allowedList) {
+    if (!pat) continue;
+    if (pat.includes('*')) {
+      // simple wildcard: convert to regex
+      const reStr = '^' + pat.split('*').map(s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('.*') + '$';
+      try { if (new RegExp(reStr).test(b)) return true; } catch { /* invalid pattern skip */ }
+    } else {
+      if (b === pat) return true;
+      // also support partial contains? strict equality primary
+    }
+  }
+  return false;
+}
+function scheduleBranchTask(taskFn) {
+  if (BRANCH_ACTIVE < 3) {
+    BRANCH_ACTIVE++;
+    taskFn(() => {
+      BRANCH_ACTIVE--;
+      if (BRANCH_QUEUE.length) {
+        const next = BRANCH_QUEUE.shift();
+        scheduleBranchTask(next);
+      }
+    });
+  } else {
+    BRANCH_QUEUE.push(taskFn);
+  }
+}
+function checkOtherBranchesForUsefulCommits(currFork, datum, user, repo, parentDefaultBranch) {
+  if (!isBranchCheckEnabledSafe()) return;
+
+  let branchesChecked = 0;
+  const seenBranches = new Set();
+
+  function listBranchesPage(pageNum) {
+    const listPromise = () => octokit.repos.listBranches({
+      owner: currFork.owner.login,
+      repo: currFork.name,
+      per_page: 100,
+      page: pageNum
+    });
+
+    const onListSuccess = (headers, branchesData) => {
+      if (isEmpty(branchesData)) return;
+
+      let allowedList = null;
+      if (typeof getAllowedBranchesList === 'function') {
+        allowedList = getAllowedBranchesList(); // null = allow all, or array lowercased
+      }
+
+      for (const br of branchesData) {
+        if (branchesChecked >= BRANCH_MAX_PER_FORK) break; // cap 5
+        if (!br || !br.name) continue;
+        if (br.name === currFork.default_branch) continue;
+        const brLower = br.name.toLowerCase();
+        if (seenBranches.has(brLower)) continue;
+        seenBranches.add(brLower);
+
+        if (allowedList !== null) {
+          if (!matchesAllowedList(brLower, allowedList)) continue;
+        }
+
+        if (branchesChecked >= BRANCH_MAX_PER_FORK) break;
+        branchesChecked++;
+
+        // Clone datum early to avoid race
+        const branchDatum = { ...datum };
+
+        const login = extract_username_from_fork(currFork.full_name);
+        const encodedBranch = encodeBranchName(br.name);
+        const headRef = `${login}:${encodedBranch}`;
+
+        const compTask = (done) => {
+          const compPromise = () => octokit.repos.compareCommits({
+            owner: user,
+            repo: repo,
+            base: parentDefaultBranch,
+            head: headRef
+          });
+
+          const onCompSuccess = (h, d) => {
+            if (d.total_commits > 0 && d.ahead_by > 0) {
+              if (is_duplicate_repo(currFork.full_name)) { done(); return; }
+              branchDatum['ahead_by'] = d.ahead_by;
+              branchDatum['ahead_url'] = d.html_url;
+              branchDatum['behind_by'] = d.behind_by;
+              branchDatum['behind_url'] = getBehindUrl(d.html_url);
+              branchDatum['pushed_at'] = getOnlyDate(currFork.pushed_at);
+              branchDatum['checked_branch'] = br.name;
+
+              TABLE_DATA.push({ ...branchDatum });
+              if (TABLE_DATA.length > 1) showFilterContainer();
+              update_table_trying_use_filter();
+            }
+            done();
+          };
+          const onCompFailure = () => { done(); };
+          send(compPromise, onCompSuccess, onCompFailure);
+        };
+
+        scheduleBranchTask(compTask);
+      }
+
+      // Full pagination recursion, not just 2 pages
+      const link_header = headers["link"] || headers["Link"] || headers.link;
+      if (link_header && (link_header.includes('rel="next"'))) {
+        // Continue only if we still need more branches and under cap handling for remaining pages still worth scanning
+        if (branchesChecked < BRANCH_MAX_PER_FORK) {
+          listBranchesPage(pageNum + 1);
+        }
+      }
+    };
+
+    const onListFailure = () => { /* ignore */ };
+    send(listPromise, onListSuccess, onListFailure);
+  }
+
+  listBranchesPage(1);
 }
 
 function update_filter_appearance() {
@@ -395,12 +560,12 @@ function request_fork_page(page_number, user, repo, defaultBranch) {
 
     sortTable();
 
-    /* Pagination (beyond 100 forks). */
-    const link_header = responseHeaders["link"];
+    /* Pagination (beyond 100 forks). Robust fix for #77. */
+    const link_header = responseHeaders["link"] || responseHeaders["Link"] || responseHeaders.link;
     if (link_header) {
-      let contains_next_page = link_header.indexOf('>; rel="next"');
-      if (contains_next_page !== -1) {
-        request_fork_page(++page_number, user, repo, defaultBranch);
+      let contains_next_page = link_header.indexOf('>; rel="next"') !== -1 || link_header.includes('rel="next"');
+      if (contains_next_page) {
+        request_fork_page(page_number + 1, user, repo, defaultBranch);
       }
     }
 
