@@ -11,8 +11,13 @@ function displayCsvExportBtn() {
   if (!UF_SETTINGS_CSV_DISPLAY) {
     return;
   }
-  // avoid duplicate
+  // source-of-truth: TABLE_DATA length, not DOM
+  if (typeof TABLE_DATA !== 'undefined' && TABLE_DATA.length === 0) {
+    return;
+  }
+  // idempotent: if already present, just ensure handler is fresh
   if (getJqId_$(EXPORT_DIV_ID).length > 0) {
+    setClickEvent();
     return;
   }
   JQ_ID_HEADER.append(EXPORT_DIV);
@@ -20,32 +25,25 @@ function displayCsvExportBtn() {
 }
 function hideExportCsvBtn() {
   // Always attempt to remove regardless of setting – allows dynamic toggle #60
-  // Original guard prevented removal when setting disabled, leaving stale button.
   getJqId_$(EXPORT_DIV_ID).remove();
 }
 function forceHideCsvBtn() {
-  getJqId_$(EXPORT_DIV_ID).remove();
+  // deprecated alias – keep for compat, single source
+  hideExportCsvBtn();
 }
 function updateCsvBtnVisibility() {
-  // central helper for #60: respects setting and table emptiness
-  try {
-    const empty = (typeof tableIsEmpty === 'function' ? tableIsEmpty() : (getTableBody && getTableBody().children().length === 0));
-    if (UF_SETTINGS_CSV_DISPLAY && !empty) {
-      displayCsvExportBtn();
-    } else {
-      hideExportCsvBtn();
-    }
-  } catch(e) {
-    // fallback: just toggle based on setting alone
-    if (UF_SETTINGS_CSV_DISPLAY) {
-      displayCsvExportBtn();
-    } else {
-      hideExportCsvBtn();
-    }
+  // central helper for #60: respects setting and TABLE_DATA length source-of-truth
+  const hasData = (typeof TABLE_DATA !== 'undefined')
+    ? TABLE_DATA.length > 0
+    : (typeof getTableBody === 'function' && getTableBody().children().length > 0);
+  if (UF_SETTINGS_CSV_DISPLAY && hasData) {
+    displayCsvExportBtn();
+  } else {
+    hideExportCsvBtn();
   }
 }
 function setClickEvent() {
-  EXPORT_BTN.on('click', function (event) {
+  EXPORT_BTN.off('click').on('click', function (event) {
     downloadCsv.apply(this);
     const query = JQ_REPO_FIELD.val();
     ga_exportCSV(query);
