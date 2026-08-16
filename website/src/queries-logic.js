@@ -30,6 +30,21 @@ let TOTAL_API_CALLS_COUNTER;
 let ONGOING_REQUESTS_COUNTER = 0;
 let IS_USEFUL_FORK; // function that determines if a fork is useful or not
 
+/* Abort / Pause / Resume state (#79, #16, #53) */
+let ABORTED = false;
+let PAUSED = false;
+let PENDING_REQUESTS = []; // queue of {user, repo, defaultBranch, page}
+let LAST_QUERY = null; // {user, repo, defaultBranch}
+let CURRENT_REPO_KEY = null; // for caching (#39)
+let CURRENT_ABORT_CTRL = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+function resetAbortCtrl() {
+  if (typeof AbortController !== 'undefined') {
+    try { if (CURRENT_ABORT_CTRL) CURRENT_ABORT_CTRL.abort(); } catch(e) {}
+    CURRENT_ABORT_CTRL = new AbortController();
+    return CURRENT_ABORT_CTRL.signal;
+  }
+  return null;
+}
 
 /** Used to reset the state for a brand new query. */
 function clear_old_data() {
@@ -46,6 +61,13 @@ function clear_old_data() {
   TOTAL_API_CALLS_COUNTER = 0;
   ONGOING_REQUESTS_COUNTER = 0;
   shouldTriggerQueryOnTokenSave = false;
+  ABORTED = false;
+  PAUSED = false;
+  PENDING_REQUESTS = [];
+  try { if (CURRENT_ABORT_CTRL) CURRENT_ABORT_CTRL.abort(); } catch(e) {}
+  resetAbortCtrl();
+  if (typeof hideAbortBtn === 'function') hideAbortBtn();
+  if (typeof hideResumeBtn === 'function') hideResumeBtn();
 }
 
 function getOnlyDate(full) {
@@ -142,8 +164,30 @@ function onRateLimitExceeded() {
   if (!RATE_LIMIT_EXCEEDED) {
     console.warn('[useful-forks] GitHub API rate-limit exceeded. (Since useful-forks sends many requests at once, you might have a lot of `Error Code 403` in your browser Console Logs.)');
     RATE_LIMIT_EXCEEDED = true;
-    setMsg(UF_MSG_API_RATE);
+    setMsg(UF_MSG_API_RATE + '<br><br>');
+    // safe button creation without inline handler
+    try {
+      const msgEl = document.getElementById(UF_ID_MSG);
+      if (msgEl) {
+        const btn = document.createElement('button');
+        btn.id = 'resumeBtnInline';
+        btn.className = 'button is-warning is-small mt-2';
+        btn.textContent = 'Resume scan';
+        btn.addEventListener('click', resumeSearch);
+        msgEl.appendChild(document.createElement('br'));
+        msgEl.appendChild(document.createElement('br'));
+        msgEl.appendChild(btn);
+      }
+    } catch(e) {}
     disableQueryFields();
+    if (typeof hideAbortBtn === 'function') hideAbortBtn();
+    if (typeof showResumeBtn === 'function') showResumeBtn();
+    else {
+      // fallback: try to make resumeBtn visible if exists
+      const rb = document.getElementById('resumeBtn');
+      if (rb) rb.style.display = 'inline-block';
+    }
+    saveCacheToStorage();
     if (!LOCAL_STORAGE_GITHUB_ACCESS_TOKEN) {
       proposeAddingToken();
     }
@@ -151,17 +195,44 @@ function onRateLimitExceeded() {
 }
 
 function allRequestsAreDone() {
+  if (ABORTED || PAUSED) return false; // don't trigger finalization when aborted/paused; explicit handling does it
   return ONGOING_REQUESTS_COUNTER <= 0 && TOTAL_API_CALLS_COUNTER >= TOTAL_FORKS;
 }
 
 /** Detection of final request. */
 function decrementCounters() {
   ONGOING_REQUESTS_COUNTER--;
+  if (ONGOING_REQUESTS_COUNTER < 0) ONGOING_REQUESTS_COUNTER = 0;
+  if (ABORTED) {
+    // when aborted, don't run finalization; counters already cleared
+    return;
+  }
+  if (PAUSED) {
+    if (ONGOING_REQUESTS_COUNTER <= 0) {
+      setMsg(`Paused. ${TABLE_DATA.length} useful forks found so far. `);
+      try {
+        const msgEl = document.getElementById(UF_ID_MSG);
+        if (msgEl) {
+          const btn = document.createElement('button');
+          btn.className = 'button is-small is-info ml-2';
+          btn.textContent = 'Resume';
+          btn.addEventListener('click', resumeSearch);
+          msgEl.appendChild(document.createTextNode(' '));
+          msgEl.appendChild(btn);
+        }
+      } catch(e) {}
+      enableQueryFields();
+    }
+    return;
+  }
   if (allRequestsAreDone()) {
     clearNonErrorMsg();
     removeProgressBar();
     updateBasedOnTable();
     enableQueryFields();
+    if (typeof hideAbortBtn === 'function') hideAbortBtn();
+    if (typeof hideResumeBtn === 'function') hideResumeBtn();
+    saveCacheToStorage();
   }
 }
 
@@ -180,23 +251,220 @@ function updateBasedOnTable() {
 function searchNotAllowed() {
   if (shouldTriggerQueryOnTokenSave)
     return false;
+  if (ABORTED) return false; // allow new search after abort (ABORTED cleared in clear_old_data)
+  if (PAUSED) return true; // prevent new search while paused; use resume
   return ONGOING_REQUESTS_COUNTER !== 0 || JQ_SEARCH_BTN.hasClass('is-loading');
 }
 
 function send(requestPromise, successFn, failureFn) {
-  if (RATE_LIMIT_EXCEEDED) {
+  if (RATE_LIMIT_EXCEEDED || ABORTED || PAUSED) {
+    if (RATE_LIMIT_EXCEEDED || PAUSED) {
+      // queue for resume later if it's a fork-page request; individual compareCommits can be dropped
+      // caller will handle queuing for fork pages
+    }
+    failureFn();
+    return;
+  }
+  if (CURRENT_ABORT_CTRL && CURRENT_ABORT_CTRL.signal && CURRENT_ABORT_CTRL.signal.aborted) {
     failureFn();
     return;
   }
 
   incrementCounters();
-  requestPromise()
+  // attempt to pass abort signal via Octokit if supported
+  let promise;
+  try {
+    promise = requestPromise(CURRENT_ABORT_CTRL ? CURRENT_ABORT_CTRL.signal : undefined);
+    if (!promise || typeof promise.then !== 'function') {
+      // requestPromise ignored signal arg (original signature) – call without arg
+      promise = requestPromise();
+    }
+  } catch(e) {
+    promise = requestPromise();
+  }
+  promise
   .then(
-      response => successFn(response.headers, response.data)) // wrapped in a { data, headers, status, url } object
+      response => {
+        if (ABORTED || (CURRENT_ABORT_CTRL && CURRENT_ABORT_CTRL.signal && CURRENT_ABORT_CTRL.signal.aborted)) return;
+        successFn(response.headers, response.data);
+      }) // wrapped in a { data, headers, status, url } object
   .catch(
       () => failureFn())
   .finally(
       () => decrementCounters());
+}
+
+/** Abort current search, preserve results (#79, #16) */
+function abortSearch() {
+  if (ONGOING_REQUESTS_COUNTER === 0 && !JQ_SEARCH_BTN.hasClass('is-loading')) return;
+  ABORTED = true;
+  PAUSED = false;
+  console.warn('[useful-forks] Search aborted by user, preserving', TABLE_DATA.length, 'results');
+  ONGOING_REQUESTS_COUNTER = 0;
+  PENDING_REQUESTS = []; // clear queue on abort – prevents flood on later resume
+  try { if (CURRENT_ABORT_CTRL) CURRENT_ABORT_CTRL.abort(); } catch(e) {}
+  resetAbortCtrl();
+  removeProgressBar();
+  enableQueryFields();
+  if (typeof hideAbortBtn === 'function') hideAbortBtn();
+  if (typeof hideResumeBtn === 'function') hideResumeBtn();
+  const inlineResume = document.getElementById('resumeBtnInline');
+  if (inlineResume) inlineResume.remove();
+  if (tableIsEmpty(getTableBody()) && TABLE_DATA.length === 0) {
+    setMsg(typeof UF_MSG_ABORTED !== 'undefined' ? UF_MSG_ABORTED : 'Search aborted.');
+  } else {
+    setMsg((typeof UF_MSG_ABORTED !== 'undefined' ? UF_MSG_ABORTED : 'Search aborted.') + ` Preserved ${TABLE_DATA.length} results.`);
+    displayCsvExportBtn();
+  }
+  saveCacheToStorage();
+}
+
+function pauseSearch() {
+  if (PAUSED || ABORTED) return;
+  PAUSED = true;
+  console.warn('[useful-forks] Paused');
+  if (typeof hideAbortBtn === 'function') hideAbortBtn();
+  if (typeof showResumeBtn === 'function') showResumeBtn();
+}
+
+function resumeSearch() {
+  if (!PAUSED && !RATE_LIMIT_EXCEEDED) {
+    // if not paused nor rate-limited, check if we have pending queue to resume from abort
+    if (PENDING_REQUESTS.length === 0 && !ABORTED) return;
+  }
+  const wasRateLimited = RATE_LIMIT_EXCEEDED;
+  RATE_LIMIT_EXCEEDED = false;
+  const wasAborted = ABORTED;
+  ABORTED = false;
+  PAUSED = false;
+  const inlineBtn = document.getElementById('resumeBtnInline');
+  if (inlineBtn) inlineBtn.remove();
+  if (typeof hideResumeBtn === 'function') hideResumeBtn();
+  setMsg(typeof UF_MSG_RESUMED !== 'undefined' ? UF_MSG_RESUMED : 'Resuming scan...');
+  setQueryFieldsAsLoading();
+  saveCacheToStorage();
+
+  // Re-trigger queued fork pages – throttled p-limit 3 style to avoid secondary rate-limit
+  if (PENDING_REQUESTS.length > 0) {
+    const queueCopy = [...PENDING_REQUESTS];
+    PENDING_REQUESTS = [];
+    // simple throttling: 3 concurrent, staggered 350ms
+    let idx = 0;
+    function nextBatch() {
+      const batch = queueCopy.slice(idx, idx+3);
+      idx += 3;
+      for (const req of batch) {
+        request_fork_page(req.page, req.user, req.repo, req.defaultBranch);
+      }
+      if (idx < queueCopy.length) {
+        setTimeout(nextBatch, 350);
+      }
+    }
+    nextBatch();
+  } else if (LAST_QUERY && wasAborted) {
+    // Fallback: if aborted without explicit queue, resume remaining fork pages from last known state is hard;
+    // we at least clear abort flag so a manual re-search can continue, and show message.
+    if (wasAborted) {
+      setMsg(`Resumed after abort. ${TABLE_DATA.length} results kept. Start a new scan to look for more, or reload cache.`);
+      enableQueryFields();
+    }
+  } else if (LAST_QUERY && wasRateLimited) {
+    // If rate-limited but no queued pages (e.g., initial request failed), retry initial request
+    if (TOTAL_FORKS === 0) {
+      initial_request(LAST_QUERY.user, LAST_QUERY.repo);
+    }
+  }
+  // Also if we had a current repo tracked, resume its scan
+  if (CURRENT_REPO_KEY && !wasAborted) {
+    // caching already saved; attempting to continue doesn't need extra action because fork pages still pending via counters
+  }
+}
+
+/** Cache helpers (localStorage) – #39 */
+function getCacheKey(repo) {
+  if (!repo) return null;
+  return 'uf-cache-' + repo.toLowerCase();
+}
+function saveCacheToStorage() {
+  try {
+    if (!CURRENT_REPO_KEY) return;
+    if (!TABLE_DATA || TABLE_DATA.length === 0) return;
+    const key = getCacheKey(CURRENT_REPO_KEY);
+    if (!key) return;
+    const payload = {
+      timestamp: Date.now(),
+      repo: CURRENT_REPO_KEY,
+      tableData: TABLE_DATA,
+      header: '', // store raw data only, never HTML (prevents persisted XSS)
+      totalCalls: TOTAL_API_CALLS_COUNTER,
+      totalForks: TOTAL_FORKS
+    };
+    const serialized = JSON.stringify(payload);
+    // size cap 2MB – skip cache if too large (prevents QuotaExceededError loop)
+    if (serialized.length > 2*1024*1024) {
+      console.warn('[useful-forks] cache too large (>2MB), skipping save for', CURRENT_REPO_KEY, serialized.length);
+      return;
+    }
+    localStorage.setItem(key, serialized);
+    localStorage.setItem('uf-cache-last-repo', CURRENT_REPO_KEY);
+    // console.log('cache saved', key, payload.tableData.length);
+  } catch (e) {
+    if (e && e.name === 'QuotaExceededError') {
+      console.warn('cache save failed – quota exceeded, clearing last-repo marker', e);
+      try { localStorage.removeItem('uf-cache-last-repo'); } catch(e2) {}
+    } else {
+      console.warn('cache save failed', e);
+    }
+  }
+}
+function loadCacheFromStorage(repo) {
+  try {
+    const key = getCacheKey(repo);
+    if (!key) return null;
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    const data = JSON.parse(raw);
+    if (Date.now() - data.timestamp > 3600000) return null; // 1h expiry
+    return data;
+  } catch (e) {
+    return null;
+  }
+}
+function restoreCacheFromStorage(repo) {
+  const cached = loadCacheFromStorage(repo);
+  if (!cached) return false;
+  TABLE_DATA = cached.tableData || [];
+  if (typeof setHeader === 'function' && cached.header) setHeader(cached.header);
+  if (typeof setApiCallsLabel === 'function') setApiCallsLabel(cached.totalCalls || TABLE_DATA.length);
+  if (typeof update_table_trying_use_filter === 'function') {
+    update_table_trying_use_filter();
+  } else if (typeof update_table === 'function') {
+    update_table(TABLE_DATA);
+  }
+  if (TABLE_DATA.length > 1 && typeof showFilterContainer === 'function') showFilterContainer();
+  if (typeof updateBasedOnTable === 'function') updateBasedOnTable();
+  const ageMin = Math.round((Date.now()-cached.timestamp)/60000);
+  setMsg((typeof UF_MSG_CACHED_RESTORED !== 'undefined' ? UF_MSG_CACHED_RESTORED : 'Restored cached results') + ` (${ageMin} min ago, ${TABLE_DATA.length} forks)`);
+  if (typeof hideAbortBtn === 'function') hideAbortBtn();
+  if (typeof hideResumeBtn === 'function') hideResumeBtn();
+  return true;
+}
+
+// Expose for inline onclick handlers and for tryOfferCache in queries-init
+if (typeof window !== 'undefined') {
+  window.abortSearch = abortSearch;
+  window.pauseSearch = pauseSearch;
+  window.resumeSearch = resumeSearch;
+  window.restoreCache = restoreCacheFromStorage;
+  window.saveCacheToStorage = saveCacheToStorage;
+  window.TABLE_DATA = TABLE_DATA; // initially, but TABLE_DATA will be mutated later; keep reference sync via function
+}
+
+// Auto-save before page unload
+if (typeof window !== 'undefined') {
+  window.addEventListener('beforeunload', () => {
+    try { saveCacheToStorage(); } catch(e) {}
+  });
 }
 
 /** Add bold to the date text if the date is earlier than the queried repo. */
@@ -222,6 +490,7 @@ function is_duplicate_repo(name) {
 
 /** Updates table data, then calls function to update the table. */
 function update_table_data(responseData, user, repo, parentDefaultBranch) {
+  if (ABORTED) return;
   if (isEmpty(responseData)) {
     return;
   }
@@ -232,7 +501,7 @@ function update_table_data(responseData, user, repo, parentDefaultBranch) {
   }
 
   for (const currFork of responseData) {
-    if (RATE_LIMIT_EXCEEDED) // we can skip everything below because they are only requests
+    if (RATE_LIMIT_EXCEEDED || ABORTED || PAUSED) // we can skip everything below because they are only requests
       continue;
 
     if (is_duplicate_repo(currFork.full_name))
@@ -252,6 +521,7 @@ function update_table_data(responseData, user, repo, parentDefaultBranch) {
       head: `${extract_username_from_fork(currFork.full_name)}:${currFork.default_branch}`
     });
     const onSuccess = (responseHeaders, responseData) => {
+      if (ABORTED) return;
       if (responseData.total_commits > 0) {
         datum['ahead_by'] = responseData.ahead_by;
         datum['ahead_url'] = responseData.html_url;
@@ -262,6 +532,8 @@ function update_table_data(responseData, user, repo, parentDefaultBranch) {
         if (TABLE_DATA.length > 1) showFilterContainer();
         
         update_table_trying_use_filter();
+        // incremental cache save
+        if (TABLE_DATA.length % 5 === 0) saveCacheToStorage();
       }
     };
     const onFailure = () => { }; // do nothing
@@ -377,8 +649,14 @@ function updateFilterFunction() {
 
 /** Paginated (index starts at 1) recursive forks scan. */
 function request_fork_page(page_number, user, repo, defaultBranch) {
-  if (RATE_LIMIT_EXCEEDED)
+  if (RATE_LIMIT_EXCEEDED || ABORTED || PAUSED) {
+    if (RATE_LIMIT_EXCEEDED || PAUSED) {
+      // queue for later resume (#53)
+      const exists = PENDING_REQUESTS.some(r=> r.user===user && r.repo===repo && r.page===page_number);
+      if (!exists) PENDING_REQUESTS.push({user, repo, defaultBranch, page: page_number});
+    }
     return;
+  }
 
   const requestPromise = () => octokit.repos.listForks({
     owner: user,
@@ -388,6 +666,13 @@ function request_fork_page(page_number, user, repo, defaultBranch) {
     page: page_number
   });
   const onSuccess = (responseHeaders, responseData) => {
+    if (ABORTED || PAUSED) {
+      if (PAUSED) {
+        const exists = PENDING_REQUESTS.some(r=> r.user===user && r.repo===repo && r.page===page_number+1);
+        // pagination continuation already handled below; queuing is done if rate-limit/pause
+      }
+      return;
+    }
     removeProgressBar();
 
     if (isEmpty(responseData)) // repo has not been forked
@@ -406,23 +691,34 @@ function request_fork_page(page_number, user, repo, defaultBranch) {
 
     update_table_data(responseData, user, repo, defaultBranch);
   };
-  const onFailure = () => displayConditionalErrorMsg();
+  const onFailure = () => {
+    if (RATE_LIMIT_EXCEEDED || PAUSED) {
+      const exists = PENDING_REQUESTS.some(r=> r.user===user && r.repo===repo && r.page===page_number);
+      if (!exists) PENDING_REQUESTS.push({user, repo, defaultBranch, page: page_number});
+    }
+    displayConditionalErrorMsg();
+  };
   send(requestPromise, onSuccess, onFailure);
 }
 
 /** Updates header with Queried Repo info, and initiates forks scan. */
 function initial_request(user, repo) {
+  if (ABORTED) return;
+  CURRENT_REPO_KEY = `${user}/${repo}`;
+  LAST_QUERY = {user, repo, defaultBranch: null};
   const requestPromise = () => octokit.repos.get({
     owner: user,
     repo: repo
   });
   const onSuccess = (responseHeaders, responseData) => {
+    if (ABORTED) return;
     if (isEmpty(responseData))
       return;
 
     const onlyDate = getOnlyDate(responseData.pushed_at);
     REPO_DATE = new Date(onlyDate);
     TOTAL_FORKS = responseData.forks_count;
+    LAST_QUERY.defaultBranch = responseData.default_branch;
 
     let html_txt = '<b>Queried repository</b>:&nbsp;&nbsp;&nbsp;';
     html_txt += getRepoCol(responseData.full_name, true);
@@ -455,6 +751,7 @@ function initial_request(user, repo) {
     } else {
       setMsg(UF_MSG_NO_FORKS);
       enableQueryFields();
+      if (typeof hideAbortBtn === 'function') hideAbortBtn();
     }
   };
   const onFailure = () => displayConditionalErrorMsg();
@@ -504,10 +801,13 @@ function initiate_search() {
   }
 
   const {user, repo} = queryValues;
+  ABORTED = false;
+  PAUSED = false;
 
   setUpOctokitWithLatestToken();
 
   setQuery(`${user}/${repo}`);
+  CURRENT_REPO_KEY = `${user}/${repo}`;
   setQueryFieldsAsLoading();
   hideFilterContainer();
   setMsg(UF_MSG_SCANNING);
@@ -568,8 +868,25 @@ function setUpOctokitWithLatestToken() {
 /* Setting up query triggers. */
 JQ_SEARCH_BTN.click(event => {
   event.preventDefault();
+  // If already loading, clicking acts as abort (bonus for #16: turn red and abort on click)
+  if (JQ_SEARCH_BTN.hasClass('is-loading')) {
+    abortSearch();
+    return;
+  }
   initiate_search();
 });
+if (typeof JQ_ABORT_BTN !== 'undefined' && JQ_ABORT_BTN && JQ_ABORT_BTN.length) {
+  JQ_ABORT_BTN.click(event => {
+    event.preventDefault();
+    abortSearch();
+  });
+}
+if (typeof JQ_RESUME_BTN !== 'undefined' && JQ_RESUME_BTN && JQ_RESUME_BTN.length) {
+  JQ_RESUME_BTN.click(event => {
+    event.preventDefault();
+    resumeSearch();
+  });
+}
 JQ_REPO_FIELD.keyup(event => {
   if (event.keyCode === 13) { // 'ENTER'
     initiate_search();
@@ -578,8 +895,87 @@ JQ_REPO_FIELD.keyup(event => {
 
 /* Trigger an automatic query is a value was extracted from the URL Param. */
 if (JQ_REPO_FIELD.val()) {
-  JQ_SEARCH_BTN.click();
+  // Before auto-starting, check cache offer (#39)
+  const repoVal = JQ_REPO_FIELD.val();
+  const cached = loadCacheFromStorage(repoVal);
+  if (cached && TABLE_DATA.length === 0) {
+    // Show banner offering cache, but still auto-start? Prefer not to double-start if cached.
+    // If user would normally auto-scan, we restore cache and offer re-scan
+    const autoRestore = false; // change to true to auto-restore without prompt
+    if (autoRestore) {
+      restoreCacheFromStorage(repoVal);
+    } else {
+      // Show offer then proceed with normal scan after short delay if not restored
+      if (typeof setMsg === 'function') {
+        const ageMin = Math.round((Date.now()-cached.timestamp)/60000);
+        // safe construction – avoid inline onclick + HTML injection via repoVal
+        setMsg('');
+        try {
+          const msgEl = document.getElementById(UF_ID_MSG);
+          if (msgEl) {
+            // container
+            const frag = document.createDocumentFragment();
+            const b = document.createElement('b');
+            b.textContent = repoVal;
+            frag.appendChild(document.createTextNode('Found cached results for '));
+            frag.appendChild(b);
+            frag.appendChild(document.createTextNode(` from ${ageMin} min ago (${cached.tableData.length} forks). `));
+            const btn = document.createElement('button');
+            btn.className = 'button is-small is-info ml-2';
+            btn.textContent = 'Restore cache';
+            // closure captures repoVal safely
+            btn.addEventListener('click', () => restoreCacheFromStorage(repoVal));
+            frag.appendChild(btn);
+            const span = document.createElement('span');
+            span.className = 'ml-2';
+            span.textContent = 'or wait for fresh scan...';
+            frag.appendChild(span);
+            // use jQuery html already cleared by setMsg(''), append via DOM
+            msgEl.appendChild(frag);
+            // re-apply box styling that setMsg normally adds
+            msgEl.classList.add('box','has-background-info-light');
+            msgEl.style.borderWidth = 'thin';
+            msgEl.style.borderColor = 'rgba(0,0,0,0.25)';
+            msgEl.style.borderStyle = 'solid';
+          } else {
+            setMsg(`Found cached results for ${repoVal} from ${ageMin} min ago.`);
+          }
+        } catch(e) {
+          setMsg(`Found cached results for ${repoVal} from ${ageMin} min ago.`);
+        }
+        setTimeout(()=>{ if (ONGOING_REQUESTS_COUNTER===0 && TABLE_DATA.length===0) JQ_SEARCH_BTN.click(); }, 1500);
+      } else {
+        JQ_SEARCH_BTN.click();
+      }
+    }
+  } else {
+    JQ_SEARCH_BTN.click();
+  }
+} else {
+  // No repo in URL – try to offer last cached repo
+  try {
+    const last = localStorage.getItem('uf-cache-last-repo');
+    if (last) {
+      const cached = loadCacheFromStorage(last);
+      if (cached) {
+        // Show unobtrusive cache banner
+        if (typeof tryOfferCache === 'function') {
+          setTimeout(tryOfferCache, 400);
+        }
+      }
+    }
+  } catch(e) {}
 }
 
 /* User updated the filters, so we refresh the table. */
 JQ_FILTER_FIELD.on('input', update_filter);
+
+/* Pause button handling – optional keyboard shortcut (Space to pause) */
+if (typeof window !== 'undefined') {
+  document.addEventListener('keydown', (e)=>{
+    if (e.target && (e.target.tagName==='INPUT' || e.target.tagName==='TEXTAREA' || e.target.isContentEditable)) return;
+    if (e.code==='Escape' && JQ_SEARCH_BTN.hasClass('is-loading')) {
+      abortSearch();
+    }
+  });
+}
