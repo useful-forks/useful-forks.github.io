@@ -14,24 +14,17 @@ function saveSettingsBtnClicked() {
   saveCsvDisplay();
   closeSettingsDialog();
   // Fix #60 – apply immediately instead of waiting for next query
+  // low-risk: only toggle CSV visibility, do NOT re-run updateBasedOnTable which re-sorts/filters and re-adds button with orphan handlers
   try {
     if (typeof updateCsvBtnVisibility === 'function') {
       updateCsvBtnVisibility();
     } else if (UF_SETTINGS_CSV_DISPLAY) {
-      if (typeof tableIsEmpty === 'function' && !tableIsEmpty()) {
-        displayCsvExportBtn();
-      } else if (typeof getTableBody === 'function' && getTableBody().children().length > 0) {
+      if (typeof TABLE_DATA !== 'undefined' && TABLE_DATA.length > 0) {
         displayCsvExportBtn();
       }
     } else {
-      // setting disabled → ensure button hidden right away
-      // forceHideCsvBtn exists after fix, else fallback to jQuery remove
-      if (typeof forceHideCsvBtn === 'function') forceHideCsvBtn();
+      if (typeof hideExportCsvBtn === 'function') hideExportCsvBtn();
       else $('#'+EXPORT_DIV_ID).remove();
-    }
-    // also consider calling updateBasedOnTable if available to sync msg
-    if (typeof updateBasedOnTable === 'function') {
-      try { updateBasedOnTable(); } catch(e) {}
     }
   } catch(e) {
     console.warn('CSV dynamic toggle failed', e);
