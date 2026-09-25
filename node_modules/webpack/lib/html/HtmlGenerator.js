@@ -1,0 +1,1675 @@
+/*
+	MIT License http://www.opensource.org/licenses/mit-license.php
+*/
+
+"use strict";
+
+const { RawSource, ReplaceSource } = require("webpack-sources");
+const ConcatenationScope = require("../ConcatenationScope");
+const Generator = require("../Generator");
+const {
+	HTML_TYPE,
+	HTML_TYPES,
+	JAVASCRIPT_TYPE,
+	JAVASCRIPT_TYPES
+} = require("../ModuleSourceTypeConstants");
+const RuntimeGlobals = require("../RuntimeGlobals");
+const Template = require("../Template");
+const CssModulesPlugin = require("../css/CssModulesPlugin");
+const WebpackError = require("../errors/WebpackError");
+const { getUndoPath } = require("../util/identifier");
+const memoize = require("../util/memoize");
+const { PUBLIC_PATH_AUTO } = require("../util/publicPathPlaceholder");
+const { VOID } = require("./data");
+
+const getCreateNodeHash = memoize(() => require("crypto").createHash);
+
+const getCssSyntax = memoize(() => require("../css/syntax"));
+
+const getHtmlSyntax = memoize(() => require("./syntax"));
+
+// Lazy: the dependency templates need this module's sentinel helpers on every
+// build, but the HTML tokenizer is only reached once HTML is actually emitted.
+// Lazy so loading the HTML generator doesn't pull in the whole CSS pipeline.
+
+// The CSS tokenizer, used to locate `url(...)` when rebasing inlined stylesheets.
+// node's crypto — real SHA hashes for Content-Security-Policy source lists
+// (the wasm hashes are xxhash, unusable for CSP), loaded only when CSP is on.
+
+// HTML void elements — serialized without a closing tag when a tag descriptor
+// (`output.html` `injectTags`) doesn't say otherwise.
+
+/**
+ * Serializes an attribute map: `true` → bare attribute, `false`/`undefined`/
+ * `null` → omitted, else a quoted (escaped) value.
+ * @param {Record<string, string | boolean | undefined> | undefined} attrs attributes
+ * @returns {string} the leading-space-prefixed attribute string
+ */
+const serializeAttrs = (attrs) => {
+	let out = "";
+	if (attrs) {
+		const { escapeAttribute } = getHtmlSyntax();
+		for (const name of Object.keys(attrs)) {
+			const value = attrs[name];
+			if (value === false || value === undefined || value === null) continue;
+			out +=
+				value === true
+					? ` ${name}`
+					: ` ${name}="${escapeAttribute(`${value}`)}"`;
+		}
+	}
+	return out;
+};
+
+/**
+ * Serializes one tag descriptor. `attrs` values: `true` → bare attribute,
+ * `false`/`undefined` → omitted, else a quoted (escaped) value.
+ * @param {HtmlTagDescriptor} tag the descriptor
+ * @returns {string} the tag's HTML
+ */
+const serializeTag = (tag) => {
+	const attrs = serializeAttrs(tag.attrs);
+	const isVoid =
+		tag.voidTag !== undefined ? tag.voidTag : VOID.has(tag.tag.toLowerCase());
+	return isVoid
+		? `<${tag.tag}${attrs}>`
+		: `<${tag.tag}${attrs}>${tag.children || ""}</${tag.tag}>`;
+};
+
+/**
+ * Canonical string of an attribute map (present keys, sorted) — used to detect
+ * whether an `transformTags` plugin changed a tag, so unchanged tags stay untouched.
+ * `false`/`undefined`/`null` count as absent.
+ * @param {Record<string, string | boolean | undefined>} attrs attributes
+ * @returns {string} a comparable snapshot
+ */
+const snapshotAttrs = (attrs) =>
+	JSON.stringify(
+		Object.keys(attrs)
+			.filter((name) => {
+				const value = attrs[name];
+				return value !== false && value !== undefined && value !== null;
+			})
+			.sort()
+			.map((name) => [name, attrs[name]])
+	);
+
+/**
+ * Whether an attribute renders (present and not `false`/`undefined`/`null`).
+ * @param {Record<string, string | boolean | undefined>} attrs attributes
+ * @param {string} name attribute name
+ * @returns {boolean} true if it renders
+ */
+const attrPresent = (attrs, name) => {
+	const value = attrs[name];
+	return value !== undefined && value !== false && value !== null;
+};
+
+/**
+ * Whether a `<meta>`'s attributes declare a Content-Security-Policy (case-
+ * insensitive `http-equiv`), used to detect an author-declared CSP.
+ * @param {Record<string, string | boolean | undefined>} attrs attributes
+ * @returns {boolean} true if it is a CSP meta
+ */
+const metaIsCsp = (attrs) => {
+	for (const name of Object.keys(attrs)) {
+		const value = attrs[name];
+		if (
+			name.toLowerCase() === "http-equiv" &&
+			typeof value === "string" &&
+			value.trim().toLowerCase() === "content-security-policy"
+		) {
+			return true;
+		}
+	}
+	return false;
+};
+
+/** @import { Source } from "webpack-sources" */
+/** @import { HtmlGeneratorOptions } from "../../declarations/WebpackOptions" */
+/** @typedef {import("../../declarations/WebpackOptions").OutputHtmlOptions["csp"]} CspOption */
+/** @import { HtmlTagDescriptor, HtmlMutableTag } from "./HtmlModulesPlugin" */
+/** @typedef {"head" | "body"} HtmlTagLocation */
+/**
+ * @typedef {object} HtmlTagSpan
+ * @property {number} start opening `<` offset
+ * @property {number} openEnd offset just after the opening `>`
+ * @property {number} end offset just after the whole element
+ * @property {HtmlTagLocation} location the `<head>`/`<body>` region it sits in
+ * @property {number} nameEnd offset after the tag name (nonce insertion point), `-1` for non-`<script>`/`<style>`
+ * @property {number} contentEnd raw-text body end for `<script>`/`<style>`, `-1` otherwise
+ * @property {boolean} selfClosing whether the element is self-closing
+ */
+/** @typedef {{ headOpen: number, headEnd: number, bodyOpen: number, bodyEnd: number }} HtmlAnchors */
+/** @typedef {{ tags: HtmlMutableTag[], spans: (HtmlTagSpan | null)[], originals: (string | null)[], descriptors: (HtmlTagDescriptor | null)[], anchors: HtmlAnchors }} HtmlModel */
+/** @import Chunk from "../Chunk" */
+/** @import Compilation, { DependencyConstructor } from "../Compilation" */
+/** @typedef {boolean | string[] | ((asset: { chunk: Chunk, filename: string }) => string[] | false)} HtmlIntegrity */
+/** @import CodeGenerationResults from "../CodeGenerationResults" */
+/** @import Dependency from "../Dependency" */
+/** @import { DependencyTemplateContext } from "../DependencyTemplate" */
+/** @import { GenerateContext, UpdateHashContext } from "../Generator" */
+/**
+ * @import Module, {
+ * 	SourceType,
+ * 	SourceTypes,
+ * 	ConcatenationBailoutReasonContext,
+ * 	RuntimeRequirements
+ * } from "../Module"
+ */
+/** @import ModuleGraph from "../ModuleGraph" */
+/** @import NormalModule from "../NormalModule" */
+/** @import { HtmlModuleBuildInfo } from "./HtmlModule" */
+/** @import RuntimeTemplate from "../RuntimeTemplate" */
+/** @import Hash from "../util/Hash" */
+/**
+ * @template T
+ * @typedef {import("../InitFragment")<T>} InitFragment
+ */
+
+/**
+ * @type {ReadonlySet<"javascript" | "html">}
+ */
+const JAVASCRIPT_AND_HTML_TYPES = new Set([JAVASCRIPT_TYPE, HTML_TYPE]);
+
+/** @type {WeakMap<Compilation, Map<string, Chunk>>} */
+const chunksByIdCache = new WeakMap();
+
+/**
+ * `String(chunk.id)` → chunk lookup, memoized per compilation and shared by the
+ * URL and integrity sentinel resolvers.
+ * @param {Compilation} compilation compilation
+ * @returns {Map<string, Chunk>} chunks keyed by stringified id
+ */
+const getChunksById = (compilation) => {
+	let chunksById = chunksByIdCache.get(compilation);
+	if (chunksById === undefined) {
+		chunksById = new Map();
+		for (const chunk of compilation.chunks) {
+			chunksById.set(String(chunk.id), chunk);
+		}
+		chunksByIdCache.set(compilation, chunksById);
+	}
+	return chunksById;
+};
+
+/** @type {WeakMap<Compilation, Map<string, Module>>} */
+const modulesByIdentifierCache = new WeakMap();
+
+/**
+ * `module.identifier()` → module lookup, memoized per compilation so the asset
+ * URL sentinel resolver doesn't re-scan the whole module graph per HTML module.
+ * @param {Compilation} compilation compilation
+ * @returns {Map<string, Module>} modules keyed by identifier
+ */
+const getModulesByIdentifier = (compilation) => {
+	let modulesByIdentifier = modulesByIdentifierCache.get(compilation);
+	if (modulesByIdentifier === undefined) {
+		modulesByIdentifier = new Map();
+		for (const module of compilation.modules) {
+			modulesByIdentifier.set(module.identifier(), module);
+		}
+		modulesByIdentifierCache.set(compilation, modulesByIdentifier);
+	}
+	return modulesByIdentifier;
+};
+
+// Hoisted so `resolveChunkUrlSentinels` (per chunk × module) doesn't allocate a
+// fresh `RegExp` each call. `String#replace` resets `lastIndex`, so sharing the
+// global-flag instance is safe under these synchronous, non-reentrant calls.
+const CHUNK_URL_SENTINEL_REGEXP =
+	/__WEBPACK_HTML_CHUNK_URL__([0-9a-f]+)__([a-z]+)__END__/g;
+
+// Sentinel for a linked HTML page (a tag mapped to the `html` source type);
+// resolved to the page's emitted filename once it has been built. Keyed by the
+// linked module's id so it shares the `<iframe srcdoc>` nested-module mechanism.
+const HTML_PAGE_URL_SENTINEL_REGEXP =
+	/__WEBPACK_HTML_PAGE_URL__([0-9a-f]+)__END__/g;
+
+// Sentinel for a URL-referenced asset in a resource-hint `<link>`, resolved at
+// `HtmlModulesPlugin` render because HtmlEntry deps run while the HTML module
+// is codegen'd, before the asset's own. Keyed by hex-encoded identifier.
+const ASSET_URL_SENTINEL_REGEXP =
+	/__WEBPACK_HTML_ASSET_URL__([0-9a-f]+)__END__/g;
+
+// Compilations whose HTML modules must emit SRI sentinels (see
+// `enableIntegritySentinels`).
+/** @type {WeakSet<Compilation>} */
+const integritySentinelCompilations = new WeakSet();
+
+// Matches the whole ` integrity="<sentinel>"`, so the attribute can be dropped
+// when the per-asset `integrity` returns `false`. Minification runs first and
+// may have unquoted it, hence the optional back-referenced quote.
+const INTEGRITY_SENTINEL_REGEXP =
+	/ integrity=(["']?)__WEBPACK_HTML_INTEGRITY__([0-9a-f]+)__([a-z]+)__END__\1/g;
+
+// Same attribute, but tolerant of the `\"` escaping the surrounding quotes get
+// when the HTML lives inside a JS string literal — used only to strip it there.
+const INTEGRITY_SENTINEL_STRIP_REGEXP =
+	/ integrity=(\\?["']|)__WEBPACK_HTML_INTEGRITY__[0-9a-f]+__[a-z]+__END__\1/g;
+
+// The trailing `(?:__<hash>)?` is the inlined chunk's content hash, embedded so
+// the host page's bytes and `[contenthash]` change with the inlined content.
+// The resolver ignores it.
+const INLINE_SENTINEL_REGEXP =
+	/__WEBPACK_HTML_INLINE__([0-9a-f]+)__([a-z]+)(?:__[0-9a-f]+)?__END__/g;
+
+/**
+ * Rewrite relative `url(...)` references in a CSS chunk so they still resolve
+ * after the styles are inlined into the HTML document (which may sit in a
+ * different directory). webpack emits every url as `undoPath(cssFile) + <asset
+ * path from the output root>`, so swapping the CSS file's undo prefix for the
+ * HTML file's re-bases them — no path math. Uses the CSS tokenizer to find url
+ * tokens exactly (never a `url(` inside a comment or string); webpack emits
+ * unquoted url()s (special characters `\`-escaped), so only that shape occurs.
+ * @param {string} css the CSS content
+ * @param {string} fromFile the CSS file's output name
+ * @param {string} toFile the HTML file's output name
+ * @param {string} outputPath the compilation output path
+ * @returns {string} the CSS with rebased urls
+ */
+const rebaseCssUrls = (css, fromFile, toFile, outputPath) => {
+	const fromUndo = getUndoPath(fromFile, outputPath, false);
+	const toUndo = getUndoPath(toFile, outputPath, false);
+	if (fromUndo === toUndo) return css;
+	const { readToken, TT_URL } = getCssSyntax();
+	const token = {
+		type: 0,
+		start: 0,
+		end: 0,
+		isId: false,
+		contentStart: 0,
+		contentEnd: 0,
+		unitStart: 0
+	};
+	let pos = 0;
+	let last = 0;
+	let out = "";
+	while (readToken(css, pos, token) !== undefined) {
+		pos = token.end;
+		if (token.type !== TT_URL) continue;
+		const url = css.slice(token.contentStart, token.contentEnd);
+		// Rebase only the undo-path-relative urls; a root-relative (`/`), fragment
+		// (`#`) or scheme (`data:`, …, a `:` before any `/`) url is absolute.
+		const colon = url.indexOf(":");
+		const slash = url.indexOf("/");
+		if (
+			!url.startsWith(fromUndo) ||
+			url[0] === "/" ||
+			url[0] === "#" ||
+			(colon !== -1 && (slash === -1 || colon < slash))
+		) {
+			continue;
+		}
+		out += `${css.slice(last, token.contentStart)}${toUndo}${url.slice(
+			fromUndo.length
+		)}`;
+		last = token.contentEnd;
+	}
+	return last === 0 ? css : out + css.slice(last);
+};
+
+class HtmlGenerator extends Generator {
+	/**
+	 * Emit a sentinel for a chunk URL that can't be resolved at code-gen time
+	 * (chunk hashes aren't computed yet); `resolveChunkUrlSentinels` swaps it
+	 * for `${PUBLIC_PATH_AUTO}<chunkFilename>` once they are.
+	 * @param {Chunk} chunk chunk
+	 * @param {"javascript" | "css"} contentHashType which chunk content hash slot the resolved URL should reference
+	 * @returns {string} sentinel
+	 */
+	static makeChunkUrlSentinel(chunk, contentHashType) {
+		const hexId = Buffer.from(String(chunk.id), "utf8").toString("hex");
+		return `__WEBPACK_HTML_CHUNK_URL__${hexId}__${contentHashType}__END__`;
+	}
+
+	/**
+	 * Replace every `makeChunkUrlSentinel` sentinel in `content` with
+	 * `${PUBLIC_PATH_AUTO}<chunkFilename>`. Must run after
+	 * `Compilation#createHash()` so `[contenthash]` resolves.
+	 * @param {string} content content
+	 * @param {Compilation} compilation compilation
+	 * @returns {string} resolved content
+	 */
+	static resolveChunkUrlSentinels(content, compilation) {
+		if (!content.includes("__WEBPACK_HTML_CHUNK_URL__")) return content;
+		const outputOptions = compilation.outputOptions;
+		const chunksById = getChunksById(compilation);
+		return content.replace(
+			CHUNK_URL_SENTINEL_REGEXP,
+			(_, hexId, contentHashType) => {
+				const chunkId = Buffer.from(hexId, "hex").toString("utf8");
+				const chunk = chunksById.get(chunkId);
+				if (!chunk) return "data:,";
+				// Reuse each pipeline's own filename-template resolver so the URL
+				// matches exactly what that plugin emits (worker/hot-update chunk
+				// handling included), mirroring the CSS branch.
+				let filenameTemplate;
+				if (contentHashType === "css") {
+					filenameTemplate = CssModulesPlugin.getChunkFilenameTemplate(
+						chunk,
+						outputOptions
+					);
+				} else {
+					const JavascriptModulesPlugin = require("../javascript/JavascriptModulesPlugin");
+
+					filenameTemplate = JavascriptModulesPlugin.getChunkFilenameTemplate(
+						chunk,
+						outputOptions
+					);
+				}
+				const filename = compilation.getPath(
+					/** @type {import("../TemplatedPathPlugin").TemplatePath} */
+					(filenameTemplate),
+					{
+						chunk,
+						contentHashType
+					}
+				);
+				return `${PUBLIC_PATH_AUTO}${filename}`;
+			}
+		);
+	}
+
+	/**
+	 * Emit a sentinel for a linked HTML page's URL (a tag the user mapped to
+	 * the `html` source `type`). The page's emitted filename isn't known at
+	 * code-gen time; `resolveHtmlPageUrlSentinels` swaps it for
+	 * `${PUBLIC_PATH_AUTO}<htmlFilename>` once the page has been built.
+	 * @param {string | number} moduleId id of the linked HTML module
+	 * @returns {string} sentinel
+	 */
+	static makeHtmlPageUrlSentinel(moduleId) {
+		const hexId = Buffer.from(String(moduleId), "utf8").toString("hex");
+		return `__WEBPACK_HTML_PAGE_URL__${hexId}__END__`;
+	}
+
+	/**
+	 * Replace every `makeHtmlPageUrlSentinel` sentinel in `content` with
+	 * `${PUBLIC_PATH_AUTO}<htmlFilename>`, resolving each linked page's emitted
+	 * filename through `getFilename`.
+	 * @param {string} content content
+	 * @param {(moduleId: string) => string} getFilename maps a linked module id to its emitted html filename
+	 * @returns {string} resolved content
+	 */
+	static resolveHtmlPageUrlSentinels(content, getFilename) {
+		if (!content.includes("__WEBPACK_HTML_PAGE_URL__")) return content;
+		return content.replace(
+			HTML_PAGE_URL_SENTINEL_REGEXP,
+			(_, hexId) =>
+				`${PUBLIC_PATH_AUTO}${getFilename(
+					Buffer.from(hexId, "hex").toString("utf8")
+				)}`
+		);
+	}
+
+	/**
+	 * Emit a sentinel for a URL-referenced asset module. Resolved by
+	 * `resolveAssetUrlSentinels` from the asset module's own codegen data
+	 * (`data.get("url")`), which isn't populated when `HtmlEntryDependency`
+	 * runs — the asset module's own codegen may still be pending.
+	 * @param {string} moduleIdentifier the referenced asset module's `identifier()`
+	 * @returns {string} sentinel
+	 */
+	static makeAssetUrlSentinel(moduleIdentifier) {
+		const hex = Buffer.from(moduleIdentifier, "utf8").toString("hex");
+		return `__WEBPACK_HTML_ASSET_URL__${hex}__END__`;
+	}
+
+	/**
+	 * Replace every `makeAssetUrlSentinel` in `content` with the asset module's
+	 * emitted URL, read from its codegen data. Unresolved sentinels (module
+	 * absent, no codegen result yet, or no URL channel — e.g. an inlined
+	 * data-URI) map to `data:,` so the surrounding `<link>` degrades cleanly
+	 * instead of shipping the raw placeholder.
+	 * @param {string} content content
+	 * @param {Compilation} compilation compilation
+	 * @returns {string} resolved content
+	 */
+	static resolveAssetUrlSentinels(content, compilation) {
+		if (!content.includes("__WEBPACK_HTML_ASSET_URL__")) return content;
+		const byIdentifier = getModulesByIdentifier(compilation);
+		const codeGenerationResults =
+			/** @type {import("../CodeGenerationResults")} */
+			(compilation.codeGenerationResults);
+		return content.replace(ASSET_URL_SENTINEL_REGEXP, (_, hex) => {
+			const id = Buffer.from(hex, "hex").toString("utf8");
+			const module = byIdentifier.get(id);
+			if (!module) return "data:,";
+			if (!codeGenerationResults.has(module, undefined)) return "data:,";
+			const codeGen = codeGenerationResults.get(module, undefined);
+			const data = codeGen.data;
+			if (!data) return "data:,";
+			const url =
+				/** @type {Record<string, string | undefined> | undefined} */
+				(data.get("url"));
+			// Prefer the `asset-url` channel, which is the real URL string. An asset
+			// reached only from JS has none — its URL is a JS expression — so rebuild
+			// one from `filename` and let the undo-path substitution run.
+			if (url && url["asset-url"]) return url["asset-url"];
+			const filename = /** @type {string | undefined} */ (data.get("filename"));
+			if (filename) return `${PUBLIC_PATH_AUTO}${filename}`;
+			return "data:,";
+		});
+	}
+
+	/**
+	 * Turns SRI sentinel emission on for this compilation. Tags are generated
+	 * once per HTML module, but one module can back several pages with different
+	 * `integrity` options, so HtmlModulesPlugin flags the compilation when any
+	 * page wants SRI and each page resolves or strips the sentinels on emit.
+	 * @param {Compilation} compilation compilation
+	 * @returns {void}
+	 */
+	static enableIntegritySentinels(compilation) {
+		integritySentinelCompilations.add(compilation);
+	}
+
+	/**
+	 * @param {Compilation} compilation compilation
+	 * @returns {boolean} true when SRI sentinels must be emitted
+	 */
+	static hasIntegritySentinels(compilation) {
+		return integritySentinelCompilations.has(compilation);
+	}
+
+	/**
+	 * Emit a sentinel for a chunk's SRI hash. Resolved late (after
+	 * `RealContentHashPlugin`) by `resolveChunkIntegritySentinels`, since the
+	 * hash must cover the chunk's final emitted bytes.
+	 * @param {Chunk} chunk chunk
+	 * @param {"javascript" | "css"} contentHashType which chunk asset to hash
+	 * @returns {string} sentinel
+	 */
+	static makeChunkIntegritySentinel(chunk, contentHashType) {
+		const hexId = Buffer.from(String(chunk.id), "utf8").toString("hex");
+		return `__WEBPACK_HTML_INTEGRITY__${hexId}__${contentHashType}__END__`;
+	}
+
+	/**
+	 * Drop every ` integrity="<sentinel>"` from `content`. Used on the HTML
+	 * string embedded in a JS chunk (e.g. `<iframe srcdoc>`), where a real SRI
+	 * hash can't be produced — the chunk's own bytes aren't final at render time
+	 * — and resolving it later would mutate the chunk after its content hash was
+	 * computed. Only real HTML output assets keep the sentinel for late resolution.
+	 * @param {string} content content
+	 * @returns {string} content with integrity sentinels removed
+	 */
+	static stripChunkIntegritySentinels(content) {
+		if (!content.includes("__WEBPACK_HTML_INTEGRITY__")) return content;
+		return content.replace(INTEGRITY_SENTINEL_STRIP_REGEXP, "");
+	}
+
+	/**
+	 * Replace every ` integrity="<sentinel>"` with the chunk's real SRI hashes,
+	 * or drop the attribute when `integrity` (a function) returns `false` for it.
+	 * @param {string} content content
+	 * @param {Compilation} compilation compilation
+	 * @param {HtmlIntegrity} integrity the `output.html.integrity` option
+	 * @returns {string} resolved content
+	 */
+	static resolveChunkIntegritySentinels(content, compilation, integrity) {
+		if (!content.includes("__WEBPACK_HTML_INTEGRITY__")) return content;
+
+		const crypto = require("crypto");
+
+		// Report each bad hash algorithm once, not once per referencing tag.
+		const reportedBadAlgorithms = new Set();
+
+		const chunksById = getChunksById(compilation);
+		return content.replace(
+			INTEGRITY_SENTINEL_REGEXP,
+			(_, _quote, hexId, contentHashType) => {
+				const chunkId = Buffer.from(hexId, "hex").toString("utf8");
+				const chunk = chunksById.get(chunkId);
+				if (!chunk) return "";
+				// `chunk.files` holds the real emitted names (after
+				// `RealContentHashPlugin`), so hash those bytes — not a name
+				// re-derived from the template, which still has the pre-hash value.
+				let filename;
+				for (const file of chunk.files) {
+					if ((contentHashType === "css") === file.endsWith(".css")) {
+						filename = file;
+						break;
+					}
+				}
+				if (!filename) return "";
+				const asset = compilation.getAsset(filename);
+				if (!asset) return "";
+				const algorithms =
+					typeof integrity === "function"
+						? integrity({ chunk, filename })
+						: integrity === true
+							? ["sha384"]
+							: integrity;
+				if (!algorithms || algorithms.length === 0) return "";
+				const buffer = asset.source.buffer();
+				const parts = [];
+				for (const algorithm of algorithms) {
+					// `crypto.createHash` throws on an unknown algorithm name — turn
+					// that into a webpack error and skip the algorithm instead of
+					// crashing the whole compilation out of `processAssets`.
+					try {
+						parts.push(
+							`${algorithm}-${crypto
+								.createHash(algorithm)
+								.update(buffer)
+								.digest("base64")}`
+						);
+					} catch (_err) {
+						if (!reportedBadAlgorithms.has(algorithm)) {
+							reportedBadAlgorithms.add(algorithm);
+							compilation.errors.push(
+								new WebpackError(
+									`output.html.integrity: unsupported hash algorithm ${JSON.stringify(
+										algorithm
+									)}`
+								)
+							);
+						}
+					}
+				}
+				if (parts.length === 0) return "";
+				return ` integrity="${parts.join(" ")}"`;
+			}
+		);
+	}
+
+	/**
+	 * @param {Chunk} chunk chunk
+	 * @param {"javascript" | "css"} contentHashType which chunk asset to inline
+	 * @returns {string} sentinel
+	 */
+	static makeChunkInlineSentinel(chunk, contentHashType) {
+		const hexId = Buffer.from(String(chunk.id), "utf8").toString("hex");
+		return `__WEBPACK_HTML_INLINE__${hexId}__${contentHashType}__END__`;
+	}
+
+	/**
+	 * Replace every inline sentinel with the chunk's actual source content.
+	 * Must run after `RealContentHashPlugin` so the final emitted filenames are
+	 * known (we look up the asset by filename from `chunk.files`).
+	 * @param {string} content content
+	 * @param {Compilation} compilation compilation
+	 * @param {string} htmlFilename output name of the HTML file being resolved (to rebase CSS urls)
+	 * @param {Set<string>=} inlinedFiles collects every chunk file inlined here, so the caller can drop now-unreferenced assets
+	 * @returns {string} resolved content
+	 */
+	static resolveChunkInlineSentinels(
+		content,
+		compilation,
+		htmlFilename,
+		inlinedFiles
+	) {
+		if (!content.includes("__WEBPACK_HTML_INLINE__")) return content;
+		const chunksById = getChunksById(compilation);
+		const outputPath = /** @type {string} */ (compilation.outputOptions.path);
+		return content.replace(
+			INLINE_SENTINEL_REGEXP,
+			(_, hexId, contentHashType) => {
+				const chunkId = Buffer.from(hexId, "hex").toString("utf8");
+				const chunk = chunksById.get(chunkId);
+				if (!chunk) return "";
+				const isCss = contentHashType === "css";
+				let out = "";
+				for (const file of chunk.files) {
+					if (isCss !== file.endsWith(".css")) continue;
+					const asset = compilation.getAsset(file);
+					if (!asset) continue;
+					let raw = String(asset.source.source());
+					if (isCss) {
+						// Styles move into the document, so relative `url(...)` must be
+						// rebased; then escape `</style` so it can't close the block early.
+						raw = rebaseCssUrls(raw, file, htmlFilename, outputPath).replace(
+							/<\/(style)/gi,
+							"<\\/$1"
+						);
+					} else {
+						// Escape `</script` (early close) and `<!--` (enters the script-data
+						// escaped state, where a later `<script` hides the real close); both
+						// only occur inside a string/comment/regex, where `<\` is inert.
+						raw = raw
+							.replace(/<\/(script)/gi, "<\\/$1")
+							.replace(/<!--/g, "<\\!--");
+					}
+					out += raw;
+					if (inlinedFiles) inlinedFiles.add(file);
+				}
+				return out;
+			}
+		);
+	}
+
+	/**
+	 * Parses the final HTML once and collects everything the `output.html`
+	 * post-processing stages need: every `<script>`/`<link>`/`<style>`/`<meta>` as
+	 * a mutable descriptor (for `transformTags`) paired with its source span, an
+	 * attribute snapshot (to detect changes), and — for `<script>`/`<style>` — the
+	 * raw-text body range and nonce insertion point (for CSP); plus the
+	 * `<head>`/`<body>` open/content-end anchors (for `injectTags`). One parse feeds
+	 * `injectTags` + `transformTags` + CSP, which `renderHtml` then applies in a
+	 * single pass. Uses the pipeline's own parser (no regex).
+	 * @param {string} content the final HTML (inline content already resolved)
+	 * @returns {HtmlModel} the collected model
+	 */
+	static collectHtml(content) {
+		/** @type {HtmlMutableTag[]} */
+		const tags = [];
+		/** @type {(HtmlTagSpan | null)[]} */
+		const spans = [];
+		/** @type {(string | null)[]} */
+		const originals = [];
+		/** @type {(HtmlTagDescriptor | null)[]} */
+		const descriptors = [];
+		let headOpen = -1;
+		let headEnd = -1;
+		let bodyOpen = -1;
+		let bodyEnd = -1;
+		let headDepth = 0;
+		let bodyDepth = 0;
+		// `skip.text` populates `contentEnd` (raw-text body end) without
+		// materializing text nodes; `</script` stays escaped, so CSP hashes match
+		// the exact bytes the browser sees.
+		const { NodeType, SourceProcessor } = getHtmlSyntax();
+		new SourceProcessor()
+			.use({
+				[NodeType.Element]: {
+					enter: (path) => {
+						const name = path.tagName();
+						if (name === "head") {
+							if (headOpen < 0) headOpen = headEnd = path.tagEnd();
+							headDepth++;
+						} else if (name === "body") {
+							if (bodyOpen < 0) bodyOpen = bodyEnd = path.tagEnd();
+							bodyDepth++;
+						}
+					},
+					// Collected on exit, since an element's `end` is final only once it
+					// closes. `script`, `style`, `link` and `meta` never nest in each
+					// other, so exiting keeps them in source order.
+					exit: (path) => {
+						const name = path.tagName();
+						if (name === "head") {
+							if (headDepth > 0) headDepth--;
+							return;
+						}
+						if (name === "body") {
+							if (bodyDepth > 0) bodyDepth--;
+							return;
+						}
+						const end = path.end();
+						if (headDepth > 0 && end > headEnd) headEnd = end;
+						if (bodyDepth > 0 && end > bodyEnd) bodyEnd = end;
+						if (
+							name !== "script" &&
+							name !== "link" &&
+							name !== "style" &&
+							name !== "meta"
+						) {
+							return;
+						}
+						/** @type {Record<string, string | boolean | undefined>} */
+						const attrs = {};
+						const count = path.attributeCount();
+						for (let i = 0; i < count; i++) {
+							const attr = path.attributeAt(i);
+							attrs[path.attributeName(attr)] =
+								path.attributeValueStart(attr) === -1
+									? true
+									: path.attributeValue(attr);
+						}
+						const isRawText = name === "script" || name === "style";
+						tags.push({
+							tag: name,
+							attrs,
+							injectTo: bodyDepth > 0 ? "body" : "head"
+						});
+						spans.push({
+							start: path.start(),
+							openEnd: path.tagEnd(),
+							end,
+							location: bodyDepth > 0 ? "body" : "head",
+							nameEnd: isRawText ? path.nameEnd() : -1,
+							contentEnd: isRawText ? path.contentEnd() : -1,
+							selfClosing: path.selfClosing()
+						});
+						originals.push(snapshotAttrs(attrs));
+						descriptors.push(null);
+					}
+				}
+			})
+			.process(content, { skip: { text: true, doctype: true } });
+		return {
+			tags,
+			spans,
+			originals,
+			descriptors,
+			anchors: { headOpen, headEnd, bodyOpen, bodyEnd }
+		};
+	}
+
+	/**
+	 * Appends `injectTags` descriptors to the model as spanless tags (pure inserts
+	 * placed by `injectTo`), so `transformTags` sees them alongside the page's own
+	 * tags and CSP hashes any injected inline `<script>`/`<style>`. `attrs` is
+	 * copied so a `transformTags` mutation never corrupts the caller's descriptor.
+	 * @param {HtmlModel} model the value from `collectHtml`
+	 * @param {HtmlTagDescriptor[]} injected the `injectTags` descriptors
+	 * @returns {void}
+	 */
+	static addInjectedTags(model, injected) {
+		for (const descriptor of injected) {
+			model.tags.push({
+				tag: descriptor.tag,
+				attrs: descriptor.attrs ? { ...descriptor.attrs } : {},
+				injectTo: descriptor.injectTo || "head"
+			});
+			model.spans.push(null);
+			model.originals.push(null);
+			model.descriptors.push(descriptor);
+		}
+	}
+
+	/**
+	 * Renders the collected (and hook-mutated) model back into HTML in a single
+	 * pass: injected tags are placed by `injectTo`; an existing tag is left
+	 * byte-for-byte unless it was removed, moved (`<head>`↔`<body>`, honoring
+	 * `*-prepend`), or had its `attrs` changed; and — when `csp` is set and the
+	 * page declares no CSP — a strict `<meta http-equiv="Content-Security-Policy">`
+	 * is injected with a hash of every inline `<script>`/`<style>` (page's own and
+	 * injected) plus an optional placeholder `nonce` on each. Edits are applied
+	 * in one ascending pass; at a shared offset an insert is emitted before a
+	 * delete/replace's text.
+	 * @param {string} content the collected HTML (inline content already resolved)
+	 * @param {HtmlModel} model the value from `collectHtml` after the hooks
+	 * @param {CspOption} csp the `output.html.csp` option
+	 * @returns {string} the rendered HTML
+	 */
+	static renderHtml(content, model, csp) {
+		const { escapeAttribute } = getHtmlSyntax();
+		const { tags, spans, originals, descriptors, anchors } = model;
+		// CSP setup: an author-declared policy (page's own or injected) wins.
+		const options = csp ? (csp === true ? {} : csp) : undefined;
+		const nonce = options && options.nonce;
+		let hasCsp = false;
+		if (options) {
+			for (let i = 0; i < tags.length; i++) {
+				const tag = tags[i];
+				if (!tag.remove && tag.tag === "meta" && metaIsCsp(tag.attrs)) {
+					hasCsp = true;
+					break;
+				}
+			}
+		}
+		const addCsp = Boolean(options) && !hasCsp;
+		/** @type {Set<string>} */
+		const scriptSrc = new Set();
+		/** @type {Set<string>} */
+		const styleSrc = new Set();
+		let hashOf;
+		if (addCsp) {
+			const hashFunction =
+				/** @type {Exclude<CspOption, boolean | undefined>} */ (options)
+					.hashFunction || "sha256";
+			const createHash = getCreateNodeHash();
+			hashOf = (/** @type {string} */ body) =>
+				`'${hashFunction}-${createHash(hashFunction)
+					.update(body, "utf8")
+					.digest("base64")}'`;
+		}
+		// Insertions accumulated per offset (placement order preserved); range edits
+		// replace/delete an existing tag's span; region groups collect placements so
+		// `*-prepend` precedes the plain name at a shared (empty-region) anchor.
+		/** @type {Map<number, string>} */
+		const inserts = new Map();
+		/** @type {(pos: number, text: string) => void} */
+		const at = (pos, text) => {
+			if (text) inserts.set(pos, (inserts.get(pos) || "") + text);
+		};
+		// Placements accumulate per region so `*-prepend` always precedes the plain
+		// name at a shared offset (an empty `<head>`/`<body>`); emitted at the anchors
+		// after the loop.
+		/** @type {Record<string, string>} */
+		const groups = {
+			"head-prepend": "",
+			head: "",
+			"body-prepend": "",
+			body: ""
+		};
+		/** @type {(region: string | undefined, text: string) => void} */
+		const place = (region, text) => {
+			if (text) {
+				groups[region !== undefined && region in groups ? region : "head"] +=
+					text;
+			}
+		};
+		/** @type {{ start: number, end: number, text: string, insert: boolean }[]} */
+		const edits = [];
+		for (let i = 0; i < tags.length; i++) {
+			const tag = tags[i];
+			const span = spans[i];
+			const isRawText = tag.tag === "script" || tag.tag === "style";
+			const needsNonce =
+				addCsp &&
+				Boolean(nonce) &&
+				isRawText &&
+				!attrPresent(tag.attrs, "nonce");
+			// Hash an inline `<script>`/`<style>` (page's own or injected). External
+			// `<script src>` is covered by `'self'`; a self-closing tag has no body.
+			if (addCsp && isRawText && !tag.remove) {
+				const isScript = tag.tag === "script";
+				let body = "";
+				if (span) {
+					if (
+						!span.selfClosing &&
+						!(isScript && attrPresent(tag.attrs, "src"))
+					) {
+						body = content.slice(span.openEnd, span.contentEnd);
+					}
+				} else if (!(isScript && attrPresent(tag.attrs, "src"))) {
+					body =
+						/** @type {HtmlTagDescriptor} */ (descriptors[i]).children || "";
+				}
+				if (body !== "") {
+					(isScript ? scriptSrc : styleSrc).add(
+						/** @type {(body: string) => string} */ (hashOf)(body)
+					);
+				}
+			}
+			if (!span) {
+				// Injected tag: serialize (with a nonce when CSP asks) and place it.
+				if (tag.remove) continue;
+				const descriptor = /** @type {HtmlTagDescriptor} */ (descriptors[i]);
+				const attrs = needsNonce
+					? { nonce: /** @type {string} */ (nonce), ...tag.attrs }
+					: tag.attrs;
+				place(
+					tag.injectTo || "head",
+					serializeTag({
+						tag: tag.tag,
+						attrs,
+						children: descriptor.children,
+						voidTag: descriptor.voidTag
+					})
+				);
+				continue;
+			}
+			// Existing tag.
+			if (tag.remove) {
+				edits.push({
+					start: span.start,
+					end: span.end,
+					text: "",
+					insert: false
+				});
+				continue;
+			}
+			const attrsChanged = snapshotAttrs(tag.attrs) !== originals[i];
+			const moved =
+				tag.injectTo !== undefined && tag.injectTo !== span.location;
+			const nonceStr = needsNonce
+				? ` nonce="${escapeAttribute(/** @type {string} */ (nonce))}"`
+				: "";
+			if (moved) {
+				const opening = `<${tag.tag}${nonceStr}${serializeAttrs(tag.attrs)}>`;
+				edits.push({
+					start: span.start,
+					end: span.end,
+					text: "",
+					insert: false
+				});
+				place(tag.injectTo, opening + content.slice(span.openEnd, span.end));
+			} else if (attrsChanged) {
+				// Rewrite the opening tag (a nonce, if any, lands first).
+				edits.push({
+					start: span.start,
+					end: span.openEnd,
+					text: `<${tag.tag}${nonceStr}${serializeAttrs(tag.attrs)}>`,
+					insert: false
+				});
+			} else if (nonceStr) {
+				// Nonce-only change: insert right after the tag name, rest verbatim.
+				edits.push({
+					start: span.nameEnd,
+					end: span.nameEnd,
+					text: nonceStr,
+					insert: true
+				});
+			}
+		}
+		if (addCsp) {
+			if (nonce) {
+				scriptSrc.add(`'nonce-${nonce}'`);
+				styleSrc.add(`'nonce-${nonce}'`);
+			}
+			// Strict baseline; a user `policy` directive replaces one, hashes/nonce append.
+			/** @type {Map<string, Set<string>>} */
+			const directives = new Map([
+				["script-src", new Set(["'self'"])],
+				["style-src", new Set(["'self'"])],
+				["object-src", new Set(["'none'"])],
+				["base-uri", new Set(["'self'"])]
+			]);
+			const policyOption =
+				/** @type {Exclude<CspOption, boolean | undefined>} */ (options).policy;
+			if (policyOption) {
+				for (const [name, value] of Object.entries(policyOption)) {
+					directives.set(name, new Set(Array.isArray(value) ? value : [value]));
+				}
+			}
+			/** @type {(name: string, extra: Set<string>) => void} */
+			const append = (name, extra) => {
+				let set = directives.get(name);
+				if (!set) directives.set(name, (set = new Set()));
+				for (const value of extra) set.add(value);
+			};
+			append("script-src", scriptSrc);
+			append("style-src", styleSrc);
+			const policy = [...directives]
+				.filter(([, values]) => values.size > 0)
+				.map(([name, values]) => `${name} ${[...values].join(" ")}`)
+				.join("; ");
+			const meta = `<meta http-equiv="Content-Security-Policy" content="${escapeAttribute(
+				policy
+			)}">`;
+			// First at the head anchor, so it precedes any head-prepend tag.
+			at(anchors.headOpen, meta);
+		}
+		// Emit region placements at the `<head>`/`<body>` anchors (after any CSP
+		// meta, prepend before the plain name). The parser always synthesizes an
+		// implied `<head>`/`<body>`, so both anchors are always present.
+		at(anchors.headOpen, groups["head-prepend"]);
+		at(anchors.headEnd, groups.head);
+		at(anchors.bodyOpen, groups["body-prepend"]);
+		at(anchors.bodyEnd, groups.body);
+		for (const [pos, text] of inserts) {
+			edits.push({ start: pos, end: pos, text, insert: true });
+		}
+		if (edits.length === 0) return content;
+		// Ascending single pass over the (non-overlapping) edits — O(page + edits)
+		// instead of two full-page copies per edit; the tie-break reproduces the
+		// former right-to-left order (insert text lands before a replacement's).
+		edits.sort(
+			(a, b) => a.start - b.start || Number(b.insert) - Number(a.insert)
+		);
+		let result = "";
+		let cursor = 0;
+		for (const edit of edits) {
+			result += content.slice(cursor, edit.start);
+			result += edit.text;
+			if (edit.end > cursor) cursor = edit.end;
+		}
+		return result + content.slice(cursor);
+	}
+
+	/**
+	 * Embeds each inlined chunk's content hash into its inline sentinel
+	 * (`…__<type>__END__` → `…__<type>__<hash>__END__`). The sentinel otherwise
+	 * carries only the stable chunk id, so the host HTML's bytes wouldn't change
+	 * when the inlined content changes — the resolved chunk URL that normally
+	 * busts the page `[contenthash]` is gone once inlined. Embedding the hash
+	 * makes the emitted bytes content-dependent, so both the initial hash and
+	 * RealContentHashPlugin's recompute pick up inlined-content changes. The
+	 * resolver (`resolveChunkInlineSentinels`) ignores this segment.
+	 * @param {string} content content with chunk-url sentinels already resolved
+	 * @param {Compilation} compilation compilation
+	 * @returns {string} content with content-hash-tagged inline sentinels
+	 */
+	static embedInlineChunkHashes(content, compilation) {
+		if (!content.includes("__WEBPACK_HTML_INLINE__")) return content;
+		const chunksById = getChunksById(compilation);
+		return content.replace(
+			INLINE_SENTINEL_REGEXP,
+			(match, hexId, contentHashType) => {
+				const chunkId = Buffer.from(hexId, "hex").toString("utf8");
+				const chunk = chunksById.get(chunkId);
+				if (!chunk) return match;
+				const hash =
+					(chunk.contentHash && chunk.contentHash[contentHashType]) ||
+					chunk.renderedHash ||
+					chunk.hash;
+				if (!hash) return match;
+				return `__WEBPACK_HTML_INLINE__${hexId}__${contentHashType}__${hash}__END__`;
+			}
+		);
+	}
+
+	/**
+	 * Creates an instance of HtmlGenerator.
+	 * @param {HtmlGeneratorOptions=} options generator options
+	 * @param {ModuleGraph=} moduleGraph the module graph; used to detect when an HTML module is reached as a compilation entry so `extract` can default to `true` for it
+	 * @param {((module: NormalModule) => boolean)=} isPageOnly tells whether the module's only output is its emitted page, so it exposes no JavaScript
+	 */
+	constructor(options, moduleGraph, isPageOnly) {
+		super();
+		/** @type {HtmlGeneratorOptions} */
+		this.options = options || {};
+		/** @type {ModuleGraph | undefined} */
+		this._moduleGraph = moduleGraph;
+		/** @type {((module: NormalModule) => boolean) | undefined} */
+		this._isPageOnly = isPageOnly;
+		// Raw render shared between the JS and HTML passes of one `codeGeneration()`
+		// call, which differ only in `undoPath`. Keyed by that call's
+		// `runtimeRequirements` Set, so the entry is scoped to it and releases with it.
+		/** @type {WeakMap<RuntimeRequirements, string>} */
+		this._rawRenderCache = new WeakMap();
+	}
+
+	/**
+	 * Returns the reason this module cannot be concatenated, when one exists.
+	 * @param {NormalModule} module module for which the bailout reason should be determined
+	 * @param {ConcatenationBailoutReasonContext} context context
+	 * @returns {string | undefined} reason why this module can't be concatenated, undefined when it can be concatenated
+	 */
+	getConcatenationBailoutReason(module, context) {
+		// The HMR shim references the per-module `module.hot`, and a concatenated
+		// file shares one `module`, so the self-accept wiring would target the wrong
+		// id. Bail out, keeping the module's own scope.
+		if (module.hot) {
+			return "HTML module needs its own module scope for HMR";
+		}
+		return undefined;
+	}
+
+	/**
+	 * Whether this HTML module is reached as a compilation entry. Entry
+	 * modules have at least one incoming connection without an
+	 * `originModule` (the EntryDependency added by `compilation.addEntry`) —
+	 * this covers both HTML-as-entry-point and a linked `type: "html"` page
+	 * (added as its own entry by HtmlModulesPlugin).
+	 * @param {NormalModule} module module
+	 * @returns {boolean} true when the module is an entry
+	 */
+	_isEntryModule(module) {
+		if (!this._moduleGraph) return false;
+		for (const connection of this._moduleGraph.getIncomingConnections(module)) {
+			if (!connection.originModule) return true;
+		}
+		return false;
+	}
+
+	/**
+	 * Whether to emit the extracted `.html` file for this module.
+	 * `options.extract === true` always extracts; `false` and `"inline"` never;
+	 * when the option is left unspecified, extraction defaults to on for HTML
+	 * modules used as compilation entries — that's the HTML-as-entry-point case
+	 * and a linked `type: "html"` page (which is added as its own entry).
+	 * @param {NormalModule} module module
+	 * @returns {boolean} true when the `.html` file should be emitted
+	 */
+	_shouldExtract(module) {
+		const { extract } = this.options;
+		if (extract === true) return true;
+		if (extract === false || extract === "inline") return false;
+		return this._isEntryModule(module);
+	}
+
+	/**
+	 * Whether this module exposes the `html` source type. Like `_shouldExtract`,
+	 * but `"inline"` also exposes it — the processed HTML is read back into the
+	 * host attribute (e.g. `<iframe srcdoc>`) instead of emitted as a file.
+	 * @param {NormalModule} module module
+	 * @returns {boolean} true when the `html` source type is available
+	 */
+	_shouldExposeHtmlType(module) {
+		if (this.options.extract === "inline") return true;
+		return this._shouldExtract(module);
+	}
+
+	/**
+	 * Returns the source types available for this module.
+	 * @param {NormalModule} module fresh module
+	 * @returns {SourceTypes} available types (do not mutate)
+	 */
+	getTypes(module) {
+		if (this._shouldExposeHtmlType(module)) {
+			// A page nothing else reads has no JavaScript side: that chunk would
+			// only re-export the markup already emitted as the `.html` asset.
+			if (this._isPageOnly && this._isPageOnly(module)) return HTML_TYPES;
+			return JAVASCRIPT_AND_HTML_TYPES;
+		}
+		return JAVASCRIPT_TYPES;
+	}
+
+	/**
+	 * @returns {boolean} whether getTypes() depends on the module's incoming connections
+	 */
+	getTypesDependOnIncomingConnections() {
+		// Every page that can expose the html type reads incoming connections —
+		// for the `extract` default, and for the page-only JavaScript drop.
+		return this.options.extract !== false;
+	}
+
+	/**
+	 * Returns the estimated size for the requested source type.
+	 * @param {NormalModule} module the module
+	 * @param {SourceType=} type source type
+	 * @returns {number} estimate size of the module
+	 */
+	getSize(module, type) {
+		const originalSource = module.originalSource();
+		if (!originalSource) return 0;
+		if (type === HTML_TYPE) return originalSource.size();
+		return originalSource.size() + 10;
+	}
+
+	/**
+	 * Processes the provided module.
+	 * @param {Dependency} dependency the dependency to generate
+	 * @param {ReplaceSource} source the current replace source which can be modified
+	 * @param {DependencyTemplateContext} templateContext the template context (shared across all dependencies of the module)
+	 * @returns {void}
+	 */
+	sourceDependency(dependency, source, templateContext) {
+		const constructor =
+			/** @type {DependencyConstructor} */
+			(dependency.constructor);
+		const template = templateContext.dependencyTemplates.get(constructor);
+		if (!template) {
+			throw new Error(
+				`No template for dependency: ${dependency.constructor.name}`
+			);
+		}
+
+		template.apply(dependency, source, templateContext);
+	}
+
+	/**
+	 * Processes the provided dependencies block.
+	 * @param {import("../DependenciesBlock")} block the dependencies block which will be processed
+	 * @param {ReplaceSource} source the current replace source which can be modified
+	 * @param {DependencyTemplateContext} templateContext the template context
+	 * @returns {void}
+	 */
+	sourceBlock(block, source, templateContext) {
+		for (const dependency of block.dependencies) {
+			this.sourceDependency(dependency, source, templateContext);
+		}
+
+		for (const childBlock of block.blocks) {
+			this.sourceBlock(childBlock, source, templateContext);
+		}
+	}
+
+	/**
+	 * Processes the provided module.
+	 * @param {NormalModule} module the module to generate
+	 * @param {InitFragment<GenerateContext>[]} initFragments mutable list of init fragments
+	 * @param {ReplaceSource} source the current replace source which can be modified
+	 * @param {GenerateContext} generateContext the generateContext
+	 * @returns {void}
+	 */
+	sourceModule(module, initFragments, source, generateContext) {
+		// Only `dependency` varies across `template.apply` calls, so one context
+		// (and one lazy `chunkInitFragments` getter) serves the whole module.
+		/** @type {InitFragment<GenerateContext>[] | undefined} */
+		let chunkInitFragments;
+		/** @type {DependencyTemplateContext} */
+		const templateContext = {
+			runtimeTemplate: generateContext.runtimeTemplate,
+			dependencyTemplates: generateContext.dependencyTemplates,
+			moduleGraph: generateContext.moduleGraph,
+			chunkGraph: generateContext.chunkGraph,
+			module,
+			runtime: generateContext.runtime,
+			runtimeRequirements: generateContext.runtimeRequirements,
+			concatenationScope: generateContext.concatenationScope,
+			codeGenerationResults:
+				/** @type {CodeGenerationResults} */
+				(generateContext.codeGenerationResults),
+			initFragments,
+			get chunkInitFragments() {
+				if (!chunkInitFragments) {
+					const data =
+						/** @type {NonNullable<GenerateContext["getData"]>} */
+						(generateContext.getData)();
+					chunkInitFragments = data.get("chunkInitFragments");
+					if (!chunkInitFragments) {
+						chunkInitFragments = [];
+						data.set("chunkInitFragments", chunkInitFragments);
+					}
+				}
+
+				return chunkInitFragments;
+			}
+		};
+
+		for (const dependency of module.dependencies) {
+			this.sourceDependency(dependency, source, templateContext);
+		}
+
+		if (module.presentationalDependencies !== undefined) {
+			for (const dependency of module.presentationalDependencies) {
+				this.sourceDependency(dependency, source, templateContext);
+			}
+		}
+
+		for (const childBlock of module.blocks) {
+			this.sourceBlock(childBlock, source, templateContext);
+		}
+	}
+
+	/**
+	 * Run all HTML dependency templates against the original module source and
+	 * return the rewritten HTML. When `undoPath` is a string, `[webpack/auto]`
+	 * placeholders left in by asset/url dependencies are resolved to that
+	 * undo path (use `""` to make URLs root-relative). When `undoPath` is
+	 * `undefined`, the placeholders are preserved so the caller (typically
+	 * `HtmlModulesPlugin#renderManifest`, which only knows the final
+	 * `.html` filename after code generation) can resolve them itself.
+	 * @param {NormalModule} module the module to render
+	 * @param {GenerateContext} generateContext the generate context
+	 * @param {string=} undoPath value to substitute for `[webpack/auto]` placeholders
+	 * @returns {string} the rewritten HTML
+	 */
+	_renderHtml(module, generateContext, undoPath) {
+		// No dependency template branches on `type` or writes
+		// `runtimeRequirements`, so the raw render is computed once per
+		// `codeGeneration()`; the passes diverge only in the substitution below.
+		const cacheKey = generateContext.runtimeRequirements;
+		let rawContent = this._rawRenderCache.get(cacheKey);
+		if (rawContent === undefined) {
+			const originalSource = /** @type {Source} */ (module.originalSource());
+			const source = new ReplaceSource(originalSource);
+			/** @type {InitFragment<GenerateContext>[]} */
+			const initFragments = [];
+
+			this.sourceModule(module, initFragments, source, generateContext);
+			rawContent = /** @type {string} */ (source.source());
+			this._rawRenderCache.set(cacheKey, rawContent);
+		}
+
+		if (undoPath === undefined) {
+			// HTML output — leave sentinels and `[webpack/auto]` for renderManifest.
+			return rawContent;
+		}
+
+		// JS-export path — resolve `[webpack/auto]` inline; chunk-URL sentinels
+		// stay for `HtmlModulesPlugin`'s `JavascriptModulesPlugin.render` tap.
+		if (!rawContent.includes(PUBLIC_PATH_AUTO)) return rawContent;
+		// A relative `<base href>` prepends `../`s so the base can't misdirect
+		// the rewritten URLs (see `HtmlParser`).
+		const basePrefix =
+			/** @type {HtmlModuleBuildInfo} */ (module.buildInfo).baseUrlPrefix || "";
+		return rawContent.split(PUBLIC_PATH_AUTO).join(basePrefix + undoPath);
+	}
+
+	/**
+	 * Generates generated code for this runtime module.
+	 * @param {NormalModule} module module for which the code should be generated
+	 * @param {GenerateContext} generateContext context for generate
+	 * @returns {Source | null} generated code
+	 */
+	generate(module, generateContext) {
+		const originalSource = module.originalSource();
+
+		if (!originalSource) {
+			return new RawSource("");
+		}
+
+		if (generateContext.type === HTML_TYPE) {
+			// Preserve `[webpack/auto]`; renderManifest resolves it once `.html` filename is known.
+			return new RawSource(
+				this._renderHtml(module, generateContext, undefined)
+			);
+		}
+
+		// JS export: resolve `[webpack/auto]` to root-relative URLs. No `.html`
+		// asset carries this markup, so an asset-level minimizer never sees it.
+		const embedded =
+			generateContext.runtimeTemplate.compilation._resolveEmbeddedSource(
+				new RawSource(this._renderHtml(module, generateContext, "")),
+				{ type: HTML_TYPE, hostType: JAVASCRIPT_TYPE, module }
+			);
+		const embeddedSource = embedded.source();
+		const generated =
+			typeof embeddedSource === "string"
+				? embeddedSource
+				: embeddedSource.toString("utf8");
+
+		/** @type {string} */
+		let sourceContent;
+		// `module.hot` marks HMR being enabled, and concatenation merges into a
+		// parent's scope where `module.hot.accept` would target the wrong id.
+		// `getConcatenationBailoutReason` keeps such a module out of it.
+		if (generateContext.concatenationScope && !module.hot) {
+			generateContext.concatenationScope.registerNamespaceExport(
+				ConcatenationScope.NAMESPACE_OBJECT_EXPORT
+			);
+			sourceContent = `${generateContext.runtimeTemplate.renderConst()} ${
+				ConcatenationScope.NAMESPACE_OBJECT_EXPORT
+			} = ${JSON.stringify(generated)};`;
+		} else {
+			generateContext.runtimeRequirements.add(RuntimeGlobals.module);
+			if (module.hot) {
+				sourceContent = this._renderHmrShim(
+					module,
+					generated,
+					this._shouldExtract(module),
+					generateContext.runtimeTemplate
+				);
+			} else {
+				sourceContent = `${module.moduleArgument}.exports = ${JSON.stringify(
+					generated
+				)};`;
+			}
+		}
+
+		return new RawSource(sourceContent);
+	}
+
+	/**
+	 * Emits the JS shim with HMR self-acceptance. When `extracting` is true the
+	 * HTML module is also the document the browser is viewing, so the shim
+	 * additionally patches `document.body` and `document.title` on every hot
+	 * update so the rendered page reflects the new HTML without a full
+	 * reload. The patching guard `module.hot.data` ensures the body is only
+	 * replaced on a re-evaluation after a hot update — never on the initial
+	 * page load, where `document.body` already matches the extracted HTML.
+	 *
+	 * The runtime extracts the body / title / head-sans-title sections from
+	 * the HTML with regexes. HTML comments are *masked* first — their
+	 * characters replaced with spaces, preserving length — via a `<!--…-->`
+	 * regex, so a `<body>` (or `</body>` / `<title>` / etc.) that appears
+	 * inside a comment can't fool the tag regexes — that was the one
+	 * well-known sharp edge of HTML+regex. Because masking keeps offsets
+	 * stable, the body / title content is sliced back out of the *original*
+	 * HTML, so real comments inside `<body>` survive into the patched DOM
+	 * exactly as a full page reload would render them.
+	 *
+	 * `<head>` changes beyond `<title>` (a new `<meta>`, a swapped
+	 * `<link rel=icon>`, an inline `<style>` block, …) are applied as a
+	 * delta against the previous evaluation's authored head. Replacing
+	 * `document.head.innerHTML` wholesale would tear down the runtime
+	 * scripts and stylesheet links webpack injects there on initial load;
+	 * a delta cannot, since those appear in neither authored head. An
+	 * added `<script>` is re-created before it is inserted, so it runs the
+	 * way the reload this replaces would have run it, and every addition
+	 * lands at its authored position rather than at the end. Two edits are
+	 * still worth reloading for: a removed `<script>` the browser *executed*,
+	 * since one that has run cannot be un-run (a removed data block such as
+	 * `application/ld+json` never ran, so it is patched like any other
+	 * element), and a reordering of elements the delta cannot
+	 * express — fine in a dev-server context because the regular
+	 * (non-hot-update) `page.html` chunk is re-emitted on every rebuild,
+	 * so the reloaded page picks up the new head.
+	 * @param {NormalModule} module module
+	 * @param {string} html the rewritten HTML content (with placeholders resolved)
+	 * @param {boolean} extracting whether the HTML module is being extracted as a real `.html` file
+	 * @param {RuntimeTemplate} runtimeTemplate runtime template (drives `const`/arrow emission based on environment support)
+	 * @returns {string} JS shim source
+	 */
+	_renderHmrShim(module, html, extracting, runtimeTemplate) {
+		const declare = runtimeTemplate.renderConst();
+		const mutable = runtimeTemplate.renderLet();
+		const acceptBlock = extracting
+			? [
+					"module.hot.accept();",
+					// WHY: a `</body>` inside a comment stops the non-greedy `*?` at the
+					// wrong place, so comments are masked before any tag regex runs.
+					// Masking rather than deleting keeps offsets stable, so the body and
+					// title can still be sliced out of the original HTML with their
+					// comments intact.
+					`${declare} __webpack_mask_comments__ = ${runtimeTemplate.returningFunction(
+						`h.replace(/<!--[\\s\\S]*?-->/g, ${runtimeTemplate.returningFunction(
+							'c.replace(/[^\\n]/g, " ")',
+							"c"
+						)})`,
+						"h"
+					)};`,
+					// Mask comments once per evaluation; reused for every
+					// tag-boundary search (head/body/title and the dispose-time
+					// head diff) so a large page isn't re-scanned per section.
+					`${declare} __webpack_masked_html__ = __webpack_mask_comments__(__webpack_html__);`,
+					// Slice the inner content of `<tag>…</tag>` out of the original
+					// HTML, using the pre-masked copy to locate the tag boundaries.
+					`${declare} __webpack_extract__ = ${runtimeTemplate.basicFunction(
+						"tag",
+						[
+							`${declare} open = new RegExp("<" + tag + "[^>]*>", "i").exec(__webpack_masked_html__);`,
+							"if (!open) return null;",
+							`${declare} start = open.index + open[0].length;`,
+							`${declare} close = new RegExp("</" + tag + ">", "i").exec(__webpack_masked_html__.slice(start));`,
+							"if (!close) return null;",
+							"return __webpack_html__.slice(start, start + close.index);"
+						]
+					)};`,
+					`${declare} __webpack_extract_head__ = ${runtimeTemplate.basicFunction(
+						"",
+						[
+							// Mask only the small extracted head so a comment-only head
+							// edit doesn't force a full reload.
+							`${declare} head = __webpack_extract__("head");`,
+							'return head === null ? "" : __webpack_mask_comments__(head).replace(/<title[^>]*>[\\s\\S]*?<\\/title>/i, "").trim();'
+						]
+					)};`,
+					// The authored head's elements, parsed but detached.
+					`${declare} __webpack_head_children__ = ${runtimeTemplate.basicFunction(
+						"html",
+						[
+							`${declare} container = document.createElement("head");`,
+							"container.innerHTML = html;",
+							"return Array.prototype.slice.call(container.children);"
+						]
+					)};`,
+					// A `<script>` parsed out of a string carries the already-started flag,
+					// so appending it would never run. A fresh one with the same attributes
+					// and body does, as the reload this replaces would have.
+					`${declare} __webpack_revive_script__ = ${runtimeTemplate.basicFunction(
+						"node",
+						[
+							'if (node.nodeName !== "SCRIPT") return node;',
+							`${declare} script = document.createElement("script");`,
+							`${declare} attributes = node.attributes;`,
+							`for (${mutable} i = 0; i < attributes.length; i++) {`,
+							Template.indent(
+								"script.setAttribute(attributes[i].name, attributes[i].value);"
+							),
+							"}",
+							"script.textContent = node.textContent;",
+							"return script;"
+						]
+					)};`,
+					// Apply only the difference between the two authored heads: the
+					// runtime's own injected tags are in neither string, so replacing
+					// `document.head` wholesale would tear them down where a delta cannot.
+					`${declare} __webpack_patch_head__ = ${runtimeTemplate.basicFunction(
+						"oldHtml, newHtml",
+						[
+							"if (!document.head) return false;",
+							`${declare} oldChildren = __webpack_head_children__(oldHtml);`,
+							`${declare} newChildren = __webpack_head_children__(newHtml);`,
+							`${declare} count = ${runtimeTemplate.basicFunction("nodes", [
+								`${declare} counts = {};`,
+								`for (${mutable} i = 0; i < nodes.length; i++) {`,
+								Template.indent([
+									`${declare} key = "$" + nodes[i].outerHTML;`,
+									"counts[key] = (counts[key] || 0) + 1;"
+								]),
+								"}",
+								"return counts;"
+							])};`,
+							// An element present the same number of times on both sides is
+							// untouched; whatever is left over on one side is the delta.
+							`${declare} surplus = ${runtimeTemplate.basicFunction(
+								"nodes, others",
+								[
+									`${declare} counts = count(others);`,
+									`${declare} out = [];`,
+									`for (${mutable} i = 0; i < nodes.length; i++) {`,
+									Template.indent([
+										`${declare} key = "$" + nodes[i].outerHTML;`,
+										"if (counts[key] > 0) counts[key]--; else out.push(nodes[i]);"
+									]),
+									"}",
+									"return out;"
+								]
+							)};`,
+							`${declare} removed = surplus(oldChildren, newChildren);`,
+							`${declare} added = surplus(newChildren, oldChildren);`,
+							"if (removed.length === 0 && added.length === 0) return true;",
+							// WHY: a script that has run cannot be un-run, so dropping one is the
+							// single edit still worth a reload — but only a script that ran. A
+							// `type` that is neither a JavaScript MIME essence, all of which end
+							// in `script`, nor `module`, `importmap` or `speculationrules` is a
+							// data block the browser never executed, as safe to remove as a
+							// `<meta>`. An unrecognized type falls back to the reload.
+							`if (removed.some(${runtimeTemplate.basicFunction("node", [
+								'if (node.nodeName !== "SCRIPT") return false;',
+								`${declare} type = (node.getAttribute("type") || "").trim().toLowerCase();`,
+								'return type === "" || type.indexOf("script") !== -1 || type === "module" || type === "importmap" || type === "speculationrules";'
+							])})) return false;`,
+							// Resolve every removal before mutating, so a node the page
+							// dropped on its own leaves the head as it was.
+							`${declare} live = [];`,
+							`for (${mutable} i = 0; i < removed.length; i++) {`,
+							Template.indent([
+								`${declare} key = removed[i].outerHTML;`,
+								`${mutable} match = null;`,
+								`for (${mutable} j = 0; j < document.head.children.length; j++) {`,
+								Template.indent([
+									`${declare} child = document.head.children[j];`,
+									"if (child.outerHTML === key && live.indexOf(child) === -1) { match = child; break; }"
+								]),
+								"}",
+								"if (match === null) return false;",
+								"live.push(match);"
+							]),
+							"}",
+							`for (${mutable} i = 0; i < live.length; i++) document.head.removeChild(live[i]);`,
+							// Pair each retained element with its live node, scanning forward
+							// only: a moved element then finds no match and falls back to the
+							// reload, while an injected node never matches either way.
+							`${declare} liveByNew = [];`,
+							`${mutable} searchFrom = 0;`,
+							`for (${mutable} i = 0; i < newChildren.length; i++) {`,
+							Template.indent([
+								"if (added.indexOf(newChildren[i]) !== -1) { liveByNew.push(null); continue; }",
+								`${declare} key = newChildren[i].outerHTML;`,
+								`${mutable} match = null;`,
+								`for (${mutable} j = searchFrom; j < document.head.children.length; j++) {`,
+								Template.indent([
+									`${declare} child = document.head.children[j];`,
+									"if (child.outerHTML === key) { match = child; searchFrom = j + 1; break; }"
+								]),
+								"}",
+								"if (match === null) return false;",
+								"liveByNew.push(match);"
+							]),
+							"}",
+							// Back to front, so the element an addition must precede is
+							// already placed by the time it is needed.
+							`for (${mutable} i = newChildren.length - 1; i >= 0; i--) {`,
+							Template.indent([
+								"if (liveByNew[i] !== null) continue;",
+								`${mutable} anchor = null;`,
+								`for (${mutable} j = i + 1; j < newChildren.length; j++) {`,
+								Template.indent(
+									"if (liveByNew[j] !== null) { anchor = liveByNew[j]; break; }"
+								),
+								"}",
+								`${declare} node = __webpack_revive_script__(newChildren[i]);`,
+								"if (anchor === null) document.head.appendChild(node);",
+								"else document.head.insertBefore(node, anchor);",
+								"liveByNew[i] = node;"
+							]),
+							"}",
+							"return true;"
+						]
+					)};`,
+					"if (module.hot.data && typeof document !== 'undefined') {",
+					Template.indent([
+						`${declare} __webpack_new_head__ = __webpack_extract_head__();`,
+						"if (module.hot.data.__webpack_head__ !== undefined && __webpack_new_head__ !== module.hot.data.__webpack_head__ && !__webpack_patch_head__(module.hot.data.__webpack_head__, __webpack_new_head__) && typeof window !== 'undefined' && window.location && typeof window.location.reload === 'function') {",
+						Template.indent("window.location.reload();"),
+						"} else {",
+						Template.indent([
+							`${declare} __webpack_body__ = __webpack_extract__("body");`,
+							"if (__webpack_body__ !== null && document.body) document.body.innerHTML = __webpack_body__;",
+							`${declare} __webpack_title__ = __webpack_extract__("title");`,
+							"if (__webpack_title__ !== null) document.title = __webpack_title__;"
+						]),
+						"}"
+					]),
+					"}",
+					// Capture this evaluation's head (sans title, comments
+					// masked) on dispose so the next module instance can diff
+					// against it.
+					`module.hot.dispose(${runtimeTemplate.basicFunction(
+						"data",
+						"data.__webpack_head__ = __webpack_extract_head__();"
+					)});`
+				]
+			: ["module.hot.accept();"];
+		return Template.asString([
+			`${declare} __webpack_html__ = ${JSON.stringify(html)};`,
+			`${module.moduleArgument}.exports = __webpack_html__;`,
+			"if (module.hot) {",
+			Template.indent(acceptBlock),
+			"}"
+		]);
+	}
+
+	/**
+	 * Generates fallback output for the provided error condition.
+	 * @param {Error} error the error
+	 * @param {NormalModule} module module for which the code should be generated
+	 * @param {GenerateContext} generateContext context for generate
+	 * @returns {Source | null} generated code
+	 */
+	generateError(error, module, generateContext) {
+		if (generateContext.type === HTML_TYPE) {
+			// Strip `<`, `>`, `--` runs from the message so it can't escape the comment.
+			const safe = Generator.buildErrorMessage(
+				error,
+				generateContext.runtimeTemplate.requestShortener
+			)
+				.replace(/[<>]/g, "")
+				.replace(/-{2,}/g, (m) => `${"-".repeat(m.length - 1)} `);
+			return new RawSource(`<!-- webpack error: ${safe} -->`);
+		}
+		return new RawSource(
+			Generator.throwBuildErrorCode(
+				error,
+				undefined,
+				generateContext.runtimeTemplate.requestShortener
+			)
+		);
+	}
+
+	/**
+	 * Updates the hash with the data contributed by this instance.
+	 * @param {Hash} hash hash that will be modified
+	 * @param {UpdateHashContext} updateHashContext context for updating hash
+	 */
+	updateHash(hash, updateHashContext) {
+		hash.update("html");
+		// The source-type set turns on html-type exposure and the HMR shim's
+		// `extracting` branch on the emit decision. They differ only for
+		// `"inline"`, which exposes html without emitting, so hash both.
+		const extract = this._shouldExtract(updateHashContext.module);
+		if (extract || this.options.extract === "inline") {
+			hash.update("html-type");
+		}
+		if (extract) {
+			hash.update("extract");
+		}
+		// The HMR shim emits additional self-accept / DOM-patch code that
+		// isn't emitted in non-HMR builds, so the cached codegen must
+		// invalidate when `module.hot` toggles.
+		if (updateHashContext.module.hot) {
+			hash.update("hot");
+		}
+		// A `renderEmbeddedSource` tap has to reach the codegen cache key, or a
+		// changed option replays the output from before it.
+		const { runtimeTemplate } = updateHashContext;
+		if (runtimeTemplate) {
+			runtimeTemplate.compilation.hooks.embeddedSourceHash.call(
+				updateHashContext.module,
+				hash
+			);
+		}
+	}
+}
+
+module.exports = HtmlGenerator;

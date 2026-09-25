@@ -1,0 +1,1513 @@
+/*
+	MIT License http://www.opensource.org/licenses/mit-license.php
+*/
+
+"use strict";
+
+const { basename, extname } = require("path");
+const { pathToFileURL } = require("url");
+const { AsyncSeriesHook, AsyncSeriesWaterfallHook } = require("tapable");
+const { RawSource } = require("webpack-sources");
+const Compilation = require("../Compilation");
+const EntryOptionPlugin = require("../EntryOptionPlugin");
+const EntryPlugin = require("../EntryPlugin");
+const HotUpdateChunk = require("../HotUpdateChunk");
+const { HTML_TYPE } = require("../ModuleSourceTypeConstants");
+const { HTML_MODULE_TYPE } = require("../ModuleTypeConstants");
+const NormalModule = require("../NormalModule");
+const { toTemplateSourceFileName } = require("../TemplatedPathPlugin");
+const ConstDependency = require("../dependencies/ConstDependency");
+const StaticExportsDependency = require("../dependencies/StaticExportsDependency");
+const WebpackError = require("../errors/WebpackError");
+const JavascriptModulesPlugin = require("../javascript/JavascriptModulesPlugin");
+const ConcatenatedModule = require("../optimize/ConcatenatedModule");
+const {
+	compareModulesByFullName,
+	compareModulesByIdentifier
+} = require("../util/comparators");
+const createHash = require("../util/createHash");
+const createHooksRegistry = require("../util/createHooksRegistry");
+const {
+	getUndoPath,
+	makePathsRelative,
+	parseResource
+} = require("../util/identifier");
+const implicitTypeLoaderFallback = require("../util/implicitTypeLoaderFallback");
+const lazyModule = require("../util/lazyModule");
+const memoize = require("../util/memoize");
+const { digestNonNumericOnly } = require("../util/nonNumericOnlyHash");
+const preloadModuleType = require("../util/preloadModuleType");
+const {
+	PUBLIC_PATH_AUTO: autoPlaceholder
+} = require("../util/publicPathPlaceholder");
+const { removeBOMFromResult } = require("../util/removeBOM");
+const HtmlModule = require("./HtmlModule");
+
+const getMimeTypes = memoize(() => require("../util/mimeTypes"));
+
+const getHtmlSyntax = memoize(() => require("./syntax"));
+
+// Lazy: this plugin is applied on every build (`experiments.html` defaults on),
+// but the HTML parser and tokenizer are only reached once HTML is in the graph.
+const getHtmlParser = lazyModule(() => require("./HtmlParser"));
+
+// html generation only happens once a build actually has an html module
+const getHtmlGenerator = memoize(() => require("./HtmlGenerator"));
+
+// only reached once a page names a CSS chunk of its own
+const getCssModulesPlugin = memoize(() => require("../css/CssModulesPlugin"));
+
+/**
+ * @import {
+ * 	EntryDescriptionNormalized,
+ * 	FilenameTemplate,
+ * 	OutputHtmlOptions,
+ * 	HtmlFaviconIcon
+ * } from "../../declarations/WebpackOptions"
+ */
+/**
+ * @import {
+ * 	OutputNormalizedWithDefaults as OutputOptions
+ * } from "../config/defaults"
+ */
+/** @typedef {import("../../declarations/WebpackOptions").OutputHtmlOptions["favicon"]} FaviconOption */
+/** @typedef {import("../../declarations/WebpackOptions").OutputHtmlOptions["manifest"]} ManifestOption */
+/** @typedef {Exclude<HtmlFaviconIcon, string>} FaviconIcon */
+/** @import Chunk, { ChunkFilenameTemplate } from "../Chunk" */
+/** @import ChunkGraph from "../ChunkGraph" */
+/** @import Compiler from "../Compiler" */
+/** @import Module from "../Module" */
+/** @typedef {import("../Compilation").EntryData} EntryData */
+/** @import { HtmlModuleBuildInfo } from "./HtmlModule" */
+/** @import HtmlParser from "./HtmlParser" */
+/** @typedef {{ request: string, entryName: string, index: number, type: "script" | "script-module" | "modulepreload" | "stylesheet" | "html" | "preload" | "prefetch", css?: boolean }} HtmlEntryInfo */
+/**
+ * What one extracted entry needs to be named. Recorded in page order once
+ * every page is built, and resolved to filenames once chunks exist.
+ * @typedef {object} PendingName
+ * @property {string} base name the tag's url (or its page) asks for, before numbering
+ * @property {FilenameTemplate} jsTemplate `output.filename` for this entry, as configured
+ * @property {string=} freeName name of a page-only entry, which emits nothing and leaves it free
+ */
+
+/** @typedef {{ outputName: string }} HtmlTransformHtmlContext */
+/** @typedef {{ outputName: string }} HtmlEmittedContext */
+/**
+ * A tag to inject into an emitted page as a structured descriptor. Injected
+ * verbatim (not re-bundled) at the `injectTo` position.
+ * @typedef {object} HtmlTagDescriptor
+ * @property {string} tag tag name, e.g. `"script"` / `"link"` / `"meta"`
+ * @property {Record<string, string | boolean | undefined>=} attrs attributes; `true` renders a bare boolean attribute, `false`/`undefined` is omitted
+ * @property {string=} children inner content (ignored for void elements like `<link>`/`<meta>`)
+ * @property {("head" | "body" | "head-prepend" | "body-prepend")=} injectTo placement; defaults to `"head"`
+ * @property {boolean=} voidTag force a void element (no closing tag); inferred from the tag name when omitted
+ */
+/** @typedef {{ outputName: string, html: string }} HtmlInjectTagsContext */
+/**
+ * A `<script>`/`<link>`/`<style>`/`<meta>` tag already present in an emitted
+ * page, exposed for in-place mutation by `transformTags`. Mutate `attrs`, set
+ * `remove`, or change `injectTo` to move it; don't reorder the array itself.
+ * @typedef {object} HtmlMutableTag
+ * @property {string} tag the (lowercased) tag name
+ * @property {Record<string, string | boolean | undefined>} attrs mutable attributes; a string value renders `name="value"`, `true` a bare attribute, `false`/`undefined`/deleting the key drops it
+ * @property {("head" | "body" | "head-prepend" | "body-prepend")=} injectTo the tag's current region (`"head"`/`"body"`); set a different value to move it there (`*-prepend` to the region's start)
+ * @property {boolean=} remove set true to delete the whole element
+ */
+/** @typedef {{ outputName: string, html: string }} HtmlTransformTagsContext */
+
+const createCompilationHooks = () => ({
+	/**
+	 * Called with the list of extra tags to inject into each page (initially empty) plus the current HTML; push `HtmlTagDescriptor`s and return the list — webpack serializes and places them by `injectTo`. A structured alternative to the string-level `transformHtml` for adding tags; runs before CSP so injected inline tags are hashed.
+	 * @type {AsyncSeriesWaterfallHook<[HtmlTagDescriptor[], HtmlInjectTagsContext]>}
+	 * @since 5.109.0
+	 */
+	injectTags: new AsyncSeriesWaterfallHook(["tags", "context"]),
+	/**
+	 * Called with the page's `<script>`/`<link>`/`<style>`/`<meta>` tags (webpack's own and any injected) as mutable descriptors; mutate `attrs` (add a `nonce`/`data-*`, switch `defer`↔`async`, …), set `remove: true`, or change `injectTo` to move a tag between `<head>` and `<body>`, and webpack rewrites the changed tags. Add new tags with `injectTags` instead.
+	 * @type {AsyncSeriesHook<[HtmlMutableTag[], HtmlTransformTagsContext]>}
+	 * @since 5.109.0
+	 */
+	transformTags: new AsyncSeriesHook(["tags", "context"]),
+	/**
+	 * Called with each emitted page's final HTML (all sentinels resolved) just before it is written; return the (possibly transformed) HTML — e.g. to minify, inject a CSP meta, or rewrite tags.
+	 * @type {AsyncSeriesWaterfallHook<[string, HtmlTransformHtmlContext]>}
+	 * @since 5.109.0
+	 */
+	transformHtml: new AsyncSeriesWaterfallHook(["html", "context"]),
+	/**
+	 * Called once each page's HTML asset has been finalized — a post-emit notification (nothing to return).
+	 * @type {AsyncSeriesHook<[HtmlEmittedContext]>}
+	 * @since 5.109.0
+	 */
+	htmlEmitted: new AsyncSeriesHook(["context"])
+});
+
+/**
+ * @typedef {ReturnType<typeof createCompilationHooks>} HtmlCompilationHooks
+ */
+
+const PLUGIN_NAME = "HtmlModulesPlugin";
+
+// Built-in default favicon, referenced as a `file:` request so the wrapper's
+// `<link rel="icon">` flows through the normal asset pipeline: emitted hashed,
+// with the right publicPath and no direct IO.
+const DEFAULT_FAVICON = new URL("./favicon.svg", pathToFileURL(__filename))
+	.href;
+
+// mime-db is heavy — only load it when a favicon actually needs a `type`.
+
+/**
+ * Resolves `output.html.favicon` for one page to `[rel, icon]` pairs.
+ * `false`/absent → none; `true` → the webpack logo; a string → one `icon`
+ * link; an object maps each `rel` to an icon (a path string, an attributes
+ * object, or an array of those for several icons under one `rel`); a function
+ * receives the page name and returns any of those. Each icon is normalized to
+ * an object so `faviconLinkTag` reads one shape.
+ * @param {FaviconOption} favicon favicon option
+ * @param {string} name page/entry name
+ * @returns {[string, FaviconIcon][]} rel/icon pairs, in order
+ */
+const resolveFaviconLinks = (favicon, name) => {
+	const value = typeof favicon === "function" ? favicon(name) : favicon;
+	if (value === true) return [["icon", { href: DEFAULT_FAVICON }]];
+	if (typeof value === "string") return [["icon", { href: value }]];
+	if (value && typeof value === "object") {
+		/** @type {[string, FaviconIcon][]} */
+		const pairs = [];
+		for (const [rel, icon] of Object.entries(value)) {
+			for (const one of Array.isArray(icon) ? icon : [icon]) {
+				pairs.push([rel, typeof one === "string" ? { href: one } : one]);
+			}
+		}
+		return pairs;
+	}
+	return [];
+};
+
+/**
+ * @param {string} rel link relation
+ * @param {FaviconIcon} icon icon `href` plus optional link attributes
+ * @returns {string} a `<link rel=… [attrs…] href=…>` tag; `type` defaults to the file format
+ */
+const faviconLinkTag = (rel, icon) => {
+	const { escapeAttribute } = getHtmlSyntax();
+	const type = icon.type || getMimeTypes().lookup(icon.href) || "";
+	const attrs = [
+		`rel="${escapeAttribute(rel)}"`,
+		icon.sizes && `sizes="${escapeAttribute(icon.sizes)}"`,
+		type && `type="${escapeAttribute(type)}"`,
+		icon.media && `media="${escapeAttribute(icon.media)}"`,
+		icon.color && `color="${escapeAttribute(icon.color)}"`,
+		icon.crossorigin && `crossorigin="${escapeAttribute(icon.crossorigin)}"`,
+		`href="${escapeAttribute(icon.href)}"`
+	];
+	return `<link ${attrs.filter(Boolean).join(" ")}>`;
+};
+
+/**
+ * Resolves `output.html.manifest` for one page to a `<link rel="manifest">`
+ * tag, or `""` when unset. A string is a path to an existing `.webmanifest`
+ * file; an object is serialized to a base64 `data:application/manifest+json`
+ * URL (routed to `asset/webmanifest` by a default rule, so its relative icon
+ * `src`s are hashed like any request); a function receives the page name.
+ * Base64 (not percent-encoding) is required because this tag is embedded in
+ * the outer `data:text/html` wrapper, which is itself percent-decoded — a
+ * percent-encoded inner URL would be corrupted by that decode.
+ * @param {ManifestOption} manifest manifest option
+ * @param {string} name page/entry name
+ * @returns {string} the `<link>` tag, or ""
+ */
+const manifestLinkTag = (manifest, name) => {
+	const value = typeof manifest === "function" ? manifest(name) : manifest;
+	if (!value) return "";
+	const href =
+		typeof value === "string"
+			? value
+			: `data:application/manifest+json;base64,${Buffer.from(
+					JSON.stringify(value),
+					"utf8"
+				).toString("base64")}`;
+	return `<link rel="manifest" href="${getHtmlSyntax().escapeAttribute(
+		href
+	)}">`;
+};
+
+// Decided while the page's HTML is generated, which happens once per module —
+// and one synthetic page module can back several entries — so an entry's `html`
+// object can't override it.
+/** @type {"inline"[]} */
+const GLOBAL_ONLY_HTML_OPTIONS = ["inline"];
+
+/**
+ * SRI is on when `integrity` names at least one algorithm.
+ * @param {OutputHtmlOptions["integrity"]} integrity integrity option
+ * @returns {boolean} true when integrity attributes must be emitted
+ */
+const isIntegrityEnabled = (integrity) =>
+	integrity === true ||
+	typeof integrity === "function" ||
+	(Array.isArray(integrity) && integrity.length > 0);
+
+// `\.html`/`\.css` request matchers for the synthetic `output.html` wrapper.
+const HTML_REQUEST_RE = /\.html(\?|$)/i;
+const CSS_REQUEST_RE = /\.css(\?|$)/i;
+/**
+ * The entry a page is the whole of: nothing imports the module and the entry
+ * asks for nothing else, so the entry's JavaScript would be the page itself.
+ * @param {Compilation} compilation compilation
+ * @param {Module} module html module
+ * @returns {{ name: string, data: EntryData } | undefined} the page's own entry, when it has one
+ */
+const getPageEntry = (compilation, module) => {
+	const { moduleGraph } = compilation;
+	for (const connection of moduleGraph.getIncomingConnections(module)) {
+		if (connection.originModule) return undefined;
+	}
+	for (const [name, data] of compilation.entries) {
+		if (data.dependencies.length !== 1) continue;
+		if (data.includeDependencies.length !== 0) continue;
+		if (moduleGraph.getModule(data.dependencies[0]) === module) {
+			return { name, data };
+		}
+	}
+	return undefined;
+};
+
+/**
+ * The entry of a page that emits nothing but its markup, so its chunk carries
+ * no JavaScript. An `output.library` asks for the page's exports, and keeps it.
+ * @param {Compilation} compilation compilation
+ * @param {Module} module html module
+ * @returns {{ name: string, data: EntryData } | undefined} the entry, when the page is all it emits
+ */
+const getPageOnlyEntry = (compilation, module) => {
+	const entry = getPageEntry(compilation, module);
+	if (entry === undefined) return undefined;
+	const { library } = entry.data.options;
+	const configured =
+		library === undefined ? compilation.outputOptions.library : library;
+	return configured === undefined ? entry : undefined;
+};
+
+/**
+ * The basename a tag's url lends to the entry it becomes, so
+ * `src="./my-script.js"` emits `my-script.js`. Undefined for an inline body.
+ * @param {string} request the tag's request
+ * @returns {string | undefined} the basename, when the url carries one
+ */
+const getRequestBaseName = (request) => {
+	// An inline `<script>` body is a `data:` request webpack writes itself.
+	if (request.startsWith("data:")) return undefined;
+	const { path: file } = parseResource(request);
+	return basename(file, extname(file)) || undefined;
+};
+
+/**
+ * Claims `base`, numbering it while something else already emits under that
+ * name, so two tags sharing a basename stay distinct.
+ * @param {string} base preferred name
+ * @param {Set<string>} taken names this kind of output already emits under
+ * @returns {string} the claimed name
+ */
+const claimName = (base, taken) => {
+	let name = base;
+	for (let index = 1; taken.has(name); index++) name = `${base}${index}`;
+	taken.add(name);
+	return name;
+};
+
+// Placeholders that tell chunks apart on their own, so a template carrying
+// one needs no `[name]`. Not `[id]`: an extracted entry's id is synthetic.
+const CONTENT_PLACEHOLDER_REGEXP =
+	/\[(?:chunkhash|contenthash|fullhash|hash)[\]:]/;
+
+// Basename stem of a filename template — what `[name]` stands in for, keeping
+// the directory, extension and query the template asked for.
+const TEMPLATE_STEM_REGEXP = /(^|\/)[^/?]*?((?:\.[^./?]+)*)(\?.*)?$/;
+
+const NAME_PLACEHOLDER_REGEXP = /\[name\]/g;
+
+/**
+ * A filename template usable for a page's extracted entries: it must tell one
+ * entry from another, or every entry of the page would be emitted to the same
+ * file. A template naming neither the chunk nor its content lends its directory
+ * and extension to a `[name]` instead.
+ * @param {string} template configured template
+ * @param {string} extension extension to fall back to when the template names none
+ * @returns {string} a template that tells the page's entries apart
+ */
+const getNamedTemplate = (template, extension) => {
+	if (
+		template.includes("[name]") ||
+		CONTENT_PLACEHOLDER_REGEXP.test(template)
+	) {
+		return template;
+	}
+	return template.replace(
+		TEMPLATE_STEM_REGEXP,
+		(_, dir, ext, query) => `${dir}[name]${ext || extension}${query || ""}`
+	);
+};
+
+/**
+ * The filename one extracted entry emits under, with `name` filling the
+ * `[name]` its template carries or the stem it leaves behind.
+ * @param {string} template configured template
+ * @param {string} extension extension to fall back to when the template names none
+ * @param {string} name the name this entry claimed
+ * @returns {string} the entry's filename template
+ */
+const fillNamedTemplate = (template, extension, name) =>
+	getNamedTemplate(template, extension).replace(NAME_PLACEHOLDER_REGEXP, name);
+
+/**
+ * The same, for a template `output.filename` states as a function: it is called
+ * at emit, and the path it returns read for a stem the same way.
+ * @param {FilenameTemplate} template configured template
+ * @param {string} extension extension to fall back to when the template names none
+ * @param {string} name the name this entry claimed
+ * @returns {ChunkFilenameTemplate} the entry's filename template
+ */
+const getEntryTemplate = (template, extension, name) => {
+	if (typeof template === "function") {
+		return (pathData, assetInfo) =>
+			fillNamedTemplate(template(pathData, assetInfo), extension, name);
+	}
+	return fillNamedTemplate(template, extension, name);
+};
+
+/**
+ * Requests an `output.html` page must load for an entry: its `dependOn`
+ * ancestors first (transitive, deduped — so a diamond loads each once), then
+ * the entry's own imports. `.html` imports are dropped (own HTML entries).
+ * @param {string} name entry name
+ * @param {Record<string, EntryDescriptionNormalized>} entries normalized static entries
+ * @returns {string[]} deduped requests in load order
+ */
+const collectHtmlEntryRequests = (name, entries) => {
+	/** @type {string[]} */
+	const requests = [];
+	/** @type {Set<string>} */
+	const seenRequests = new Set();
+	/** @type {Set<string>} */
+	const visited = new Set();
+	/**
+	 * Collects an entry's non-html requests, `dependOn` entries included.
+	 * @param {string} entryName entry to walk
+	 * @returns {void}
+	 */
+	const walk = (entryName) => {
+		if (visited.has(entryName)) return;
+		visited.add(entryName);
+		const desc = entries[entryName];
+		if (!desc) return;
+		if (desc.dependOn) {
+			for (const dep of desc.dependOn) walk(dep);
+		}
+		if (!desc.import) return;
+		for (const request of desc.import) {
+			if (HTML_REQUEST_RE.test(request) || seenRequests.has(request)) continue;
+			seenRequests.add(request);
+			requests.push(request);
+		}
+	};
+	walk(name);
+	return requests;
+};
+
+/**
+ * @param {string} name definition name in `schemas/WebpackOptions.json`
+ * @returns {EXPECTED_OBJECT} a schema referencing `#/definitions/<name>`
+ */
+const getSchema = (name) => {
+	const { definitions } = require("../../schemas/WebpackOptions.json");
+
+	return {
+		definitions,
+		oneOf: [{ $ref: `#/definitions/${name}` }]
+	};
+};
+
+const generatorValidationOptions = {
+	name: "Html Modules Plugin",
+	baseDataPath: "generator"
+};
+
+const parserValidationOptions = {
+	name: "Html Modules Plugin",
+	baseDataPath: "parser"
+};
+
+class HtmlModulesPlugin {
+	/**
+	 * `output.hashFunction`/`hashSalt`/`hashDigest`/`hashDigestLength`
+	 * digest of `content`, with `nonNumericOnlyHash` applied — webpack's
+	 * standard `[contenthash]` recipe.
+	 * @param {string | Buffer} content content to hash
+	 * @param {OutputOptions} outputOptions output options
+	 * @returns {string} content hash
+	 */
+	static computeContentHash(content, outputOptions) {
+		const hash = createHash(
+			/** @type {import("../../declarations/WebpackOptions").HashFunction} */
+			(outputOptions.hashFunction)
+		);
+		if (outputOptions.hashSalt) hash.update(outputOptions.hashSalt);
+		hash.update(content);
+		return digestNonNumericOnly(
+			hash,
+			/** @type {string} */ (outputOptions.hashDigest),
+			/** @type {number} */ (outputOptions.hashDigestLength)
+		);
+	}
+
+	/**
+	 * Filename template for an extracted HTML page: `output.htmlFilename` for
+	 * initial chunks, `output.htmlChunkFilename` otherwise — the HTML counterpart
+	 * of `CssModulesPlugin.getChunkFilenameTemplate`.
+	 * @param {import("../Chunk")} chunk chunk
+	 * @param {OutputOptions} outputOptions output options
+	 * @returns {import("../Chunk").ChunkFilenameTemplate} used filename template
+	 */
+	static getChunkFilenameTemplate(chunk, outputOptions) {
+		return chunk.canBeInitial()
+			? /** @type {import("../Chunk").ChunkFilenameTemplate} */ (
+					outputOptions.htmlFilename
+				)
+			: /** @type {import("../Chunk").ChunkFilenameTemplate} */ (
+					outputOptions.htmlChunkFilename
+				);
+	}
+
+	/**
+	 * Applies the plugin by registering its hooks on the compiler.
+	 * @param {Compiler} compiler the compiler instance
+	 * @returns {void}
+	 */
+	apply(compiler) {
+		const { output } = compiler.options;
+		const htmlOption = output.html;
+		const globalHtmlOptions =
+			typeof htmlOption === "object" ? htmlOption : undefined;
+		// Collected while entries are resolved (`entryOption`, before the first
+		// compilation) and reported on every compilation; a Set dedupes entries
+		// that hit the same problem.
+		/** @type {Set<string>} */
+		const optionWarnings = new Set();
+		compiler.hooks.thisCompilation.tap(PLUGIN_NAME, (compilation) => {
+			for (const message of optionWarnings) {
+				compilation.warnings.push(new WebpackError(message));
+			}
+		});
+
+		// Resolved options per entry that owns a generated page, read back when the
+		// page is emitted (`csp`, `integrity`) — one synthetic page module can back
+		// several entries, so those can only be applied per emitted asset.
+		/** @type {Map<string, OutputHtmlOptions>} */
+		const htmlOptionsByEntry = new Map();
+		// SRI sentinels are emitted before the owning entry is known, so one page
+		// asking for integrity turns them on for all and the rest drop them on emit.
+		// Authored `.html` pages never reach the entry hook, hence the global seed.
+		let anyIntegrity = isIntegrityEnabled(
+			globalHtmlOptions && globalHtmlOptions.integrity
+		);
+
+		/**
+		 * Options for one page: an entry's `html` object overrides `output.html`
+		 * option by option, `true` inherits it as-is.
+		 * @param {EntryDescriptionNormalized["html"]} html the entry's `html` value
+		 * @param {string} name entry name
+		 * @returns {OutputHtmlOptions} resolved options
+		 */
+		const resolveHtmlOptions = (html, name) => {
+			const options =
+				typeof html !== "object"
+					? globalHtmlOptions || {}
+					: globalHtmlOptions
+						? { ...globalHtmlOptions, ...html }
+						: html;
+			if (typeof html === "object") {
+				for (const option of GLOBAL_ONLY_HTML_OPTIONS) {
+					if (html[option] !== undefined) {
+						optionWarnings.add(
+							`entry "${name}" html.${option} is ignored — ${option} is resolved once per generated page and can only be set on output.html.`
+						);
+					}
+				}
+			}
+			htmlOptionsByEntry.set(name, options);
+			if (isIntegrityEnabled(options.integrity)) anyIntegrity = true;
+			return options;
+		};
+
+		// `output.html` wraps a non-HTML entry in a synthetic HTML module, so the
+		// existing pipeline injects its chunks. `dependOn` ancestors go first, so the
+		// page loads shared and runtime chunks before the entry's own.
+		EntryOptionPlugin.getHooks(compiler).entry.tap(
+			PLUGIN_NAME,
+			(context, name, desc) => {
+				// Resolved for every entry, including the authored `.html` ones that
+				// need no wrapper below — their page reads back `csp`/`integrity` too.
+				const htmlObj = resolveHtmlOptions(desc.html, name);
+				const html = desc.html !== undefined ? desc.html : htmlOption;
+				const imports = desc.import;
+				if (
+					!html ||
+					!imports ||
+					imports.every((r) => HTML_REQUEST_RE.test(r))
+				) {
+					return;
+				}
+				const scriptLoading = htmlObj.scriptLoading || "auto";
+				// ESM output emits `type="module"` (already deferred), so
+				// scriptLoading is ignored under output.module — warn on an
+				// explicit defer/blocking.
+				let scriptAttr = " defer";
+				if (output.module) {
+					scriptAttr = "";
+					if (scriptLoading === "defer" || scriptLoading === "blocking") {
+						const source =
+							typeof desc.html === "object" &&
+							desc.html.scriptLoading !== undefined
+								? `entry "${name}" html`
+								: "output.html";
+						optionWarnings.add(
+							`${source}.scriptLoading: "${scriptLoading}" is ignored with output.module — ES module scripts are always deferred.`
+						);
+					}
+				} else if (scriptLoading === "blocking") {
+					scriptAttr = "";
+				}
+				const entries = compiler.options.entry;
+				const requests =
+					typeof entries === "object" && entries[name]
+						? collectHtmlEntryRequests(name, entries)
+						: imports.filter((r) => !HTML_REQUEST_RE.test(r));
+				const links = [];
+				const scripts = [];
+				for (const r of requests) {
+					if (CSS_REQUEST_RE.test(r)) {
+						links.push(`<link rel="stylesheet" href="${r}">`);
+					} else {
+						scripts.push(`<script${scriptAttr} src="${r}"></script>`);
+					}
+				}
+				const headTags = getHtmlSyntax().buildHeadTags(htmlObj);
+				// Injected into webpack-generated pages only; each icon's href is a
+				// normal request the parser turns into a hashed asset.
+				const faviconTag = resolveFaviconLinks(htmlObj.favicon, name)
+					.map(([rel, icon]) => faviconLinkTag(rel, icon))
+					.join("");
+				const manifestTag = manifestLinkTag(htmlObj.manifest, name);
+				const inject = htmlObj.inject;
+				const scriptsInHead =
+					inject === "head" || (inject !== "body" && output.module);
+				const scriptsFirst = output.module || scriptAttr === " defer";
+				const headScripts = scriptsInHead ? scripts.join("") : "";
+				return `data:text/html,<!doctype html><html><head>${faviconTag}${manifestTag}${headTags}${
+					scriptsFirst
+						? headScripts + links.join("")
+						: links.join("") + headScripts
+				}</head><body>${scriptsInHead ? "" : scripts.join("")}</body></html>`;
+			}
+		);
+
+		// Per-chunk `RawSource` reused across builds when bytes are unchanged:
+		// keeping identity stable avoids invalidating `RealContentHashPlugin|analyse`.
+		/** @type {Map<string, { content: string, source: import("webpack-sources").RawSource }>} */
+		const sentinelResolvedSourceCache = new Map();
+
+		// WHY: the `script` and `script-module` groups are chained through a
+		// leader-only `dependOn`, so they share a runtime: the group's first entry
+		// owns it and every later one sets `dependOn: [leader]`. A modulepreload
+		// entry is emitted independently, with no `dependOn`, so a later script can
+		// never import it as a runtime leader — which is what keeps the "preload but
+		// don't execute" contract of `<link rel="modulepreload">` intact.
+		// Per-compilation state: the HTML modules seen during make, so `finishMake`
+		// creates their entries without scanning the module graph, plus the
+		// stylesheet entry names and each emitted page's html options.
+		/** @type {WeakMap<import("../Compilation"), { htmlModules: Set<Module>, stylesheetEntries: Set<string>, pendingNames: Map<string, PendingName>, htmlAssetOptions: Map<string, OutputHtmlOptions> }>} */
+		const compilationState = new WeakMap();
+		/**
+		 * @param {import("../Compilation")} compilation compilation
+		 * @returns {{ htmlModules: Set<Module>, stylesheetEntries: Set<string>, pendingNames: Map<string, PendingName>, htmlAssetOptions: Map<string, OutputHtmlOptions> }} per-compilation state
+		 */
+		const getState = (compilation) => {
+			let state = compilationState.get(compilation);
+			if (state === undefined) {
+				state = {
+					htmlModules: new Set(),
+					stylesheetEntries: new Set(),
+					pendingNames: new Map(),
+					htmlAssetOptions: new Map()
+				};
+				compilationState.set(compilation, state);
+			}
+			return state;
+		};
+		compiler.hooks.finishMake.tapAsync(PLUGIN_NAME, (compilation, callback) => {
+			const { htmlModules, stylesheetEntries, pendingNames } =
+				getState(compilation);
+			/** @type {Set<string>} */
+			const extractedNames = new Set();
+			// The page each `type: "html"` link built, so the naming walk below can
+			// follow the links in document order instead of in build order.
+			/** @type {Map<string, Module>} */
+			const linkedPages = new Map();
+
+			// Collect the entries an HTML module asks for. Only the script chains share
+			// a runtime, through a leader-only `dependOn`; chaining a CSS or page entry
+			// into a JS leader would mix unrelated outputs into one chunk.
+			/** @type {(module: Module) => { context: string, request: string, name: string, dependOn: string[] | undefined }[]} */
+			const collectEntrySpecs = (module) => {
+				const { htmlEntries } = /** @type {HtmlModuleBuildInfo} */ (
+					module.buildInfo
+				);
+				if (!htmlEntries) return [];
+				const context = /** @type {string} */ (module.context);
+				const specs = [];
+				for (const [groupKind, group] of Object.entries(htmlEntries)) {
+					const isChainGroup =
+						groupKind === "script" || groupKind === "script-module";
+					/** @type {string | undefined} */
+					let leaderName;
+					for (const entry of group) {
+						const dependOn =
+							isChainGroup && leaderName !== undefined
+								? [leaderName]
+								: undefined;
+						if (isChainGroup && leaderName === undefined) {
+							leaderName = entry.entryName;
+						}
+						// Stylesheet entries and `as="style"` preload/prefetch entries emit
+						// a CSS chunk, so they are named from `output.cssFilename` alone.
+						if (groupKind === "stylesheet" || Boolean(entry.css)) {
+							stylesheetEntries.add(entry.entryName);
+						}
+						extractedNames.add(entry.entryName);
+						specs.push({
+							context,
+							request: entry.request,
+							name: entry.entryName,
+							dependOn
+						});
+					}
+				}
+				return specs;
+			};
+
+			// Records what a page's entries ask to be named, then walks its links —
+			// once every page is built, so the order is the documents', not the builds'.
+			/** @type {(module: Module, seen: Set<Module>) => void} */
+			const recordNames = (module, seen) => {
+				if (seen.has(module)) return;
+				seen.add(module);
+				const { htmlEntries } = /** @type {HtmlModuleBuildInfo} */ (
+					module.buildInfo
+				);
+				if (!htmlEntries) return;
+				const pageEntry = getPageOnlyEntry(compilation, module);
+				const namedEntry =
+					pageEntry !== undefined && !extractedNames.has(pageEntry.name)
+						? pageEntry
+						: undefined;
+				const { resource } = /** @type {NormalModule} */ (module);
+				// An `output.html` page is a wrapper webpack writes around an entry, so
+				// what it loads is that entry's own output and takes its name.
+				const wrapsEntry =
+					namedEntry !== undefined &&
+					typeof resource === "string" &&
+					resource.startsWith("data:text/html");
+				const { filename } = compilation.outputOptions;
+				// Kept as configured, a function included, and read for a name once the
+				// chunks exist.
+				const jsTemplate =
+					namedEntry && namedEntry.data.options.filename !== undefined
+						? namedEntry.data.options.filename
+						: filename;
+				// In document order, so of two tags sharing a basename the first a
+				// reader sees keeps it. A linked page is named on emit instead.
+				/** @type {HtmlEntryInfo[]} */
+				const ordered = [];
+				/** @type {HtmlEntryInfo[]} */
+				const links = [];
+				for (const [groupKind, group] of Object.entries(htmlEntries)) {
+					for (const entry of group) {
+						(groupKind === "html" ? links : ordered).push(entry);
+					}
+				}
+				ordered.sort((a, b) => a.index - b.index);
+				for (const entry of ordered) {
+					// An inline `<script>` body has no url to be named after, so it
+					// keeps the name of its own entry, page hash and tag index.
+					const base =
+						wrapsEntry && namedEntry
+							? namedEntry.name
+							: getRequestBaseName(entry.request) || entry.entryName;
+					pendingNames.set(entry.entryName, {
+						base,
+						jsTemplate,
+						freeName: namedEntry && namedEntry.name
+					});
+				}
+				links.sort((a, b) => a.index - b.index);
+				for (const link of links) {
+					const page = linkedPages.get(link.entryName);
+					if (page) recordNames(page, seen);
+				}
+			};
+
+			// Push one collected reference as a compilation entry; resolves with
+			// the built entry module.
+			/** @type {(spec: { context: string, request: string, name: string, dependOn: string[] | undefined }) => Promise<Module | null>} */
+			const addEntry = (spec) =>
+				new Promise((resolve, reject) => {
+					compilation.addEntry(
+						spec.context,
+						EntryPlugin.createDependency(spec.request, { name: spec.name }),
+						{
+							name: spec.name,
+							// A placeholder `afterChunks` overwrites for every entry it
+							// names; only a linked page keeps it, and it emits no JavaScript.
+							filename: compilation.outputOptions.chunkFilename || "[name].js",
+							dependOn: spec.dependOn
+						},
+						(err, entryModule) =>
+							err ? reject(err) : resolve(entryModule || null)
+					);
+				});
+
+			// Create one HTML module's entries. A `type: "html"` link is itself an
+			// HTML entry, so after it builds we recurse into it — the same handling
+			// every HTML entry already gets. `processed` guards diamonds and cycles.
+			/** @type {WeakSet<import("../Module")>} */
+			const processed = new WeakSet();
+			/** @type {(module: Module) => Promise<void>} */
+			const processEntry = async (module) => {
+				if (processed.has(module)) return;
+				processed.add(module);
+				await Promise.all(
+					collectEntrySpecs(module).map(async (spec) => {
+						const entryModule = await addEntry(spec);
+						if (entryModule && entryModule.type === HTML_MODULE_TYPE) {
+							linkedPages.set(spec.name, entryModule);
+							await processEntry(entryModule);
+						}
+					})
+				);
+			};
+			// Seed with the HTML modules seen during make; linked pages are reached by
+			// the recursion above. Sorted because they are tracked in build-completion
+			// order, which the generated names must not depend on.
+			const seeds = [...htmlModules].sort(compareModulesByIdentifier);
+			Promise.all(seeds.map(processEntry)).then(() => {
+				/** @type {Set<Module>} */
+				const named = new Set();
+				for (const seed of seeds) recordNames(seed, named);
+				callback();
+			}, callback);
+		});
+
+		// `csp` injects a `<meta http-equiv="Content-Security-Policy">` and
+		// `integrity` resolves the SRI sentinels, both per page once its inline
+		// content is final, so an entry's `html` can override them.
+
+		// `"auto"` marks implicit enablement, the one case where loaders win over
+		// the built-in type — see `applyExperimentsDefaults`.
+		// TODO webpack 6: html defaults to `true`, drop this implicit-only fallback.
+		const implicitlyEnabled = compiler.options.experiments.html === "auto";
+		compiler.hooks.compilation.tap(
+			PLUGIN_NAME,
+			(compilation, { normalModuleFactory }) => {
+				if (implicitlyEnabled) {
+					implicitTypeLoaderFallback(
+						normalModuleFactory,
+						PLUGIN_NAME,
+						/\.html$/i,
+						HTML_MODULE_TYPE
+					);
+				}
+				const { htmlModules } = getState(compilation);
+				/**
+				 * Records HTML modules as they are built or restored, so `finishMake`
+				 * creates their entries without scanning the whole module graph.
+				 * @param {import("../Module")} module built or restored module
+				 * @returns {void}
+				 */
+				const trackHtmlModule = (module) => {
+					if (module.type !== HTML_MODULE_TYPE) return;
+					// enabled here, not on the compilation hook: an integrity build
+					// with no html module must not load the generator
+					if (anyIntegrity) {
+						getHtmlGenerator().enableIntegritySentinels(compilation);
+					}
+					htmlModules.add(module);
+				};
+				compilation.hooks.succeedModule.tap(PLUGIN_NAME, trackHtmlModule);
+				compilation.hooks.stillValidModule.tap(PLUGIN_NAME, trackHtmlModule);
+
+				// Resolve integrity and inline sentinels after `RealContentHashPlugin`,
+				// so final bytes are in place. Only HTML pages carry them.
+
+				// SRI takes effect only on a cross-origin subresource fetched with CORS,
+				// so without `output.crossOriginLoading` the browser ignores `integrity`.
+				// Warn once, rather than let a CDN deployment ship no-op attributes.
+				if (anyIntegrity && !compilation.outputOptions.crossOriginLoading) {
+					compilation.warnings.push(
+						new WebpackError(
+							'output.html.integrity is set but output.crossOriginLoading is not. Browsers ignore Subresource Integrity on cross-origin requests made without CORS; set output.crossOriginLoading (e.g. "anonymous") if any asset is served from a different origin.'
+						)
+					);
+				}
+				compilation.hooks.processAssets.tapPromise(
+					{
+						name: PLUGIN_NAME,
+						stage: Compilation.PROCESS_ASSETS_STAGE_OPTIMIZE_HASH + 1
+					},
+					async (assets) => {
+						const { htmlAssetOptions } = getState(compilation);
+						const hooks = HtmlModulesPlugin.getCompilationHooks(compilation);
+						/** @type {Set<string>} */
+						const inlinedFiles = new Set();
+						for (const name of Object.keys(assets)) {
+							const pageOptions = htmlAssetOptions.get(name);
+							if (pageOptions === undefined) continue;
+							const content = assets[name].source();
+							if (typeof content !== "string") continue;
+							const { csp, integrity } = pageOptions;
+							let resolved = content;
+							// Sentinels are emitted whenever any page wants SRI, so a page
+							// that doesn't drops them again here.
+							if (resolved.includes("__WEBPACK_HTML_INTEGRITY__")) {
+								resolved = isIntegrityEnabled(integrity)
+									? getHtmlGenerator().resolveChunkIntegritySentinels(
+											resolved,
+											compilation,
+											/** @type {import("./HtmlGenerator").HtmlIntegrity} */ (
+												integrity
+											)
+										)
+									: getHtmlGenerator().stripChunkIntegritySentinels(resolved);
+							}
+							if (resolved.includes("__WEBPACK_HTML_INLINE__")) {
+								resolved = getHtmlGenerator().resolveChunkInlineSentinels(
+									resolved,
+									compilation,
+									name,
+									inlinedFiles
+								);
+							}
+							// `injectTags`, `transformTags` and CSP all run over a single parse:
+							// collect the tags and anchors once, let the hooks act, then render
+							// every edit in one pass.
+							const injected = await hooks.injectTags.promise([], {
+								outputName: name,
+								html: resolved
+							});
+							const transformTags = hooks.transformTags.taps.length > 0;
+							if (injected.length > 0 || transformTags || csp) {
+								const model = getHtmlGenerator().collectHtml(resolved);
+								getHtmlGenerator().addInjectedTags(model, injected);
+								if (transformTags) {
+									await hooks.transformTags.promise(model.tags, {
+										outputName: name,
+										html: resolved
+									});
+								}
+								resolved = getHtmlGenerator().renderHtml(resolved, model, csp);
+							}
+							// Final, fully-resolved HTML — let plugins transform it (minify,
+							// inject a CSP meta, rewrite tags) before it is written.
+							resolved = await hooks.transformHtml.promise(resolved, {
+								outputName: name
+							});
+							if (resolved !== content) {
+								compilation.updateAsset(name, new RawSource(resolved));
+							}
+							await hooks.htmlEmitted.promise({ outputName: name });
+						}
+						// An inlined chunk file is dead weight once nothing else references
+						// it by URL (another page's tag, or the runtime's async chunk map);
+						// a content-hashed filename makes a substring hit a real reference.
+						/** @type {Set<string>} */
+						const deletionCandidates = new Set(inlinedFiles);
+						// Materialize each other asset's source once (it can be expensive to
+						// render) and test all candidates against it, rather than
+						// re-materializing every asset per candidate.
+						if (deletionCandidates.size > 0) {
+							/** @type {Set<string>} */
+							const stillReferenced = new Set();
+							/** @type {string[]} */
+							const pending = [];
+							/**
+							 * @param {string} name asset whose source may name a candidate
+							 */
+							const markReferenced = (name) => {
+								const source = compilation.assets[name].source();
+								if (typeof source !== "string") return;
+								for (const file of deletionCandidates) {
+									if (!stillReferenced.has(file) && source.includes(file)) {
+										stillReferenced.add(file);
+										pending.push(file);
+									}
+								}
+							};
+							for (const name of Object.keys(compilation.assets)) {
+								if (
+									deletionCandidates.has(name) ||
+									stillReferenced.size === deletionCandidates.size
+								) {
+									continue;
+								}
+								markReferenced(name);
+							}
+							// A kept candidate can reference another through its async chunk
+							// map, so follow each until nothing new is kept.
+							while (pending.length > 0) {
+								markReferenced(/** @type {string} */ (pending.pop()));
+							}
+							for (const file of deletionCandidates) {
+								if (!stillReferenced.has(file)) compilation.deleteAsset(file);
+							}
+						}
+					}
+				);
+
+				// There is no entry-level `cssFilename`: Compilation flows
+				// `options.filename` only to `chunk.filenameTemplate`, which drives JS
+				// emit. So set `chunk.cssFilenameTemplate` here, once chunks exist.
+				compilation.hooks.afterChunks.tap(PLUGIN_NAME, () => {
+					const { stylesheetEntries, pendingNames } = getState(compilation);
+					if (pendingNames.size === 0) return;
+					const { chunkGraph, outputOptions } = compilation;
+					const jsExtension = outputOptions.module ? ".mjs" : ".js";
+					// Claimed in the order the pages recorded them, which is the
+					// documents' order rather than their builds'.
+					const takenJsNames = new Set(compilation.entries.keys());
+					const takenCssNames = new Set(takenJsNames);
+					// An extracted entry emits nothing under its own synthetic name, so
+					// that name never stands in the way of the one its tag asks for.
+					for (const entryName of pendingNames.keys()) {
+						takenJsNames.delete(entryName);
+						takenCssNames.delete(entryName);
+					}
+					for (const { freeName } of pendingNames.values()) {
+						if (freeName === undefined) continue;
+						// A page-only entry emits nothing of its own, so its name is free for
+						// the entries extracted from it — `app.html` keeps `app.js`.
+						takenJsNames.delete(freeName);
+						takenCssNames.delete(freeName);
+					}
+					for (const [entryName, { base, jsTemplate }] of pendingNames) {
+						const entrypoint = compilation.entrypoints.get(entryName);
+						if (!entrypoint) continue;
+						const chunk = entrypoint.getEntrypointChunk();
+						if (!chunk) continue;
+						// A stylesheet entry emits no JavaScript, so it claims no JS name and
+						// leaves that one to a `<script src>` of the same basename.
+						const emitsCss = stylesheetEntries.has(entryName);
+						if (!emitsCss) {
+							// `output.filename` named after the tag's url, the way an entry
+							// point is named. `Compilation` set it from the placeholder above.
+							chunk.filenameTemplate = getEntryTemplate(
+								jsTemplate,
+								jsExtension,
+								claimName(base, takenJsNames)
+							);
+						}
+						// A `<script src>` whose chunk carries no CSS claims no CSS name, so
+						// a `<link>` of the same basename still gets the plain one.
+						if (
+							!emitsCss &&
+							!getCssModulesPlugin().chunkHasCss(chunk, chunkGraph)
+						) {
+							continue;
+						}
+						chunk.cssFilenameTemplate = getEntryTemplate(
+							outputOptions.cssFilename,
+							".css",
+							claimName(base, takenCssNames)
+						);
+					}
+				});
+				compilation.dependencyTemplates.set(
+					StaticExportsDependency,
+					new StaticExportsDependency.Template()
+				);
+				// HtmlParser uses `ConstDependency` to insert ` type="module"` into a
+				// rewritten `<script>` under `output.module`; its template has to be
+				// registered for the HTML generator to run that insertion.
+				compilation.dependencyTemplates.set(
+					ConstDependency,
+					new ConstDependency.Template()
+				);
+				// registered when the first html module is prepared, so a build
+				// without html never loads these dependency classes
+				normalModuleFactory.hooks.prepareModuleType
+					.for(HTML_MODULE_TYPE)
+					.tap(PLUGIN_NAME, () => {
+						const HtmlSourceDependency = require("../dependencies/HtmlSourceDependency");
+						const HtmlEntryDependency = require("../dependencies/HtmlEntryDependency");
+						const HtmlInlineScriptDependency = require("../dependencies/HtmlInlineScriptDependency");
+						const HtmlInlineStyleDependency = require("../dependencies/HtmlInlineStyleDependency");
+						const HtmlInlineHtmlDependency = require("../dependencies/HtmlInlineHtmlDependency");
+
+						compilation.dependencyFactories.set(
+							HtmlSourceDependency,
+							normalModuleFactory
+						);
+						compilation.dependencyTemplates.set(
+							HtmlSourceDependency,
+							new HtmlSourceDependency.Template()
+						);
+						compilation.dependencyFactories.set(
+							HtmlEntryDependency,
+							normalModuleFactory
+						);
+						compilation.dependencyTemplates.set(
+							HtmlEntryDependency,
+							new HtmlEntryDependency.Template()
+						);
+						// Inline `<script>` content becomes its own entry through a
+						// `data:text/javascript,...` request, the same pipeline as
+						// `<script src>`; the template then rewrites the tag.
+						compilation.dependencyFactories.set(
+							HtmlInlineScriptDependency,
+							normalModuleFactory
+						);
+						compilation.dependencyTemplates.set(
+							HtmlInlineScriptDependency,
+							new HtmlInlineScriptDependency.Template()
+						);
+						// Inline `<style>` content goes through the CSS pipeline as a
+						// `data:text/css` module; the template reads the processed text
+						// from the `css-text` code-generation channel.
+						compilation.dependencyFactories.set(
+							HtmlInlineStyleDependency,
+							normalModuleFactory
+						);
+						compilation.dependencyTemplates.set(
+							HtmlInlineStyleDependency,
+							new HtmlInlineStyleDependency.Template()
+						);
+						// `<iframe srcdoc>` content is routed back through the HTML
+						// pipeline as a `data:text/html` module; the template reads the
+						// processed HTML from the nested module's `html` channel.
+						compilation.dependencyFactories.set(
+							HtmlInlineHtmlDependency,
+							normalModuleFactory
+						);
+						compilation.dependencyTemplates.set(
+							HtmlInlineHtmlDependency,
+							new HtmlInlineHtmlDependency.Template()
+						);
+					});
+				preloadModuleType(normalModuleFactory, PLUGIN_NAME, [
+					[HTML_MODULE_TYPE, [getHtmlParser]]
+				]);
+
+				normalModuleFactory.hooks.createModuleClass
+					.for(HTML_MODULE_TYPE)
+					.tap(
+						PLUGIN_NAME,
+						(createData, _resolveData) => new HtmlModule(createData)
+					);
+				normalModuleFactory.hooks.createParser
+					.for(HTML_MODULE_TYPE)
+					.tap(PLUGIN_NAME, (parserOptions) => {
+						compiler.validate(
+							() => getSchema("HtmlParserOptions"),
+							parserOptions,
+							parserValidationOptions,
+							(options) =>
+								require("../../schemas/plugins/HtmlParserOptions.check")(
+									options
+								)
+						);
+						return new (getHtmlParser.loaded())(parserOptions);
+					});
+
+				normalModuleFactory.hooks.createGenerator
+					.for(HTML_MODULE_TYPE)
+					.tap(PLUGIN_NAME, (generatorOptions) => {
+						compiler.validate(
+							() => getSchema("HtmlGeneratorOptions"),
+							generatorOptions,
+							generatorValidationOptions,
+							(options) =>
+								require("../../schemas/plugins/HtmlGeneratorOptions.check")(
+									options
+								)
+						);
+						return new (getHtmlGenerator())(
+							generatorOptions,
+							compilation.moduleGraph,
+							(module) => getPageOnlyEntry(compilation, module) !== undefined
+						);
+					});
+
+				NormalModule.getCompilationHooks(compilation).processResult.tap(
+					PLUGIN_NAME,
+					(result, module) => {
+						if (module.type === HTML_MODULE_TYPE) {
+							const [source, ...rest] = removeBOMFromResult(result);
+							// Run here, where the returned source becomes the module's stored
+							// source, so the parser's dependency offsets and the generator's
+							// render base stay in sync.
+							const parser = /** @type {HtmlParser} */ (module.parser);
+
+							return [parser.applyTemplate(source, module), ...rest];
+						}
+
+						return result;
+					}
+				);
+
+				// WHY: emit extracted `.html` files for any HTML module that opted in.
+				// `HtmlGenerator#_shouldExtract` computes that opt-in —
+				// `module.generator.html.extract: true` always extracts, `false` never,
+				// and unset extracts only a compilation entry — and the iteration below
+				// picks up only modules whose generator reported the `html` source type,
+				// so that decision is honoured implicitly. The filename comes from
+				// `output.htmlFilename` for initial chunks and `output.htmlChunkFilename`
+				// otherwise, mirroring the CSS pipeline, and the path data follows the
+				// asset-module pattern with `chunk` deliberately left out, so `[name]`
+				// resolves to the HTML source's basename rather than the chunk's.
+
+				// `renderManifest` runs per `(chunk, module)`, but resolved content and
+				// its hash depend only on the module source, so memoize. Scoped to this
+				// compilation, since resolution embeds chunk filenames.
+				/** @type {WeakMap<import("webpack-sources").Source, { resolvedContent: string, contentHash: string }>} */
+				const resolvedSentinelHashCache = new WeakMap();
+
+				/**
+				 * Computes an HTML page's emitted filename, chunk-URL-resolved content and
+				 * content hash. Links to other pages stay sentinels, so a page's filename
+				 * never depends on the filenames of the pages it links to.
+				 * @param {NormalModule} module the page's html module
+				 * @param {import("../Chunk")} chunk chunk the page is emitted from
+				 * @returns {{ resolvedContent: string, contentHash: string, filename: string, info: import("../Compilation").AssetInfo } | undefined} the page's emit, or `undefined` when it generates no html
+				 */
+				const computePageEmit = (module, chunk) => {
+					const { chunkGraph, outputOptions } = compilation;
+					const codeGenResult =
+						/** @type {import("../CodeGenerationResults")} */ (
+							compilation.codeGenerationResults
+						).get(module, chunk.runtime);
+					const placeholderSource = codeGenResult.sources.get(HTML_TYPE);
+					if (!placeholderSource) return undefined;
+					let cached = resolvedSentinelHashCache.get(placeholderSource);
+					if (cached === undefined) {
+						// Resolve chunk-URL sentinels before hashing, so the page's
+						// `[contenthash]` tracks the referenced chunks. An inlined chunk has
+						// no URL, so its sentinel carries the chunk content hash instead.
+
+						// Asset URL sentinels resolve here rather than in `template.apply`,
+						// which would race with asset-module codegen.
+						const resolvedContent = getHtmlGenerator().resolveAssetUrlSentinels(
+							getHtmlGenerator().embedInlineChunkHashes(
+								getHtmlGenerator().resolveChunkUrlSentinels(
+									/** @type {string} */ (placeholderSource.source()),
+									compilation
+								),
+								compilation
+							),
+							compilation
+						);
+						cached = {
+							resolvedContent,
+							contentHash: HtmlModulesPlugin.computeContentHash(
+								resolvedContent,
+								outputOptions
+							)
+						};
+						resolvedSentinelHashCache.set(placeholderSource, cached);
+					}
+					const resource = module.getResource() || module.resource;
+					// Synthetic `output.html` entries are `data:text/html` modules with no
+					// real basename — name the file after the entry instead.
+					const sourceFilename =
+						resource.startsWith("data:text/html") && chunk.name
+							? chunk.name
+							: toTemplateSourceFileName(
+									makePathsRelative(
+										compiler.context,
+										/** @type {string} */ (resource),
+										compiler.root
+									).replace(/^\.\//, ""),
+									compilation
+								);
+					const filenameTemplate = HtmlModulesPlugin.getChunkFilenameTemplate(
+						chunk,
+						outputOptions
+					);
+					const { path: filename, info } = compilation.getPathWithInfo(
+						/** @type {import("../TemplatedPathPlugin").TemplatePath} */
+						(filenameTemplate),
+						{
+							module,
+							runtime: chunk.runtime,
+							chunkGraph,
+							contentHash: cached.contentHash,
+							contentHashType: HTML_TYPE,
+							filename: sourceFilename,
+							hash: compilation.hash
+						}
+					);
+					return {
+						resolvedContent: cached.resolvedContent,
+						contentHash: cached.contentHash,
+						filename,
+						info
+					};
+				};
+
+				/** @type {Map<string, string>} */
+				const htmlPageFilenameCache = new Map();
+				/**
+				 * Emitted filename of a linked `type: "html"` page, read from the page's
+				 * own entry chunk so chunk render order cannot affect it.
+				 * @param {string} entryName entry name of the linked page
+				 * @returns {string} the page's emitted filename, `"data:,"` when it has none
+				 */
+				const computePageFilenameByEntry = (entryName) => {
+					const cached = htmlPageFilenameCache.get(entryName);
+					if (cached !== undefined) return cached;
+					let filename = "data:,";
+					const entrypoint = compilation.entrypoints.get(entryName);
+					const chunk = entrypoint && entrypoint.getEntrypointChunk();
+					if (chunk) {
+						const modules =
+							compilation.chunkGraph.getOrderedChunkModulesIterableBySourceType(
+								chunk,
+								HTML_TYPE,
+								compareModulesByFullName(compilation.compiler)
+							);
+						const module = modules && modules[Symbol.iterator]().next().value;
+						if (module) {
+							const emit = computePageEmit(
+								/** @type {NormalModule} */ (module),
+								chunk
+							);
+							if (emit) filename = emit.filename;
+						}
+					}
+					htmlPageFilenameCache.set(entryName, filename);
+					return filename;
+				};
+
+				compilation.hooks.renderManifest.tap(
+					PLUGIN_NAME,
+					(result, { chunk }) => {
+						// HMR's `HotUpdateChunk`s reach this hook but are not output chunks,
+						// so extracting `.html` for them would emit stray hot-update files.
+						// `CssModulesPlugin` early-returns for the same reason.
+						if (chunk instanceof HotUpdateChunk) return result;
+						const { chunkGraph } = compilation;
+						const modules =
+							chunkGraph.getOrderedChunkModulesIterableBySourceType(
+								chunk,
+								HTML_TYPE,
+								compareModulesByFullName(compilation.compiler)
+							);
+						if (!modules) return result;
+						const outputOptions = compilation.outputOptions;
+						for (const module of modules) {
+							const normalModule = /** @type {NormalModule} */ (module);
+							// WHY: an `<iframe srcdoc>` module exposes `html` only so that
+							// `HtmlInlineHtmlDependency` can write the processed markup back
+							// into the host attribute; it is never a standalone page.
+							// `generator.extract: "inline"` marks it so no `.html` file is
+							// emitted — without it they would collide on the `data:text/html`
+							// to chunk-name path, every srcdoc module in a chunk emitting
+							// `<chunk>.html`. An O(1) flag check rather than a scan.
+							const generatorOptions = normalModule.generatorOptions;
+							if (generatorOptions && generatorOptions.extract === "inline") {
+								continue;
+							}
+
+							const emit = computePageEmit(normalModule, chunk);
+							if (!emit) continue;
+							const { resolvedContent, contentHash, filename, info } = emit;
+
+							// Resolve the remaining `[webpack/auto]` placeholders against the
+							// emitted page's own location, so URLs stay relative to `output.path`
+							// from a subdirectory. A relative `<base href>` prepends `../`s.
+							const basePrefix =
+								/** @type {HtmlModuleBuildInfo} */ (normalModule.buildInfo)
+									.baseUrlPrefix || "";
+							const undoPath =
+								basePrefix +
+								getUndoPath(
+									filename,
+									/** @type {string} */ (outputOptions.path),
+									false
+								);
+							// Resolve linked-page (`type: "html"`) sentinels to each page's
+							// emitted filename before the undo path, so the href is relative to
+							// this page.
+							const finalContent = getHtmlGenerator()
+								.resolveHtmlPageUrlSentinels(
+									resolvedContent,
+									computePageFilenameByEntry
+								)
+								.split(autoPlaceholder)
+								.join(undoPath);
+							const finalSource = new RawSource(finalContent);
+							// One module can land in several chunks whose filename shapes give
+							// different undo paths, so the emitted filename joins the cache key
+							// and the post-undo content the hash — else variants alias.
+							const finalContentHash =
+								finalContent === resolvedContent
+									? contentHash
+									: HtmlModulesPlugin.computeContentHash(
+											finalContent,
+											outputOptions
+										);
+
+							// Track HTML pages (never JS chunks) with the html options of the
+							// entry that owns them, read back by the emit passes below.
+							getState(compilation).htmlAssetOptions.set(
+								filename,
+								(chunk.name && htmlOptionsByEntry.get(chunk.name)) ||
+									globalHtmlOptions ||
+									{}
+							);
+
+							result.push({
+								render: () => finalSource,
+								filename,
+								info,
+								auxiliary: true,
+								identifier: `htmlModule${chunkGraph.getModuleId(
+									module
+								)}|${filename}`,
+								hash: finalContentHash
+							});
+						}
+						return result;
+					}
+				);
+
+				// Resolve sentinels at JS chunk render time so later passes
+				// (SourceMapDevToolPlugin, size optimizers, RealContentHash) see resolved bytes.
+				const jsHooks =
+					JavascriptModulesPlugin.getCompilationHooks(compilation);
+				jsHooks.render.tap(PLUGIN_NAME, (source, renderContext) => {
+					// No HTML modules ⇒ no sentinels; skip materializing the JS source.
+					if (htmlModules.size === 0) return source;
+					// Chunks without HTML modules can't carry HTML sentinels — avoid
+					// ConcatSource.source() on the common pure-JS chunk path.
+					if (
+						!HtmlModulesPlugin.chunkHasHtml(
+							renderContext.chunk,
+							compilation.chunkGraph
+						)
+					) {
+						return source;
+					}
+					const raw = source.source();
+					if (typeof raw !== "string") return source;
+					// Every sentinel shares this prefix — one scan answers the common
+					// sentinel-free case instead of five.
+					if (!raw.includes("__WEBPACK_HTML_")) {
+						return source;
+					}
+					// Exact re-check on a prefix hit: the autoPlaceholder strip below is
+					// not sentinel-guarded, so bare-prefix false positives must bail here.
+					if (
+						!raw.includes("__WEBPACK_HTML_CHUNK_URL__") &&
+						!raw.includes("__WEBPACK_HTML_PAGE_URL__") &&
+						!raw.includes("__WEBPACK_HTML_INTEGRITY__") &&
+						!raw.includes("__WEBPACK_HTML_INLINE__") &&
+						!raw.includes("__WEBPACK_HTML_ASSET_URL__")
+					) {
+						return source;
+					}
+					// Strip integrity and inline sentinels (not resolve): a JS chunk
+					// can't hold real SRI hashes for its own not-yet-final bytes, and
+					// inline content belongs only in the final .html, never in JS bundles.
+					const resolved = getHtmlGenerator()
+						.stripChunkIntegritySentinels(
+							getHtmlGenerator()
+								.resolveAssetUrlSentinels(
+									getHtmlGenerator().resolveHtmlPageUrlSentinels(
+										getHtmlGenerator().resolveChunkUrlSentinels(
+											raw,
+											compilation
+										),
+										computePageFilenameByEntry
+									),
+									compilation
+								)
+								.split(autoPlaceholder)
+								.join("")
+						)
+						.replace(
+							/__WEBPACK_HTML_INLINE__[0-9a-f]+__[a-z]+(?:__[0-9a-f]+)?__END__/g,
+							""
+						);
+					if (resolved === raw) return source;
+					const chunkId = String(renderContext.chunk.id);
+					const prior = sentinelResolvedSourceCache.get(chunkId);
+					if (prior !== undefined && prior.content === resolved) {
+						return prior.source;
+					}
+					const newSource = new RawSource(resolved);
+					sentinelResolvedSourceCache.set(chunkId, {
+						content: resolved,
+						source: newSource
+					});
+					return newSource;
+				});
+
+				// Prune cache entries for chunks no longer in the graph so a
+				// long watch session can't accumulate stale entries.
+				compilation.hooks.afterSeal.tap(PLUGIN_NAME, () => {
+					if (sentinelResolvedSourceCache.size === 0) return;
+					const live = new Set();
+					for (const chunk of compilation.chunks) {
+						live.add(String(chunk.id));
+					}
+					for (const id of sentinelResolvedSourceCache.keys()) {
+						if (!live.has(id)) sentinelResolvedSourceCache.delete(id);
+					}
+				});
+			}
+		);
+	}
+
+	/**
+	 * Returns true, when the chunk has html.
+	 * @param {Chunk} chunk chunk
+	 * @param {ChunkGraph} chunkGraph chunk graph
+	 * @returns {boolean} true, when the chunk has html
+	 */
+	static chunkHasHtml(chunk, chunkGraph) {
+		if (chunkGraph.getChunkModulesIterableBySourceType(chunk, HTML_TYPE)) {
+			return true;
+		}
+		// Scope-hoisted HTML loses HTML_TYPE on the ConcatenatedModule, but its
+		// JS export can still carry unresolved sentinels that need this path.
+		for (const module of chunkGraph.getChunkModulesIterable(chunk)) {
+			if (module instanceof HtmlModule) return true;
+			if (module instanceof ConcatenatedModule) {
+				for (const inner of module.modules) {
+					if (inner instanceof HtmlModule) return true;
+				}
+			}
+		}
+		return false;
+	}
+}
+
+/**
+ * Per-compilation hooks for the experimental HTML support.
+ * @param {Compilation} compilation the compilation
+ * @returns {HtmlCompilationHooks} the hooks
+ */
+HtmlModulesPlugin.getCompilationHooks = createHooksRegistry(
+	createCompilationHooks
+);
+
+module.exports = HtmlModulesPlugin;

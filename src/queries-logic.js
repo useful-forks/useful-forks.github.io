@@ -1,0 +1,882 @@
+const { Octokit } = require("@octokit/rest");
+const { throttling } = require("@octokit/plugin-throttling");
+
+
+/* Filtering constants. */
+const attributeRgx = '([a-z]+)';
+const operatorRgx = '(<=|>=|[<=>])';
+const dateRgx = '[0-9]{4}(?:(?<!-|-[0-9])-[0-9]{0,2}){0,2}';
+const valueRgx = `(${dateRgx}|[0-9]+)`;
+const regex = new RegExp(attributeRgx + operatorRgx + valueRgx);
+const mapTable = {
+  'ahead': 'ahead_by',
+  'behind': 'behind_by',
+  'pushed': 'pushed_at',
+  'date': 'pushed_at',
+  'd': 'pushed_at',
+  'a': 'ahead_by',
+  'b': 'behind_by',
+  'p': 'pushed_at',
+  's': 'stars',
+  'f': 'forks',
+  'r': 'releases_count',
+  'release': 'releases_count',
+  'releases': 'releases_count',
+};
+
+/* Variables that should be cleared for every new query (defaults are set in "clear_old_data"). */
+let TABLE_DATA = [];
+let SEEN_FORKS = new Set();
+function normalizeRepoName(name){ return (name||"").trim().toLowerCase(); }
+function seenHas(name){ return SEEN_FORKS.has(normalizeRepoName(name)); }
+function seenAdd(name){ SEEN_FORKS.add(normalizeRepoName(name)); }
+let REPO_DATE;
+let TOTAL_FORKS;
+let RATE_LIMIT_EXCEEDED;
+let TOTAL_API_CALLS_COUNTER;
+let ONGOING_REQUESTS_COUNTER = 0;
+let IS_USEFUL_FORK; // function that determines if a fork is useful or not
+let PRIVATE_SKIPPED_COUNT = 0;
+
+
+/** Used to reset the state for a brand new query. */
+function clear_old_data() {
+  clearHeader();
+  clearMsg();
+  removeProgressBar();
+  TABLE_DATA = []; // clear the table data
+  SEEN_FORKS.clear();
+  clearTable(); // clear the table DOM
+  setApiCallsLabel(0);
+  hideExportCsvBtn();
+  REPO_DATE = new Date();
+  TOTAL_FORKS = 0;
+  RATE_LIMIT_EXCEEDED = false;
+  TOTAL_API_CALLS_COUNTER = 0;
+  ONGOING_REQUESTS_COUNTER = 0;
+  PRIVATE_SKIPPED_COUNT = 0;
+  shouldTriggerQueryOnTokenSave = false;
+}
+
+function getOnlyDate(full) {
+  return full.split('T')[0];
+}
+
+function extract_username_from_fork(combined_name) {
+  return combined_name.split('/')[0];
+}
+
+function badge_width(number) {
+  return 70 * number.toString().length; // magic number 70 extracted from analyzing 'shields.io'
+}
+
+/** Credits to https://shields.io/ */
+function ahead_badge(amount, url) {
+  return `
+  <a href="${url}" target="_blank" rel="noopener noreferrer">
+    <svg xmlns="http://www.w3.org/2000/svg" width="88" height="24" role="img">
+      <title>How far ahead this fork's default branch is compared to its parent's default branch</title>
+      <linearGradient id="s" x2="0" y2="100%"><stop offset="0" stop-color="#fff" stop-opacity=".7"/><stop offset=".1" stop-color="#aaa" stop-opacity=".1"/><stop offset=".9" stop-color="#000" stop-opacity=".3"/><stop offset="1" stop-color="#000" stop-opacity=".5"/></linearGradient><clipPath id="r"><rect width="88" height="18" rx="4" fill="#fff"/></clipPath><g clip-path="url(#r)"><rect width="43" height="18" fill="#555"/><rect x="43" width="45" height="18" fill="#007ec6"/><rect width="88" height="18" fill="url(#s)"/></g>
+      <g fill="#fff" text-anchor="middle" font-family="Verdana,Geneva,DejaVu Sans,sans-serif" text-rendering="geometricPrecision" font-size="110">
+        <text aria-hidden="true" x="225" y="140" fill="#010101" fill-opacity=".3" transform="scale(.1)" textLength="330">ahead</text>
+        <text x="225" y="130" transform="scale(.1)" fill="#fff" textLength="330">ahead</text>
+        <text x="645" y="130" transform="scale(.1)" fill="#fff" textLength="${badge_width(amount)}">${amount}</text>
+      </g>
+    </svg>
+  </a>`;
+}
+
+/** Credits to https://shields.io/ */
+function behind_badge(amount, url) {
+  const color = amount === 0 ? '#4c1' : '#007ec6'; // green only when not behind, blue otherwise
+  return `
+  <a href="${url}" target="_blank" rel="noopener noreferrer">
+    <svg xmlns="http://www.w3.org/2000/svg" width="92" height="24" role="img">
+      <title>How far behind this fork's default branch is compared to its parent's default branch</title>
+      <linearGradient id="s" x2="0" y2="100%"><stop offset="0" stop-color="#fff" stop-opacity=".7"/><stop offset=".1" stop-color="#aaa" stop-opacity=".1"/><stop offset=".9" stop-color="#000" stop-opacity=".3"/><stop offset="1" stop-color="#000" stop-opacity=".5"/></linearGradient><clipPath id="r"><rect width="92" height="18" rx="4" fill="#fff"/></clipPath><g clip-path="url(#r)"><rect width="47" height="18" fill="#555"/>
+      <rect x="47" width="45" height="18" fill="${color}"/><rect width="92" height="18" fill="url(#s)"/></g>
+      <g fill="#fff" text-anchor="middle" font-family="Verdana,Geneva,DejaVu Sans,sans-serif" text-rendering="geometricPrecision" font-size="110">
+        <text aria-hidden="true" x="245" y="140" fill="#010101" fill-opacity=".3" transform="scale(.1)" textLength="370">behind</text>
+        <text x="245" y="130" transform="scale(.1)" fill="#fff" textLength="370">behind</text>
+        <text x="685" y="130" transform="scale(.1)" fill="#fff" textLength="${badge_width(amount)}">${amount}</text>
+      </g>
+    </svg>
+  </a>`;
+}
+
+/** Reverses the last part of the "ahead" URL. */
+function getBehindUrl(aheadUrl) {
+  var split = aheadUrl.split('/');
+  const behind_suffix = split[split.length - 1].split('...').reverse().join('...');
+  split[split.length - 1] = behind_suffix;
+  return split.join('/');
+}
+
+/* Sorting state for column sorting feature #48 – fixed bubble-sort -> Array.sort + fragment */
+let SORT_STATE = { column: 1, direction: 'desc' };
+let SORT_DEBOUNCE_TIMER = null;
+
+function getTdRawValue(rows, index, col) {
+  // legacy signature: rows is HTMLCollection, index numeric
+  // also support direct row element overload via second param object check
+  if (rows && rows.getElementsByTagName) {
+    // called as (rowElement, col) – compat shim
+    let td = rows.getElementsByTagName('td').item(index);
+    if (!td) return "";
+    let attr = td.getAttribute("value");
+    return attr === null ? "" : attr;
+  }
+  let td = rows.item(index).getElementsByTagName('td').item(col);
+  if (!td) return "";
+  let attr = td.getAttribute("value");
+  return attr === null ? "" : attr;
+}
+
+function getRowValue(row, col) {
+  let td = row.getElementsByTagName('td').item(col);
+  if (!td) return "";
+  let attr = td.getAttribute("value");
+  let raw = attr === null ? "" : attr;
+  if ([1,2,3,4,6].includes(col)) {
+    let n = Number(raw);
+    return isNaN(n) ? -1 : n;
+  }
+  if (col === 5) {
+    let t = Date.parse(raw);
+    return isNaN(t) ? 0 : t;
+  }
+  if (col === 0) {
+    return raw.toString().toLowerCase();
+  }
+  return raw.toString().toLowerCase();
+}
+
+const SVG_TAG = '<svg class="octicon octicon-tag v-align-text-bottom" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" role="img"><title>Releases</title><path fill-rule="evenodd" d="M2.5 2.75a1 1 0 000 1.5l8.75 8.75a1 1 0 001.5 0l2-2a1 1 0 000-1.5l-8.75-8.75a1 1 0 00-1.5 0l-2 2zM5 6a1 1 0 100-2 1 1 0 000 2z"></path></svg>';
+
+function release_badge(count, url) {
+  if (!count || count < 1) return '';
+  const label = count === 1 ? '1 release' : `${count} releases`;
+  return `
+  <a href="${url}" target="_blank" rel="noopener noreferrer" title="This fork has ${label}">
+    ${SVG_TAG} ${label}
+  </a>`;
+}
+
+function getReleaseCol(count, url) {
+  return release_badge(count, url);
+}
+
+function getTdValue(rows, index, col) {
+  // support both signatures for backward compat
+  if (rows && rows.length === undefined && rows.getElementsByTagName) {
+    // overload row element case – index is actually col
+    return getRowValue(rows, index);
+  }
+  let raw = getTdRawValue(rows, index, col);
+  // numeric columns: 1,2,3,4,6
+  if ([1,2,3,4,6].includes(col)) {
+    let n = Number(raw);
+    return isNaN(n) ? -1 : n;
+  }
+  if (col === 5) { // date column YYYY-MM-DD
+    let t = Date.parse(raw);
+    return isNaN(t) ? 0 : t;
+  }
+  if (col === 0) {
+    return raw.toString().toLowerCase();
+  }
+  // fallback for separator or others
+  return raw.toString().toLowerCase();
+}
+
+function compareForSort(a, b, dir) {
+  // handle numbers and strings uniformly; JS < and > work for both
+  if (dir === 'desc') {
+    if (a < b) return 1;
+    if (a > b) return -1;
+    return 0;
+  } else {
+    if (a > b) return 1;
+    if (a < b) return -1;
+    return 0;
+  }
+}
+
+function sortTable() {
+  sortTableColumn(UF_ID_TABLE, SORT_STATE.column, SORT_STATE.direction);
+}
+
+function sortTableColumn(table_id, sortColumn, direction){
+  let tableEl = document.getElementById(table_id);
+  if (!tableEl) return;
+  let tableData = tableEl.getElementsByTagName('tbody').item(0);
+  if (!tableData) return;
+  let rowsCollection = tableData.getElementsByTagName('tr');
+  if (rowsCollection.length <= 1) return;
+
+  let dir = direction;
+  if (!dir) {
+    if (SORT_STATE.column === sortColumn) {
+      dir = SORT_STATE.direction === 'desc' ? 'asc' : 'desc';
+    } else {
+      dir = (sortColumn === 0) ? 'asc' : 'desc';
+    }
+  }
+  SORT_STATE = { column: sortColumn, direction: dir };
+
+  // O(n log n) stable sort with DocumentFragment – fixes O(n²) freeze + live HTMLCollection bug
+  let rows = Array.from(rowsCollection);
+  rows.sort((rowA, rowB) => {
+    let a = getRowValue(rowA, sortColumn);
+    let b = getRowValue(rowB, sortColumn);
+    let cmp = 0;
+    if (typeof a === 'string' && typeof b === 'string') {
+      cmp = a.localeCompare(b);
+    } else {
+      if (a < b) cmp = -1;
+      else if (a > b) cmp = 1;
+      else cmp = 0;
+    }
+    if (cmp !== 0) {
+      return dir === 'desc' ? -cmp : cmp;
+    }
+    // secondary repo key for stable deterministic ordering
+    let aRepo = getRowValue(rowA, 0);
+    let bRepo = getRowValue(rowB, 0);
+    // aRepo/bRepo already lowercased via getRowValue; fallback to attr
+    if (typeof aRepo === 'string' && typeof bRepo === 'string') {
+      let sec = aRepo.localeCompare(bRepo);
+      return sec;
+    }
+    return 0;
+  });
+
+  // re-append in fragment – single DOM operation
+  let frag = document.createDocumentFragment();
+  rows.forEach(r => frag.appendChild(r));
+  tableData.appendChild(frag);
+
+  updateSortIndicators(sortColumn, dir);
+}
+
+function updateSortIndicators(col, dir) {
+  try {
+    let $ths = $('#' + UF_ID_TABLE + ' thead th');
+    $ths.each(function() {
+      let $th = $(this);
+      let c = parseInt($th.attr('data-col'));
+      let baseText = $th.attr('data-base');
+      if (!baseText) {
+        // recover base without arrows – guard against accumulated ▼▼
+        baseText = $th.text().replace(/[\s▲▼]+$/g,'').trim();
+        $th.attr('data-base', baseText);
+      }
+      if (c === col && !isNaN(c) && [0,1,2,3,4,5,6].includes(c)) {
+        $th.html('').append(document.createTextNode(baseText + ' ')).append(
+          $('<span>', {class: 'sort-arrow', text: dir === 'desc' ? '▼' : '▲', 'aria-hidden': 'true'}));
+        $th.addClass('is-sorted');
+        $th.attr('aria-sort', dir === 'desc' ? 'descending' : 'ascending');
+        $th.attr('tabindex', '0');
+        $th.attr('role', 'columnheader');
+      } else {
+        if ([0,1,2,3,4,5,6].includes(c)) {
+          $th.text(baseText);
+          $th.removeClass('is-sorted');
+          $th.removeAttr('aria-sort');
+          $th.attr('tabindex', '0');
+          $th.attr('role', 'columnheader');
+        }
+      }
+    });
+  } catch(e) {}
+}
+
+function setupSortableHeaders() {
+  try {
+    let $headers = $('#' + UF_ID_TABLE + ' thead th.sortable');
+    $headers.attr('tabindex','0').attr('role','columnheader').attr('aria-sort', function(){
+      let c = parseInt($(this).attr('data-col'));
+      return (c === SORT_STATE.column) ? (SORT_STATE.direction === 'desc' ? 'descending' : 'ascending') : null;
+    });
+
+    $headers.off('click.sortable keydown.sortable').on('click.sortable', function(e){
+      let col = parseInt($(this).attr('data-col'));
+      if (isNaN(col)) return;
+      // debounce rapid clicks 100ms
+      clearTimeout(SORT_DEBOUNCE_TIMER);
+      SORT_DEBOUNCE_TIMER = setTimeout(() => sortTableColumn(UF_ID_TABLE, col), 80);
+    }).on('keydown.sortable', function(e){
+      if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') {
+        e.preventDefault();
+        let col = parseInt($(this).attr('data-col'));
+        if (isNaN(col)) return;
+        clearTimeout(SORT_DEBOUNCE_TIMER);
+        SORT_DEBOUNCE_TIMER = setTimeout(() => sortTableColumn(UF_ID_TABLE, col), 80);
+      }
+    });
+  } catch(e) {}
+}
+
+function isEmpty(aList) {
+  return (!aList || aList.length === 0);
+}
+
+function displayConditionalErrorMsg() {
+  if (!RATE_LIMIT_EXCEEDED)
+    setMsg(UF_MSG_ERROR);
+}
+
+function incrementCounters() {
+  ONGOING_REQUESTS_COUNTER++;
+  TOTAL_API_CALLS_COUNTER++;
+  setApiCallsLabel(TOTAL_API_CALLS_COUNTER);
+}
+
+function onRateLimitExceeded() {
+  if (!RATE_LIMIT_EXCEEDED) {
+    console.warn('[useful-forks] GitHub API rate-limit exceeded. (Since useful-forks sends many requests at once, you might have a lot of `Error Code 403` in your browser Console Logs.)');
+    RATE_LIMIT_EXCEEDED = true;
+    setMsg(UF_MSG_API_RATE);
+    disableQueryFields();
+    if (!LOCAL_STORAGE_GITHUB_ACCESS_TOKEN) {
+      proposeAddingToken();
+    }
+  }
+}
+
+function allRequestsAreDone() {
+  // Fix #77: For massive fork volumes (>100k), TOTAL_FORKS is brittle.
+  // - GitHub may rate-limit / secondary rate-limit and abort pagination,
+  //   leaving TOTAL_API_CALLS < TOTAL_FORKS and UI stuck "scanning".
+  // - Forks-of-forks spawn extra API calls beyond parent TOTAL_FORKS,
+  //   making >= check semantically wrong.
+  // - Finally, recursive pagination + 100 compare calls per page creates
+  //   huge concurrency that triggers secondary rate-limits; the throttling
+  //   plugin keeps promises pending, so ONGOING stays >0 while stalled.
+  // Robust completion = no ongoing requests. Pagination chains keep ONGOING>0
+  // because next page is queued inside success before finally decrementing.
+  return ONGOING_REQUESTS_COUNTER <= 0;
+}
+
+/** Detection of final request. */
+function decrementCounters() {
+  ONGOING_REQUESTS_COUNTER--;
+  if (allRequestsAreDone()) {
+    clearNonErrorMsg();
+    removeProgressBar();
+    updateBasedOnTable();
+    enableQueryFields();
+  }
+}
+
+function updateBasedOnTable() {
+  clearNonScanStateMsg();
+  if (tableIsEmpty(getTableBody())) {
+    if (isMsgEmpty()) {
+      setMsg(UF_MSG_EMPTY_FILTER);
+    }
+    hideExportCsvBtn();
+  } else {
+    displayCsvExportBtn();
+  }
+  if (PRIVATE_SKIPPED_COUNT > 0) {
+    console.info(`Filtered ${PRIVATE_SKIPPED_COUNT} private forks (Fix #55)`);
+  }
+}
+
+function searchNotAllowed() {
+  if (shouldTriggerQueryOnTokenSave)
+    return false;
+  return ONGOING_REQUESTS_COUNTER !== 0 || JQ_SEARCH_BTN.hasClass('is-loading');
+}
+
+function send(requestPromise, successFn, failureFn) {
+  if (RATE_LIMIT_EXCEEDED) {
+    failureFn();
+    return;
+  }
+
+  incrementCounters();
+  requestPromise()
+  .then(
+      response => successFn(response.headers, response.data)) // wrapped in a { data, headers, status, url } object
+  .catch(
+      () => failureFn())
+  .finally(
+      () => decrementCounters());
+}
+
+/** Add bold to the date text if the date is earlier than the queried repo. */
+function compareDates(date, html) {
+  return REPO_DATE <= new Date(date) ? `<strong>${html}</strong>` : html;
+}
+
+function update_table_trying_use_filter() {
+  if (typeof IS_USEFUL_FORK === 'function') {
+    update_table(TABLE_DATA.filter(IS_USEFUL_FORK));
+  } else {
+    update_table(TABLE_DATA);
+  }
+}
+
+function is_duplicate_repo(name) {
+  const norm = normalizeRepoName(name);
+  if (SEEN_FORKS.has(norm)) return true;
+  for (const fork of TABLE_DATA) {
+    if (normalizeRepoName(fork['name']) === norm)
+      return true;
+  }
+  return false;
+}
+
+/** Updates table data, then calls function to update the table. */
+function update_table_data(responseData, user, repo, parentDefaultBranch) {
+  if (isEmpty(responseData)) {
+    return;
+  }
+
+  if (!RATE_LIMIT_EXCEEDED) { // because some times gets called after some other msgs are displayed
+    clearNonErrorMsg();
+    removeProgressBar();
+  }
+
+  for (const currFork of responseData) {
+    if (RATE_LIMIT_EXCEEDED) // we can skip everything below because they are only requests
+      continue;
+
+    // Fix #55: Ignore private repos – listForks erroneously returns private forks
+    // which pollute Console with 404 on compareCommits.
+    // https://docs.github.com/en/rest/repos/forks#list-forks
+    // Truthy check + counted; respects token scopes via optional opt-in setting (default skip).
+    if (currFork.private) {
+      PRIVATE_SKIPPED_COUNT++;
+      continue;
+    }
+
+    const normFull = normalizeRepoName(currFork.full_name);
+    if (SEEN_FORKS.has(normFull))
+      continue; // abort because repo already seen (synchronous dedup normalized)
+    if (is_duplicate_repo(currFork.full_name))
+      continue; // abort because repo is already listed
+
+    // NOTE: the fork is marked as seen only once its compare/processing completes
+    // (in onSuccess below), NOT here. Marking it here made every fork self-skip
+    // via is_duplicate_repo in onSuccess, rendering zero rows.
+
+    let datum = {
+      'name': currFork.full_name,
+      'stars': currFork.stargazers_count,
+      'forks': currFork.forks_count,
+      'releases_count': 0,
+      'has_releases': false,
+      'releases_url': `https://github.com/${currFork.full_name}/releases`,
+    };
+
+    /* Commits diff data (ahead/behind). */
+    const requestPromise = () => octokit.repos.compareCommits({
+      owner: user,
+      repo: repo,
+      base: parentDefaultBranch,
+      head: `${extract_username_from_fork(currFork.full_name)}:${currFork.default_branch}`
+    });
+    const onSuccess = (responseHeaders, responseData) => {
+      if (responseData.total_commits > 0) {
+        // Double-check duplicate before push (normalized) – avoid race push
+        const normDatum = normalizeRepoName(datum['name']);
+        if (TABLE_DATA.some(e=>normalizeRepoName(e['name'])===normDatum)) {
+          return;
+        }
+        if (is_duplicate_repo(datum['name'])) {
+          return;
+        }
+        // Mark as seen only now that processing completed: adding it before the
+        // async compare ran made this fork self-skip in the checks above.
+        seenAdd(normDatum);
+        datum['ahead_by'] = responseData.ahead_by;
+        datum['ahead_url'] = responseData.html_url;
+        datum['behind_by'] = responseData.behind_by;
+        datum['behind_url'] = getBehindUrl(responseData.html_url);
+        datum['pushed_at'] = getOnlyDate(currFork.pushed_at);
+
+        // Issue #75: check if fork has releases (compiled binaries).
+        // With per_page=1 the Link header's rel="last" page number equals the
+        // total release count, so we get the real amount without fetching pages.
+        const getReleasesCount = (relHeaders, relData) => {
+          const link = relHeaders && (relHeaders.link || relHeaders.Link);
+          if (link) {
+            const last = link.match(/<[^>]*[?&]page=(\d+)[^>]*>\s*;\s*rel="last"/);
+            if (last) return parseInt(last[1], 10);
+          }
+          return relData ? relData.length : 0;
+        };
+        const releasesPromise = () => octokit.repos.listReleases({
+          owner: currFork.owner.login,
+          repo: currFork.name,
+          per_page: 1
+        });
+        const onReleasesSuccess = (relHeaders, relData) => {
+          const count = getReleasesCount(relHeaders, relData);
+          if (count > 0) {
+            datum['has_releases'] = true;
+            datum['releases_count'] = count;
+          }
+          TABLE_DATA.push(datum);
+          if (TABLE_DATA.length > 1) showFilterContainer();
+          update_table_trying_use_filter();
+        };
+        const onReleasesFailure = () => {
+          // Still push even if releases check fails (e.g., empty or 404)
+          TABLE_DATA.push(datum);
+          if (TABLE_DATA.length > 1) showFilterContainer();
+          update_table_trying_use_filter();
+        };
+        send(releasesPromise, onReleasesSuccess, onReleasesFailure);
+      } else {
+        // Even if not useful (no commits ahead), mark as seen to avoid re-scanning forks.
+        seenAdd(normFull);
+      }
+    };
+    const onFailure = () => { }; // do nothing
+    send(requestPromise, onSuccess, onFailure);
+
+    /* Forks of forks. */
+    if (currFork.forks_count > 0) {
+      request_fork_page(1, currFork.owner.login, currFork.name, currFork.default_branch);
+    }
+  }
+}
+
+function update_filter_appearance() {
+  const filter = getFilterOrDefault();
+  if (filter === '') {
+    JQ_FILTER_FIELD.removeClass('is-dark');
+  } else {
+    JQ_FILTER_FIELD.addClass('is-dark');
+  }
+}
+
+function update_filter() {
+  update_filter_appearance();
+  updateFilterFunction();
+  update_table_trying_use_filter();
+
+  updateBasedOnTable();
+}
+
+/**
+ * Rewrites the table with the specified data.
+ * @param {Array} data - Array of objects with the following keys: name, stars, forks, ahead_by, ahead_url, behind_by, behind_url, pushed_at, releases_count, has_releases, releases_url
+ */
+function update_table(data) {
+  clearTable();
+  let table_body = getTableBody();
+  for (const currFork of data) {
+    const { name, stars, forks, ahead_by, ahead_url, behind_by, behind_url, pushed_at, releases_count, has_releases, releases_url } = currFork;
+    const date_txt = compareDates(pushed_at, getDateCol(pushed_at));
+    const releases_txt = getReleaseCol(releases_count, releases_url);
+
+    const NEW_ROW = $('<tr>', { id: extract_username_from_fork(name), class: "useful_forks_repo" });
+    NEW_ROW.append(
+      $('<td>').html(getRepoCol(name, false)).attr("value", name),
+      $('<td>').html(getStarCol(stars)).attr("value", stars),
+      $('<td>').html(getForkCol(forks)).attr("value", forks),
+      $('<td>', { class: "uf_badge" }).html(ahead_badge(ahead_by, ahead_url)).attr("value", ahead_by),
+      $('<td>', { class: "uf_badge" }).html(behind_badge(behind_by, behind_url)).attr("value", behind_by),
+      $('<td>').html(date_txt).attr("value", pushed_at),
+      $('<td>').html(releases_txt).attr("value", releases_count || 0)
+    );
+    table_body.append(NEW_ROW);
+  }
+  // Reveal the table only once there is something to show – keeps the landing page clean.
+  $('#' + UF_ID_TABLE).toggle(data.length > 0);
+  sortTable();
+}
+
+/**
+ * 1. Empty filter means no filter.
+ * 2. Filter string is a list of conditions separated by spaces.
+ * 3. If a condition is invalid, it is ignored, and the rest of the conditions are applied.
+ */
+function updateFilterFunction() {
+  const filter = getFilterOrDefault();
+  if (filter === '') {
+    IS_USEFUL_FORK = () => true; // no filter
+    return;
+  }
+
+  // parse filter string into condition object
+  const conditionStrList = filter.split(' ');
+  let conditionObj = {};
+  for (const condition of conditionStrList) {
+    const matchResult = condition.match(regex);
+    let [attribute, operator, value] = matchResult ? matchResult.slice(1) : [];
+    if (!attribute || !operator || !value) {
+      continue; // invalid condition
+    }
+    if (attribute in mapTable) {
+      attribute = mapTable[attribute];
+    }
+    conditionObj[attribute] = { operator, value };
+  }
+  
+  IS_USEFUL_FORK = (datum) => {
+    for (const [attribute, { operator, value }] of Object.entries(conditionObj)) {
+      const attrValue = datum[attribute];
+      switch (operator) {
+        case '>':
+          if (attrValue <= value)
+            return false;
+          break;
+        case '>=':
+          if (attrValue < value)
+            return false;
+          break;
+        case '<':
+          if (attrValue >= value)
+            return false;
+          break;
+        case '<=':
+          if (attrValue > value)
+            return false;
+          break;
+        case '=':
+          if (attrValue != value)
+            return false;
+          break;
+      }
+    }
+    return true;
+  }
+}
+
+/** Paginated (index starts at 1) recursive forks scan. */
+function request_fork_page(page_number, user, repo, defaultBranch) {
+  if (RATE_LIMIT_EXCEEDED)
+    return;
+
+  const requestPromise = () => octokit.repos.listForks({
+    owner: user,
+    repo: repo,
+    sort: "stargazers",
+    per_page: 100, // maximum allowed by GitHub
+    page: page_number
+  });
+  const onSuccess = (responseHeaders, responseData) => {
+    removeProgressBar();
+
+    if (isEmpty(responseData)) // repo has not been forked
+      return;
+
+    sortTable();
+
+    /* Pagination (beyond 100 forks).
+       GitHub's Link header may be lowercased or missing due to Octokit version.
+       We handle both `link` and `Link` keys for robustness.
+       For massive volumes (>100k forks), this recursion plus fork-of-fork expansion
+       creates thousands of pages. The throttling plugin retries on secondary rate
+       limits, but UI previously hung because allRequestsAreDone required
+       TOTAL_API_CALLS >= TOTAL_FORKS. With ONGOING-only completion, we still
+       correctly chain pages: next page is queued synchronously inside success
+       before finally() decrements current ONGOING, so ONGOING never hits 0
+       prematurely while pagination continues.
+    */
+    const link_header = responseHeaders["link"] || responseHeaders["Link"] || responseHeaders.link;
+    if (link_header) {
+      let contains_next_page = link_header.indexOf('>; rel="next"') !== -1 || link_header.includes('rel="next"');
+      if (contains_next_page) {
+        request_fork_page(page_number + 1, user, repo, defaultBranch);
+      }
+    }
+
+    update_table_data(responseData, user, repo, defaultBranch);
+  };
+  const onFailure = () => displayConditionalErrorMsg();
+  send(requestPromise, onSuccess, onFailure);
+}
+
+/** Updates header with Queried Repo info, and initiates forks scan. */
+function initial_request(user, repo) {
+  const requestPromise = () => octokit.repos.get({
+    owner: user,
+    repo: repo
+  });
+  const onSuccess = (responseHeaders, responseData) => {
+    if (isEmpty(responseData))
+      return;
+
+    const onlyDate = getOnlyDate(responseData.pushed_at);
+    REPO_DATE = new Date(onlyDate);
+    TOTAL_FORKS = responseData.forks_count;
+
+    let html_txt = '<b>Queried repository</b>:&nbsp;&nbsp;&nbsp;';
+    html_txt += getRepoCol(responseData.full_name, true);
+    html_txt += UF_TABLE_SEPARATOR + getStarCol(responseData.stargazers_count);
+    html_txt += UF_TABLE_SEPARATOR + getForkCol(TOTAL_FORKS);
+    html_txt += UF_TABLE_SEPARATOR + getWatchCol(responseData.subscribers_count);
+    html_txt += UF_TABLE_SEPARATOR + getDateCol(onlyDate);
+
+    /* Warning the user if he's not scanning from the root. */
+    if (responseData.source) { // guarantees both 'source' and 'parent' are present
+      html_txt += `<p class="mt-2">`;
+
+      const source = responseData.source.full_name;
+      html_txt += getForkButtonLink("Source", source);
+
+      /* If at least 2nd level fork from source. */
+      const parent = responseData.parent.full_name;
+      if (parent !== source) {
+        html_txt += UF_TABLE_SEPARATOR;
+        html_txt += getForkButtonLink("Parent", parent);
+      }
+
+      html_txt += "</p>"
+    }
+
+    setHeader(html_txt);
+
+    if (TOTAL_FORKS > 0) {
+      request_fork_page(1, user, repo, responseData.default_branch);
+    } else {
+      setMsg(UF_MSG_NO_FORKS);
+      enableQueryFields();
+    }
+  };
+  const onFailure = () => displayConditionalErrorMsg();
+  send(requestPromise, onSuccess, onFailure);
+}
+
+/** Extracts and sanitizes 'user' and 'repo' values from potential inputs. */
+function parse_query(queryString) {
+  const shorthand = /^(?<user>[\w.-]+)\/(?<repo>[\w.-]+)$/;
+  const shorthandMatch = shorthand.exec(queryString);
+
+  if (shorthandMatch) { // we are dealing with "user/repo" input format
+    const {user, repo} = shorthandMatch.groups;
+    return {user, repo};
+  }
+
+  let pathname;
+  try {
+    pathname = new URL(queryString).pathname;
+  } catch {
+    return null;
+  }
+
+  const values = pathname.split('/').filter(s => s.length > 0);
+  if (values.length < 2)
+    return null;
+
+  const [user, repo] = values;
+  return {user, repo};
+}
+
+
+function initiate_search() {
+  /* Checking if search is allowed. */
+  if (searchNotAllowed())
+    return; // abort
+
+  clear_old_data();
+
+  let queryString = getQueryOrDefault("payne911/PieMenu");
+  const queryValues = parse_query(queryString);
+
+  if (!queryValues) {
+    setMsg('Please enter a valid query: it should contain two strings separated by a "/", or the full URL to a GitHub repo');
+    ga_faultyQuery(queryString);
+    return; // abort
+  }
+
+  const {user, repo} = queryValues;
+
+  setUpOctokitWithLatestToken();
+
+  setQuery(`${user}/${repo}`);
+  setQueryFieldsAsLoading();
+  hideFilterContainer();
+  setMsg(UF_MSG_SCANNING);
+
+  if (history.replaceState) {
+    history.replaceState({}, document.title, `?repo=${user}/${repo}`); // replace current URL param
+  }
+  ga_searchQuery(user, repo);
+  initial_request(user, repo);
+}
+
+/* Object used for REST calls. */
+const MyOctokit = Octokit.plugin(throttling);
+let octokit;
+setUpOctokitWithLatestToken();
+function setUpOctokitWithLatestToken() {
+  if (!shouldReconstructOctokit)
+    return;
+
+  octokit = new MyOctokit({
+    auth: LOCAL_STORAGE_GITHUB_ACCESS_TOKEN,
+    userAgent: 'useful-forks',
+    // https://github.com/octokit/plugin-throttling.js#usage
+    throttle: {
+      onRateLimit: (retryAfter, options, octokit, retryCount) => {
+        onRateLimitExceeded();
+        if (retryCount < 1) { // only retries once
+          return true; // true = retry
+        }
+      },
+      onSecondaryRateLimit: (retryAfter, options, octokit) => { // slow down
+        setMsg(UF_MSG_SLOWER);
+
+        // setup the progress bar
+        if (!getJq_ProgressBar()[0]) { // only if it isn't displayed yet
+          JQ_ID_MSG.after(`<progress class="progress is-small" value="${retryAfter}" max="${retryAfter}">some%</progress>`);
+          getJq_ProgressBar().animate(
+            {value: "0"}, // target for the "value" attribute
+            {
+                duration: 1000 * retryAfter, // in ms
+                easing: 'linear',
+                done: function() {
+                    getJq_ProgressBar().removeAttr('value'); // for moving bar
+                }
+            }
+          );
+        }
+
+        return true; // true = automatically retry after given amount of seconds (usually 1 min)
+      }
+    }
+  });
+
+  shouldReconstructOctokit = false;
+}
+
+
+/* Setting up query triggers. */
+JQ_SEARCH_BTN.click(event => {
+  event.preventDefault();
+  initiate_search();
+});
+JQ_REPO_FIELD.keyup(event => {
+  if (event.keyCode === 13) { // 'ENTER'
+    initiate_search();
+  }
+});
+
+/* Trigger an automatic query is a value was extracted from the URL Param. */
+if (JQ_REPO_FIELD.val()) {
+  JQ_SEARCH_BTN.click();
+}
+
+/* User updated the filters, so we refresh the table. */
+JQ_FILTER_FIELD.on('input', update_filter);
+
+// Initialize sortable headers once DOM is ready (supports #48)
+if (typeof setupSortableHeaders === 'function') {
+  try { setupSortableHeaders(); } catch(e) {}
+} else {
+  // if called before function hoisted, defer
+  setTimeout(function(){
+    if (typeof setupSortableHeaders === 'function') {
+      try { setupSortableHeaders(); } catch(e) {}
+    }
+  }, 300);
+}
+

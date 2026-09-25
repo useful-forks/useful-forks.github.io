@@ -1,0 +1,139 @@
+/*
+	MIT License http://www.opensource.org/licenses/mit-license.php
+	Author Tobias Koppers @sokra
+*/
+
+"use strict";
+
+const { compareIds } = require("../util/comparators");
+
+/** @import Chunk, { ChunkId } from "../Chunk" */
+/** @import Compiler from "../Compiler" */
+/** @import Module from "../Module" */
+
+const PLUGIN_NAME = "FlagIncludedChunksPlugin";
+
+class FlagIncludedChunksPlugin {
+	/**
+	 * Applies the plugin by registering its hooks on the compiler.
+	 * @param {Compiler} compiler the compiler instance
+	 * @returns {void}
+	 */
+	apply(compiler) {
+		compiler.hooks.compilation.tap(PLUGIN_NAME, (compilation) => {
+			compilation.hooks.optimizeChunkIds.tap(PLUGIN_NAME, (chunks) => {
+				const chunkGraph = compilation.chunkGraph;
+
+				// Two bit integers per module, within v8's 2^31 SMI range. The bits are
+				// spread so 2^31 falls to about one module in `modulesCount` and 2^0 to
+				// any module missing a better one, which gives the modulo below.
+				/** @type {WeakMap<Module, number>} */
+				const moduleBits = new WeakMap();
+				const modulesCount = compilation.modules.size;
+
+				// precalculate the modulo values for each bit
+				const modulo = 1 / (1 / modulesCount) ** (1 / 31);
+				/** @type {number[]} */
+				const modulos = Array.from(
+					{ length: 31 },
+					/**
+					 * Handles the callback logic for this hook.
+					 * @param {number} x x
+					 * @param {number} i i
+					 * @returns {number} result
+					 */
+					(x, i) => (modulo ** i) | 0
+				);
+
+				// iterate all modules to generate bit values
+				let i = 0;
+				for (const module of compilation.modules) {
+					let bit = 30;
+					while (i % modulos[bit] !== 0) {
+						bit--;
+					}
+					moduleBits.set(module, 1 << bit);
+					i++;
+				}
+
+				// iterate all chunks to generate bitmaps
+				/** @type {WeakMap<Chunk, number>} */
+				const chunkModulesHash = new WeakMap();
+				for (const chunk of chunks) {
+					let hash = 0;
+					for (const module of chunkGraph.getChunkModulesIterable(chunk)) {
+						hash |= /** @type {number} */ (moduleBits.get(module));
+					}
+					chunkModulesHash.set(chunk, hash);
+				}
+
+				// Chunks that received an included id and need their `ids` re-sorted
+				// once, after all pushes — instead of re-sorting on every push
+				// inside the nested loop below (https://github.com/webpack/webpack/issues/18837).
+				/** @type {Set<Chunk>} */
+				const chunksWithIncludedIds = new Set();
+
+				for (const chunkA of chunks) {
+					const chunkAHash =
+						/** @type {number} */
+						(chunkModulesHash.get(chunkA));
+					const chunkAModulesCount = chunkGraph.getNumberOfChunkModules(chunkA);
+					if (chunkAModulesCount === 0) continue;
+					/** @type {undefined | Module} */
+					let bestModule;
+					for (const module of chunkGraph.getChunkModulesIterable(chunkA)) {
+						if (
+							bestModule === undefined ||
+							chunkGraph.getNumberOfModuleChunks(bestModule) >
+								chunkGraph.getNumberOfModuleChunks(module)
+						) {
+							bestModule = module;
+						}
+					}
+					loopB: for (const chunkB of chunkGraph.getModuleChunksIterable(
+						/** @type {Module} */ (bestModule)
+					)) {
+						// as we iterate the same iterables twice
+						// skip if we find ourselves
+						if (chunkA === chunkB) continue;
+
+						const chunkBModulesCount =
+							chunkGraph.getNumberOfChunkModules(chunkB);
+
+						// ids for empty chunks are not included
+						if (chunkBModulesCount === 0) continue;
+
+						// instead of swapping A and B just bail
+						// as we loop twice the current A will be B and B then A
+						if (chunkAModulesCount > chunkBModulesCount) continue;
+
+						// is chunkA in chunkB?
+
+						// we do a cheap check for the hash value
+						const chunkBHash =
+							/** @type {number} */
+							(chunkModulesHash.get(chunkB));
+						if ((chunkBHash & chunkAHash) !== chunkAHash) continue;
+
+						// compare all modules
+						for (const m of chunkGraph.getChunkModulesIterable(chunkA)) {
+							if (!chunkGraph.isModuleInChunk(m, chunkB)) continue loopB;
+						}
+
+						/** @type {ChunkId[]} */
+						(chunkB.ids).push(/** @type {ChunkId} */ (chunkA.id));
+						chunksWithIncludedIds.add(chunkB);
+					}
+				}
+
+				// Sort each affected chunk's ids once (https://github.com/webpack/webpack/issues/18837).
+				for (const chunk of chunksWithIncludedIds) {
+					/** @type {ChunkId[]} */
+					(chunk.ids).sort(compareIds);
+				}
+			});
+		});
+	}
+}
+
+module.exports = FlagIncludedChunksPlugin;
