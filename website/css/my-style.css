@@ -112,26 +112,29 @@ html body strong, html body b {
   padding-top: 3px;
 }
 
-table {
+/* Scoped to the table id: Bulma loads after this file, so the unscoped
+   `table` rule loses to Bulma's `.table { background-color: #fff }` and even
+   rows render white in dark mode while odd rows get the dark var. */
+#useful_forks_table {
   margin: 0 auto;
   background-color: var(--table-bg);
   color: var(--fg);
 }
-tr:nth-child(odd) {
+#useful_forks_table tr:nth-child(odd) {
   background-color: var(--table-odd);
 }
-tr:hover {
+#useful_forks_table tr:hover {
   background-color: var(--table-hover);
 }
-th {
+#useful_forks_table th {
   background-color: var(--table-bg);
   color: var(--fg);
   border-color: var(--border);
 }
-th.sortable:hover {
+#useful_forks_table th.sortable:hover {
   background-color: var(--table-hover);
 }
-th.sortable.is-sorted {
+#useful_forks_table th.sortable.is-sorted {
   background-color: var(--table-odd);
 }
 
