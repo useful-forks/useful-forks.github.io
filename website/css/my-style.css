@@ -151,10 +151,10 @@ th.sortable.is-sorted {
 
 /* Responsive table – Fix #19: small screens get weird table */
 :root {
-  --sticky-bg: #fdf0d5;      /* warm tint for the column headers (light) */
-  --th-hover-bg: #f7e3b0;
+  --sticky-bg: #e8e8e8;      /* gray-ish tint for the column headers (light) */
+  --th-hover-bg: #dcdcdc;
   --th-hover-fg: #000;
-  --th-sorted-bg: #f2d48b;
+  --th-sorted-bg: #cfcfcf;
   --th-sorted-fg: #111;
 }
 @media (prefers-color-scheme: dark) {
@@ -168,6 +168,10 @@ th.sortable.is-sorted {
 }
 body.dark {
   --sticky-bg: #1e1e1e;
+  --th-hover-bg: #2e2e2e;
+  --th-hover-fg: #f5f5f5;
+  --th-sorted-bg: #3a3a3a;
+  --th-sorted-fg: #f5f5f5;
 }
 #useful_forks_wrapper {
   width: 100%;
