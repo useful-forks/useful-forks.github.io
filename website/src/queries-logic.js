@@ -459,9 +459,9 @@ function update_table_data(responseData, user, repo, parentDefaultBranch) {
     if (is_duplicate_repo(currFork.full_name))
       continue; // abort because repo is already listed
 
-    // Mark as seen synchronously to prevent race conditions with concurrent async requests
-    // Normalized add; will be kept even if not useful to avoid re-scanning, but persisted correctly
-    SEEN_FORKS.add(normFull);
+    // NOTE: the fork is marked as seen only once its compare/processing completes
+    // (in onSuccess below), NOT here. Marking it here made every fork self-skip
+    // via is_duplicate_repo in onSuccess, rendering zero rows.
 
     let datum = {
       'name': currFork.full_name,
@@ -489,6 +489,9 @@ function update_table_data(responseData, user, repo, parentDefaultBranch) {
         if (is_duplicate_repo(datum['name'])) {
           return;
         }
+        // Mark as seen only now that processing completed: adding it before the
+        // async compare ran made this fork self-skip in the checks above.
+        seenAdd(normDatum);
         datum['ahead_by'] = responseData.ahead_by;
         datum['ahead_url'] = responseData.html_url;
         datum['behind_by'] = responseData.behind_by;
@@ -529,8 +532,8 @@ function update_table_data(responseData, user, repo, parentDefaultBranch) {
         };
         send(releasesPromise, onReleasesSuccess, onReleasesFailure);
       } else {
-        // Even if not useful (no commits ahead), we keep it marked as seen to avoid re-scanning forks
-        // but we allow SEEN_FORKS to remain (already added)
+        // Even if not useful (no commits ahead), mark as seen to avoid re-scanning forks.
+        seenAdd(normFull);
       }
     };
     const onFailure = () => { }; // do nothing
