@@ -2,14 +2,15 @@
   "manifest_version": 3,
   "name": "Useful Forks",
   "version": "2.2.5",
-  "data_collection_permissions": {
-    "required": [],
-    "optional": []
-  },
   "description": "To list GitHub forks ordered by stars, with additional information and automatic filtering of irrelevant ones.",
   "browser_specific_settings": {
     "gecko": {
-      "id": "useful-forks@useful-forks.github.io"
+      "id": "useful-forks@useful-forks.github.io",
+      "data_collection_permissions": {
+        "required": [
+          "none"
+        ]
+      }
     }
   },
   "icons": {
