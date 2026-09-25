@@ -114,7 +114,9 @@ html body strong, html body b {
   margin-bottom: 20px;
 }
 #useful_forks_msg.box.has-background-info-light {
-  background-color: var(--msg-bg);
+  /* Bulma's .has-background-info-light carries !important – match it or the
+     banner stays white in dark mode */
+  background-color: var(--msg-bg) !important;
   color: var(--msg-fg);
   border-color: var(--msg-border);
 }
@@ -162,8 +164,10 @@ body .input, body .textarea, body .select select {
   color: var(--fg);
   border-color: var(--border);
 }
-.input::placeholder,
-.textarea::placeholder {
+/* Bulma's .input::placeholder ties this specificity and loads later – scope up
+   or filter/search placeholders stay near-invisible in dark mode */
+body .input::placeholder,
+body .textarea::placeholder {
   color: var(--placeholder-fg);
   opacity: 1; /* override the browser's default placeholder dimming */
 }
@@ -208,8 +212,9 @@ body .input, body .textarea, body .select select {
   }
 }
 
-#useful_forks_msg.box.has-background-info-light,
-.title, h1 {
+/* Bulma's .title (#363636) ties unscoped specificity and loads later – scope up */
+html body .title,
+html body h1 {
   color: var(--fg);
 }
 a {
@@ -418,5 +423,63 @@ body.dark {
     max-width: 160px;
     overflow: hidden;
     text-overflow: ellipsis;
+}
+}
+/* ---- PR91 feedback round 2: remaining dark-mode contrast fixes ---- */
+
+/* .button.is-dark.is-outlined (search + CSV buttons): Bulma gives them dark
+   text on transparent – invisible on a dark page. Flip to light text/border. */
+[data-theme="dark"] .button.is-dark.is-outlined {
+  border-color: var(--fg);
+  color: var(--fg);
+}
+[data-theme="dark"] .button.is-dark.is-outlined:hover {
+  background-color: var(--fg);
+  border-color: var(--fg);
+  color: #121212;
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-theme="auto"] .button.is-dark.is-outlined {
+    border-color: var(--fg);
+    color: var(--fg);
+  }
+  :root[data-theme="auto"] .button.is-dark.is-outlined:hover {
+    background-color: var(--fg);
+    border-color: var(--fg);
+    color: #121212;
+  }
+}
+
+/* Save buttons (.button.is-uf-orange): white on orange is ~2:1 – use near-black
+   text on the orange background in dark mode. */
+[data-theme="dark"] .button.is-uf-orange,
+[data-theme="dark"] .button.is-uf-orange:hover {
+  color: #1a1a1a;
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-theme="auto"] .button.is-uf-orange,
+  :root[data-theme="auto"] .button.is-uf-orange:hover {
+    color: #1a1a1a;
+  }
+}
+
+/* Table row octicons (fork/star/eye/history SVGs) default to black fill –
+   invert to light in dark mode so they read as "reverted". */
+[data-theme="dark"] .octicon {
+  fill: var(--fg);
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-theme="auto"] .octicon {
+    fill: var(--fg);
+  }
+}
+
+/* CSV download icon is dark artwork – invert it in dark mode too. */
+[data-theme="dark"] #uf_csv_export_btn img {
+  filter: invert(1);
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-theme="auto"] #uf_csv_export_btn img {
+    filter: invert(1);
   }
 }
