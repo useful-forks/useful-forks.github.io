@@ -19,6 +19,9 @@ const mapTable = {
   'p': 'pushed_at',
   's': 'stars',
   'f': 'forks',
+  'r': 'releases_count',
+  'release': 'releases_count',
+  'releases': 'releases_count',
 };
 
 /* Variables that should be cleared for every new query (defaults are set in "clear_old_data"). */
@@ -129,7 +132,7 @@ function getRowValue(row, col) {
   if (!td) return "";
   let attr = td.getAttribute("value");
   let raw = attr === null ? "" : attr;
-  if ([1,2,3,4].includes(col)) {
+  if ([1,2,3,4,6].includes(col)) {
     let n = Number(raw);
     return isNaN(n) ? -1 : n;
   }
@@ -143,6 +146,21 @@ function getRowValue(row, col) {
   return raw.toString().toLowerCase();
 }
 
+const SVG_TAG = '<svg class="octicon octicon-tag v-align-text-bottom" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" role="img"><title>Releases</title><path fill-rule="evenodd" d="M2.5 2.75a1 1 0 000 1.5l8.75 8.75a1 1 0 001.5 0l2-2a1 1 0 000-1.5l-8.75-8.75a1 1 0 00-1.5 0l-2 2zM5 6a1 1 0 100-2 1 1 0 000 2z"></path></svg>';
+
+function release_badge(count, url) {
+  if (!count || count < 1) return '';
+  const label = count === 1 ? '1 release' : `${count} releases`;
+  return `
+  <a href="${url}" target="_blank" rel="noopener noreferrer" title="This fork has ${label}">
+    ${SVG_TAG} ${label}
+  </a>`;
+}
+
+function getReleaseCol(count, url) {
+  return release_badge(count, url);
+}
+
 function getTdValue(rows, index, col) {
   // support both signatures for backward compat
   if (rows && rows.length === undefined && rows.getElementsByTagName) {
@@ -150,8 +168,8 @@ function getTdValue(rows, index, col) {
     return getRowValue(rows, index);
   }
   let raw = getTdRawValue(rows, index, col);
-  // numeric columns: 1,2,3,4
-  if ([1,2,3,4].includes(col)) {
+  // numeric columns: 1,2,3,4,6
+  if ([1,2,3,4,6].includes(col)) {
     let n = Number(raw);
     return isNaN(n) ? -1 : n;
   }
@@ -248,7 +266,7 @@ function updateSortIndicators(col, dir) {
         baseText = $th.text().replace(/[\s▲▼]+$/g,'').trim();
         $th.attr('data-base', baseText);
       }
-      if (c === col && !isNaN(c) && [0,1,2,3,4,5].includes(c)) {
+      if (c === col && !isNaN(c) && [0,1,2,3,4,5,6].includes(c)) {
         $th.html('').append(document.createTextNode(baseText + ' ')).append(
           $('<span>', {class: 'sort-arrow', text: dir === 'desc' ? '▼' : '▲', 'aria-hidden': 'true'}));
         $th.addClass('is-sorted');
@@ -256,7 +274,7 @@ function updateSortIndicators(col, dir) {
         $th.attr('tabindex', '0');
         $th.attr('role', 'columnheader');
       } else {
-        if ([0,1,2,3,4,5].includes(c)) {
+        if ([0,1,2,3,4,5,6].includes(c)) {
           $th.text(baseText);
           $th.removeClass('is-sorted');
           $th.removeAttr('aria-sort');
@@ -435,6 +453,9 @@ function update_table_data(responseData, user, repo, parentDefaultBranch) {
       'name': currFork.full_name,
       'stars': currFork.stargazers_count,
       'forks': currFork.forks_count,
+      'releases_count': 0,
+      'has_releases': false,
+      'releases_url': `https://github.com/${currFork.full_name}/releases`,
     };
 
     /* Commits diff data (ahead/behind). */
@@ -451,10 +472,40 @@ function update_table_data(responseData, user, repo, parentDefaultBranch) {
         datum['behind_by'] = responseData.behind_by;
         datum['behind_url'] = getBehindUrl(responseData.html_url);
         datum['pushed_at'] = getOnlyDate(currFork.pushed_at);
-        TABLE_DATA.push(datum);
-        if (TABLE_DATA.length > 1) showFilterContainer();
-        
-        update_table_trying_use_filter();
+
+        // Issue #75: check if fork has releases (compiled binaries).
+        // With per_page=1 the Link header's rel="last" page number equals the
+        // total release count, so we get the real amount without fetching pages.
+        const getReleasesCount = (relHeaders, relData) => {
+          const link = relHeaders && (relHeaders.link || relHeaders.Link);
+          if (link) {
+            const last = link.match(/<[^>]*[?&]page=(\d+)[^>]*>\s*;\s*rel="last"/);
+            if (last) return parseInt(last[1], 10);
+          }
+          return relData ? relData.length : 0;
+        };
+        const releasesPromise = () => octokit.repos.listReleases({
+          owner: currFork.owner.login,
+          repo: currFork.name,
+          per_page: 1
+        });
+        const onReleasesSuccess = (relHeaders, relData) => {
+          const count = getReleasesCount(relHeaders, relData);
+          if (count > 0) {
+            datum['has_releases'] = true;
+            datum['releases_count'] = count;
+          }
+          TABLE_DATA.push(datum);
+          if (TABLE_DATA.length > 1) showFilterContainer();
+          update_table_trying_use_filter();
+        };
+        const onReleasesFailure = () => {
+          // Still push even if releases check fails (e.g., empty or 404)
+          TABLE_DATA.push(datum);
+          if (TABLE_DATA.length > 1) showFilterContainer();
+          update_table_trying_use_filter();
+        };
+        send(releasesPromise, onReleasesSuccess, onReleasesFailure);
       }
     };
     const onFailure = () => { }; // do nothing
@@ -486,14 +537,15 @@ function update_filter() {
 
 /**
  * Rewrites the table with the specified data.
- * @param {Array} data - Array of objects with the following keys: name, stars, forks, ahead_by, ahead_url, behind_by, behind_url, pushed_at
+ * @param {Array} data - Array of objects with the following keys: name, stars, forks, ahead_by, ahead_url, behind_by, behind_url, pushed_at, releases_count, has_releases, releases_url
  */
 function update_table(data) {
   clearTable();
   let table_body = getTableBody();
   for (const currFork of data) {
-    const { name, stars, forks, ahead_by, ahead_url, behind_by, behind_url, pushed_at } = currFork;
+    const { name, stars, forks, ahead_by, ahead_url, behind_by, behind_url, pushed_at, releases_count, has_releases, releases_url } = currFork;
     const date_txt = compareDates(pushed_at, getDateCol(pushed_at));
+    const releases_txt = getReleaseCol(releases_count, releases_url);
 
     const NEW_ROW = $('<tr>', { id: extract_username_from_fork(name), class: "useful_forks_repo" });
     NEW_ROW.append(
@@ -502,7 +554,8 @@ function update_table(data) {
       $('<td>').html(getForkCol(forks)).attr("value", forks),
       $('<td>', { class: "uf_badge" }).html(ahead_badge(ahead_by, ahead_url)).attr("value", ahead_by),
       $('<td>', { class: "uf_badge" }).html(behind_badge(behind_by, behind_url)).attr("value", behind_by),
-      $('<td>').html(date_txt).attr("value", pushed_at)
+      $('<td>').html(date_txt).attr("value", pushed_at),
+      $('<td>').html(releases_txt).attr("value", releases_count || 0)
     );
     table_body.append(NEW_ROW);
   }

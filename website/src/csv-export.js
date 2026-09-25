@@ -42,8 +42,8 @@ function downloadCsv() {
   const colDelim = '","';
   const rowDelim = '"\r\n"';
 
-  // Manually adding headers
-  let headers = ["Repo", "URL", "Stars", "Forks", "Ahead", "Behind", "Last Push"];
+  // Manually adding headers (including Releases for #75)
+  let headers = ["Repo", "URL", "Stars", "Forks", "Ahead", "Behind", "Last Push", "Releases"];
   let csv = '"' + headers.join(colDelim);
   csv += rowDelim;
 
