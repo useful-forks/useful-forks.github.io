@@ -14,6 +14,8 @@
   --msg-bg: #eff5fb;
   --msg-fg: #296fa8;
   --msg-border: #b8d8f0;
+  --muted-fg: #6b6b6b;       /* secondary text: .help, placeholders */
+  --placeholder-fg: #8a8a8a;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -30,6 +32,8 @@
     --msg-bg: #1a2a3a;
     --msg-fg: #cde4ff;
     --msg-border: #2a4a6a;
+    --muted-fg: #b0b0b0;
+    --placeholder-fg: #a3a3a3;
   }
 }
 
@@ -45,6 +49,8 @@
   --msg-bg: #1a2a3a;
   --msg-fg: #cde4ff;
   --msg-border: #2a4a6a;
+  --muted-fg: #b0b0b0;
+  --placeholder-fg: #a3a3a3;
   color-scheme: dark;
 }
 [data-theme="light"] {
@@ -59,6 +65,8 @@
   --msg-bg: #eff5fb;
   --msg-fg: #296fa8;
   --msg-border: #b8d8f0;
+  --muted-fg: #6b6b6b;
+  --placeholder-fg: #8a8a8a;
   color-scheme: light;
 }
 [data-theme="auto"] {
@@ -86,8 +94,12 @@
   color: #fff;
 }
 
-body {
+/* html scope: beats Bulma's body{color/background-color} which loads later */
+html body {
   background: var(--bg);
+  color: var(--fg);
+}
+html body strong, html body b {
   color: var(--fg);
 }
 
@@ -143,25 +155,61 @@ th.sortable.is-sorted {
   background-color: var(--table-odd);
 }
 
-.input, .textarea, .select select {
+/* body scope: Bulma loads after this file with equal specificity, so unscoped
+   rules lose and inputs stay white in dark mode */
+body .input, body .textarea, body .select select {
   background-color: var(--input-bg);
   color: var(--fg);
   border-color: var(--border);
 }
-.input::placeholder {
-  color: #888;
+.input::placeholder,
+.textarea::placeholder {
+  color: var(--placeholder-fg);
+  opacity: 1; /* override the browser's default placeholder dimming */
 }
 
-.modal-card-head, .modal-card-body, .modal-card-foot {
+/* Bulma loads after this file, so these need the extra .modal-card scope to win.
+   Without it, Bulma's white modal-card-* backgrounds override the dark vars. */
+.modal-card .modal-card-head,
+.modal-card .modal-card-body,
+.modal-card .modal-card-foot {
   background-color: var(--table-bg);
   color: var(--fg);
+  border-color: var(--border);
 }
-.modal-card-title {
+.modal-card .modal-card-title {
   color: var(--fg);
+}
+/* Bulma's .label (#363636) / .help (#7a7a7a) are unreadably dim on a dark modal */
+#uf_settings_popup .label,
+#useful_forks_token_popup .label {
+  color: var(--fg);
+}
+#uf_settings_popup .help,
+#useful_forks_token_popup .help {
+  color: var(--muted-fg);
+}
+#uf_settings_popup .help strong,
+#useful_forks_token_popup .help strong {
+  color: var(--fg);
+}
+
+/* footer mail button stays readable in dark mode */
+[data-theme="dark"] .footer .button.is-white {
+  background-color: var(--table-odd);
+  border-color: var(--border);
+  color: var(--fg);
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-theme="auto"] .footer .button.is-white {
+    background-color: var(--table-odd);
+    border-color: var(--border);
+    color: var(--fg);
+  }
 }
 
 #useful_forks_msg.box.has-background-info-light,
-.title, h1, strong, b {
+.title, h1 {
   color: var(--fg);
 }
 a {
@@ -176,10 +224,10 @@ a {
   color: #a8c7fa;
 }
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme]) a {
+  :root[data-theme="auto"] a {
     color: #8ab4f8;
   }
-  :root:not([data-theme]) a:hover {
+  :root[data-theme="auto"] a:hover {
     color: #a8c7fa;
   }
 }
@@ -212,11 +260,11 @@ a {
 }
 
 @media screen and (max-width: 1023px) {
-  .navbar-menu {
+  .navbar .navbar-menu {
     background-color: var(--table-odd);
     padding: 0;
   }
-  .navbar-menu .navbar-item:hover {
+  .navbar .navbar-menu .navbar-item:hover {
     background-color: #4a4a4a;
     color: #f8f8f8;
   }
