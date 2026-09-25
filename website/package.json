@@ -14,7 +14,7 @@
     "@octokit/plugin-throttling": "^9.4.0"
   },
   "devDependencies": {
-    "webpack": "^5.94.0",
+    "webpack": "^5.111.1",
     "webpack-cli": "^5.0.0"
   },
   "repository": {
