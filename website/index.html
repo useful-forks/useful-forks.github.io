@@ -183,6 +183,24 @@
           </div>
         </div>
 
+        <!-- Search non-fork copies (opt-in) – PR89 fix -->
+        <div class="field is-horizontal">
+          <div class="field-label is-normal">
+            <label class="label">Similar copies:</label>
+          </div>
+          <div class="field-body">
+            <div class="field">
+              <div class="control">
+                <label class="checkbox">
+                  <input type="checkbox" id="uf_settings_copies">
+                  Search non-fork copies (opt-in, capped)
+                </label>
+              </div>
+              <p class="help mb-2"><strong>Default is unchecked.</strong> When enabled, searches GitHub for repos with similar name (max 5, per_page 5, >5 stars or useful). Opt-in to avoid quota blow-up.</p>
+            </div>
+          </div>
+        </div>
+
       </section>
       <footer class="modal-card-foot">
         <a class="button is-uf-orange is-large is-fullwidth"
