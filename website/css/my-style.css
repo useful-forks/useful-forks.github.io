@@ -18,25 +18,6 @@
   --placeholder-fg: #8a8a8a;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    color-scheme: dark light;
-    --bg: #121212;
-    --fg: #e0e0e0;
-    --border: #444;
-    --table-bg: #1e1e1e;
-    --table-odd: #2a2a2a;
-    --table-hover: #3a3a3a;
-    --input-bg: #2b2b2b;
-    --footer-bg: #121212;
-    --msg-bg: #1a2a3a;
-    --msg-fg: #cde4ff;
-    --msg-border: #2a4a6a;
-    --muted-fg: #b0b0b0;
-    --placeholder-fg: #a3a3a3;
-  }
-}
-
 [data-theme="dark"] {
   --bg: #121212;
   --fg: #e0e0e0;
@@ -68,9 +49,6 @@
   --muted-fg: #6b6b6b;
   --placeholder-fg: #8a8a8a;
   color-scheme: light;
-}
-[data-theme="auto"] {
-  /* relies on @media prefers-color-scheme */
 }
 
 .button.is-uf-orange {
@@ -204,13 +182,6 @@ body .textarea::placeholder {
   border-color: var(--border);
   color: var(--fg);
 }
-@media (prefers-color-scheme: dark) {
-  :root[data-theme="auto"] .footer .button.is-white {
-    background-color: var(--table-odd);
-    border-color: var(--border);
-    color: var(--fg);
-  }
-}
 
 /* Bulma's .title (#363636) ties unscoped specificity and loads later – scope up */
 html body .title,
@@ -227,14 +198,6 @@ a {
 [data-theme="dark"] a:hover,
 :root[data-theme="dark"] a:hover {
   color: #a8c7fa;
-}
-@media (prefers-color-scheme: dark) {
-  :root[data-theme="auto"] a {
-    color: #8ab4f8;
-  }
-  :root[data-theme="auto"] a:hover {
-    color: #a8c7fa;
-  }
 }
 
 /* reduce badge brightness filter – keep readable */
@@ -336,7 +299,6 @@ th.sortable.is-sorted {
   color: var(--th-sorted-fg);
 }
 
-
 /* Responsive table – Fix #19: small screens get weird table */
 :root {
   --sticky-bg: #e8e8e8;      /* gray-ish tint for the column headers (light) */
@@ -344,15 +306,6 @@ th.sortable.is-sorted {
   --th-hover-fg: #000;
   --th-sorted-bg: #cfcfcf;
   --th-sorted-fg: #111;
-}
-@media (prefers-color-scheme: dark) {
-  :root {
-    --sticky-bg: #1e1e1e;
-    --th-hover-bg: #2e2e2e;
-    --th-hover-fg: #f5f5f5;
-    --th-sorted-bg: #3a3a3a;
-    --th-sorted-fg: #f5f5f5;
-  }
 }
 body.dark {
   --sticky-bg: #1e1e1e;
@@ -438,17 +391,6 @@ body.dark {
   border-color: var(--fg);
   color: #121212;
 }
-@media (prefers-color-scheme: dark) {
-  :root[data-theme="auto"] .button.is-dark.is-outlined {
-    border-color: var(--fg);
-    color: var(--fg);
-  }
-  :root[data-theme="auto"] .button.is-dark.is-outlined:hover {
-    background-color: var(--fg);
-    border-color: var(--fg);
-    color: #121212;
-  }
-}
 
 /* Search input group (Bulma .field.has-addons): the repo input keeps Bulma's
    dark #363636 border while the Settings / Find buttons use the light --fg
@@ -460,14 +402,6 @@ body.dark {
   border-color: var(--fg);
   box-shadow: none;
 }
-@media (prefers-color-scheme: dark) {
-  :root[data-theme="auto"] .search-container .field.has-addons .input.is-dark,
-  :root[data-theme="auto"] .search-container .field.has-addons .input.is-dark:focus,
-  :root[data-theme="auto"] .search-container .field.has-addons .input.is-dark:active {
-    border-color: var(--fg);
-    box-shadow: none;
-  }
-}
 
 /* Save buttons (.button.is-uf-orange): white on orange is ~2:1 – use near-black
    text on the orange background in dark mode. */
@@ -475,30 +409,14 @@ body.dark {
 [data-theme="dark"] .button.is-uf-orange:hover {
   color: #1a1a1a;
 }
-@media (prefers-color-scheme: dark) {
-  :root[data-theme="auto"] .button.is-uf-orange,
-  :root[data-theme="auto"] .button.is-uf-orange:hover {
-    color: #1a1a1a;
-  }
-}
 
 /* Table row octicons (fork/star/eye/history SVGs) default to black fill –
    invert to light in dark mode so they read as "reverted". */
 [data-theme="dark"] .octicon {
   fill: var(--fg);
 }
-@media (prefers-color-scheme: dark) {
-  :root[data-theme="auto"] .octicon {
-    fill: var(--fg);
-  }
-}
 
 /* CSV download icon is dark artwork – invert it in dark mode too. */
 [data-theme="dark"] #uf_csv_export_btn img {
   filter: invert(1);
-}
-@media (prefers-color-scheme: dark) {
-  :root[data-theme="auto"] #uf_csv_export_btn img {
-    filter: invert(1);
-  }
 }

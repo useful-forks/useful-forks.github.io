@@ -1,73 +1,43 @@
-/* Dark theme toggle – Fix #34 – CSS vars + 3-state auto/light/dark */
+/* Theme toggle – Fix #34 – light/dark toggle, default light, choice kept in localStorage */
 const LOCAL_STORAGE_THEME = "useful-forks-theme";
-let UF_THEME = null;
 
 function applyTheme(theme) {
-  UF_THEME = theme;
+  const t = theme === 'dark' ? 'dark' : 'light';
   const html = document.documentElement;
   const body = document.body;
-  // normalize
-  const t = ['dark','light','auto'].includes(theme) ? theme : 'auto';
-  // set data-theme for CSS vars
-  if (t === 'auto') {
-    html.removeAttribute('data-theme');
-    if (body) body.removeAttribute('data-theme');
-    html.dataset.theme = 'auto'; // keep for JS but CSS falls back to @media
-  } else {
-    html.setAttribute('data-theme', t);
-    if (body) body.setAttribute('data-theme', t);
-  }
-  // legacy body.dark class for compat but now vars driven
+  html.setAttribute('data-theme', t);
   if (body) {
-    if (t === 'dark') body.classList.add('dark');
-    else if (t === 'light') body.classList.remove('dark');
-    else {
-      // auto: no class, rely on media query
-      body.classList.remove('dark');
-    }
+    body.setAttribute('data-theme', t);
+    body.classList.toggle('dark', t === 'dark');
   }
   const btn = document.getElementById('themeToggleBtn');
   if (btn) {
-    const label = t === 'dark' ? '☀️ Light' : t === 'light' ? '🌙 Dark' : '🌓 Auto';
-    btn.textContent = label;
-    btn.setAttribute('aria-label', `Theme: ${t}, click to toggle auto→dark→light`);
+    const other = t === 'dark' ? 'light' : 'dark';
+    btn.textContent = t === 'dark' ? '☀️ Light' : '🌙 Dark';
+    btn.setAttribute('aria-label', `Switch to ${other} theme`);
+    btn.setAttribute('title', `Switch to ${other} theme`);
   }
 }
 
 function getStoredTheme() {
-  let t = localStorage.getItem(LOCAL_STORAGE_THEME);
-  if (!t) return 'auto';
-  try { t = JSON.parse(t); } catch(e) {}
-  if (['dark','light','auto'].includes(t)) return t;
-  return 'auto';
+  try {
+    return localStorage.getItem(LOCAL_STORAGE_THEME) === 'dark' ? 'dark' : 'light';
+  } catch (e) {
+    return 'light';
+  }
 }
 
 function setStoredTheme(t) {
-  localStorage.setItem(LOCAL_STORAGE_THEME, JSON.stringify(t));
+  try { localStorage.setItem(LOCAL_STORAGE_THEME, t); } catch (e) {}
   applyTheme(t);
 }
 
 function toggleTheme() {
-  let curr = getStoredTheme();
-  let next = curr === 'auto' ? 'dark' : curr === 'dark' ? 'light' : 'auto';
-  setStoredTheme(next);
+  setStoredTheme(getStoredTheme() === 'dark' ? 'light' : 'dark');
 }
 
 function initTheme() {
-  let stored = getStoredTheme();
-  applyTheme(stored);
-  if (window.matchMedia) {
-    const mq = window.matchMedia('(prefers-color-scheme: dark)');
-    // modern addEventListener, fallback addListener
-    const handler = () => {
-      if (getStoredTheme() === 'auto') {
-        // force var recompute – no DOM hack needed, just re-apply to trigger
-        applyTheme('auto');
-      }
-    };
-    if (mq.addEventListener) mq.addEventListener('change', handler);
-    else if (mq.addListener) mq.addListener(handler);
-  }
+  applyTheme(getStoredTheme());
 }
 
 // init on load
