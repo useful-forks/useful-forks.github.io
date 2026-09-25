@@ -26,6 +26,10 @@ const mapTable = {
 
 /* Variables that should be cleared for every new query (defaults are set in "clear_old_data"). */
 let TABLE_DATA = [];
+let SEEN_FORKS = new Set();
+function normalizeRepoName(name){ return (name||"").trim().toLowerCase(); }
+function seenHas(name){ return SEEN_FORKS.has(normalizeRepoName(name)); }
+function seenAdd(name){ SEEN_FORKS.add(normalizeRepoName(name)); }
 let REPO_DATE;
 let TOTAL_FORKS;
 let RATE_LIMIT_EXCEEDED;
@@ -41,6 +45,7 @@ function clear_old_data() {
   clearMsg();
   removeProgressBar();
   TABLE_DATA = []; // clear the table data
+  SEEN_FORKS.clear();
   clearTable(); // clear the table DOM
   setApiCallsLabel(0);
   hideExportCsvBtn();
@@ -415,8 +420,10 @@ function update_table_trying_use_filter() {
 }
 
 function is_duplicate_repo(name) {
+  const norm = normalizeRepoName(name);
+  if (SEEN_FORKS.has(norm)) return true;
   for (const fork of TABLE_DATA) {
-    if (fork['name'] === name)
+    if (normalizeRepoName(fork['name']) === norm)
       return true;
   }
   return false;
@@ -446,8 +453,15 @@ function update_table_data(responseData, user, repo, parentDefaultBranch) {
       continue;
     }
 
+    const normFull = normalizeRepoName(currFork.full_name);
+    if (SEEN_FORKS.has(normFull))
+      continue; // abort because repo already seen (synchronous dedup normalized)
     if (is_duplicate_repo(currFork.full_name))
       continue; // abort because repo is already listed
+
+    // NOTE: the fork is marked as seen only once its compare/processing completes
+    // (in onSuccess below), NOT here. Marking it here made every fork self-skip
+    // via is_duplicate_repo in onSuccess, rendering zero rows.
 
     let datum = {
       'name': currFork.full_name,
@@ -467,6 +481,17 @@ function update_table_data(responseData, user, repo, parentDefaultBranch) {
     });
     const onSuccess = (responseHeaders, responseData) => {
       if (responseData.total_commits > 0) {
+        // Double-check duplicate before push (normalized) – avoid race push
+        const normDatum = normalizeRepoName(datum['name']);
+        if (TABLE_DATA.some(e=>normalizeRepoName(e['name'])===normDatum)) {
+          return;
+        }
+        if (is_duplicate_repo(datum['name'])) {
+          return;
+        }
+        // Mark as seen only now that processing completed: adding it before the
+        // async compare ran made this fork self-skip in the checks above.
+        seenAdd(normDatum);
         datum['ahead_by'] = responseData.ahead_by;
         datum['ahead_url'] = responseData.html_url;
         datum['behind_by'] = responseData.behind_by;
@@ -506,6 +531,9 @@ function update_table_data(responseData, user, repo, parentDefaultBranch) {
           update_table_trying_use_filter();
         };
         send(releasesPromise, onReleasesSuccess, onReleasesFailure);
+      } else {
+        // Even if not useful (no commits ahead), mark as seen to avoid re-scanning forks.
+        seenAdd(normFull);
       }
     };
     const onFailure = () => { }; // do nothing
