@@ -13,6 +13,22 @@ function closeSettingsDialog() {
 function saveSettingsBtnClicked() {
   saveCsvDisplay();
   closeSettingsDialog();
+  // Fix #60 – apply immediately instead of waiting for next query
+  // low-risk: only toggle CSV visibility, do NOT re-run updateBasedOnTable which re-sorts/filters and re-adds button with orphan handlers
+  try {
+    if (typeof updateCsvBtnVisibility === 'function') {
+      updateCsvBtnVisibility();
+    } else if (UF_SETTINGS_CSV_DISPLAY) {
+      if (typeof TABLE_DATA !== 'undefined' && TABLE_DATA.length > 0) {
+        displayCsvExportBtn();
+      }
+    } else {
+      if (typeof hideExportCsvBtn === 'function') hideExportCsvBtn();
+      else $('#'+EXPORT_DIV_ID).remove();
+    }
+  } catch(e) {
+    console.warn('CSV dynamic toggle failed', e);
+  }
 }
 
 
