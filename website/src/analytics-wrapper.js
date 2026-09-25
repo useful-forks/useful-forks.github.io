@@ -50,6 +50,9 @@ function ga_githubHeader() {
 function ga_chromeHeader() {
   dispatch('click', 'left-header-button', 'Chrome-Extension');
 }
+function ga_firefoxHeader() {
+  dispatch('click', 'left-header-button', 'Firefox-Add-on');
+}
 
 
 /* Access Token. */
