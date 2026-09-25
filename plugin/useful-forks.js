@@ -31,6 +31,25 @@ function createUsefulBtn() {
   return li;
 }
 
+function getForkButton() {
+  // Old GitHub layout (still served to signed-out users): the fork counter span.
+  // This must be checked FIRST: on signed-out pages [id="fork-button"] is the
+  // "sign in to fork" login link, not the fork counter.
+  const oldCounter = document.getElementById("repo-network-counter");
+  if (oldCounter) {
+    return oldCounter;
+  }
+  // New GitHub layout (signed-in users): the fork button itself.
+  return document.querySelector(
+    'ul li [data-testid="fork-button"], ul li [id="fork-button"]'
+  );
+}
+
+function getForksCount(forkBtn) {
+  const match = forkBtn.textContent.match(/[\d,]+/);
+  return match ? parseInt(match[0].replace(/,/g, ""), 10) : NaN;
+}
+
 function init() {
   // This is required for some cases like on Back/Forward navigation
   const oldLi = document.getElementById(UF_LI_ID);
@@ -38,13 +57,19 @@ function init() {
     oldLi.remove();
   }
 
-  const forkBtn = document.getElementById("repo-network-counter");
+  const forkBtn = getForkButton();
   if (forkBtn) { // sufficient to know the user is looking at a repository
-    const forksAmount = forkBtn.textContent;
-    if (forksAmount < 1) {
+    // Don't show the button if there are no forks (#57). Only hides when the
+    // count is positively known to be zero; shows the button when the count
+    // cannot be parsed (fail-open on unknown layouts).
+    const forksAmount = getForksCount(forkBtn);
+    if (!Number.isNaN(forksAmount) && forksAmount < 1) {
       return;
     }
     const parentLi = forkBtn.closest("li");
+    if (!parentLi) {
+      return;
+    }
     const newLi = createUsefulBtn();
     parentLi.parentNode.insertBefore(newLi, parentLi);
     setBtnUrl(); // this needs to happen after the btn is inserted in the DOM
