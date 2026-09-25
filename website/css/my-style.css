@@ -138,3 +138,102 @@ th.sortable.is-sorted {
   color: #777;
   margin-left: 3px;
 }
+/* Keep #48's hover/sorted affordances visible above the sticky header background */
+#useful_forks_table thead th.sortable:hover {
+  background-color: var(--th-hover-bg);
+  color: var(--th-hover-fg);
+}
+#useful_forks_table thead th.sortable.is-sorted {
+  background-color: var(--th-sorted-bg);
+  color: var(--th-sorted-fg);
+}
+
+
+/* Responsive table – Fix #19: small screens get weird table */
+:root {
+  --sticky-bg: #e8e8e8;      /* gray-ish tint for the column headers (light) */
+  --th-hover-bg: #dcdcdc;
+  --th-hover-fg: #000;
+  --th-sorted-bg: #cfcfcf;
+  --th-sorted-fg: #111;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --sticky-bg: #1e1e1e;
+    --th-hover-bg: #2e2e2e;
+    --th-hover-fg: #f5f5f5;
+    --th-sorted-bg: #3a3a3a;
+    --th-sorted-fg: #f5f5f5;
+  }
+}
+body.dark {
+  --sticky-bg: #1e1e1e;
+  --th-hover-bg: #2e2e2e;
+  --th-hover-fg: #f5f5f5;
+  --th-sorted-bg: #3a3a3a;
+  --th-sorted-fg: #f5f5f5;
+}
+#useful_forks_wrapper {
+  width: 100%;
+  overflow-x: auto;
+}
+#useful_forks_data {
+  width: 100%;
+}
+#useful_forks_table {
+  width: 100%;
+  min-width: 640px; /* ensure readable columns, scroll on mobile */
+  border-collapse: collapse;
+  table-layout: auto;
+}
+#useful_forks_table thead th {
+  white-space: nowrap;
+  position: sticky;
+  top: 0;
+  background: var(--sticky-bg);
+  z-index: 2;
+}
+@media screen and (max-width: 768px) {
+  .container {
+    padding-left: 12px !important;
+    padding-right: 12px !important;
+  }
+  .search-container {
+    min-width: 100% !important;
+    max-width: 100% !important;
+  }
+  #useful_forks_wrapper {
+    font-size: 0.9em;
+  }
+  #useful_forks_table {
+    font-size: 0.85em;
+    min-width: 560px;
+  }
+  #useful_forks_table thead th,
+  #useful_forks_table tbody td {
+    white-space: nowrap;
+    padding: 0.15em 0.35em; /* keep rows as compact as desktop – taller padding enlarged rows on mobile (PR94 feedback) */
+  }
+  .uf_badge svg {
+    transform: scale(0.9);
+  }
+  #useful_forks_header {
+    margin-bottom: 20px;
+    font-size: 0.9em;
+    word-break: break-word;
+  }
+}
+
+/* Ultra-small: stack using flex wrapping and smaller fonts */
+@media screen and (max-width: 480px) {
+  #useful_forks_table {
+    font-size: 0.8em;
+    min-width: 500px;
+  }
+  /* Make repo name flex-friendly with spans */
+  .useful_forks_repo td:first-child {
+    max-width: 160px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
