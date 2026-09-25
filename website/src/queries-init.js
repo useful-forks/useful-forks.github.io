@@ -98,6 +98,8 @@ function tableIsEmpty(table) {
 }
 function clearTable() {
   getTableBody().empty();
+  // Keep the table (and its headers) hidden until new results arrive.
+  $('#' + UF_ID_TABLE).hide();
 }
 function setMsg(msg) {
   JQ_ID_MSG
@@ -230,11 +232,9 @@ $('#useful_forks_inject').append(
                         $('<th>', {text: 'Repository', 'data-col': 0, class: 'sortable', 'data-base': 'Repository'}).css({'cursor':'pointer','white-space':'nowrap'}).attr('title','Sort by repository'),
                         $('<th>', {text: 'Stars ▼', 'data-col': 1, class: 'sortable is-sorted', 'data-base': 'Stars'}).css('cursor','pointer').attr('title','Sort by stars'),
                         $('<th>', {text: 'Forks', 'data-col': 2, class: 'sortable', 'data-base': 'Forks'}).css('cursor','pointer').attr('title','Sort by forks'),
-                        $('<th>', {'data-col': 3, 'data-base': ''}).css('width','10px'),
-                        $('<th>', {text: 'Ahead', 'data-col': 4, class: 'sortable', 'data-base': 'Ahead'}).css('cursor','pointer').attr('title','Sort by ahead'),
-                        $('<th>', {'data-col': 5, 'data-base': ''}).css('width','10px'),
-                        $('<th>', {text: 'Behind', 'data-col': 6, class: 'sortable', 'data-base': 'Behind'}).css('cursor','pointer').attr('title','Sort by behind'),
-                        $('<th>', {text: 'Last Push', 'data-col': 7, class: 'sortable', 'data-base': 'Last Push'}).css({'cursor':'pointer','white-space':'nowrap'}).attr('title','Sort by date')
+                        $('<th>', {text: 'Ahead', 'data-col': 3, class: 'sortable', 'data-base': 'Ahead'}).css('cursor','pointer').attr('title','Sort by ahead'),
+                        $('<th>', {text: 'Behind', 'data-col': 4, class: 'sortable', 'data-base': 'Behind'}).css('cursor','pointer').attr('title','Sort by behind'),
+                        $('<th>', {text: 'Last Push', 'data-col': 5, class: 'sortable', 'data-base': 'Last Push'}).css({'cursor':'pointer','white-space':'nowrap'}).attr('title','Sort by date')
                     )
                 ),
                 $('<tbody>')
@@ -245,6 +245,8 @@ $('#useful_forks_inject').append(
 function getJqId_$(id) {
   return $('#' + id);
 }
+// Start hidden – update_table() reveals it once results arrive. Keeps the landing page clean.
+getJqId_$(UF_ID_TABLE).hide();
 const JQ_ID_HEADER  = getJqId_$(UF_ID_HEADER);
 const JQ_ID_MSG     = getJqId_$(UF_ID_MSG);
 const JQ_ID_TABLE   = getJqId_$(UF_ID_TABLE);

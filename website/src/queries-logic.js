@@ -129,11 +129,11 @@ function getRowValue(row, col) {
   if (!td) return "";
   let attr = td.getAttribute("value");
   let raw = attr === null ? "" : attr;
-  if ([1,2,4,6].includes(col)) {
+  if ([1,2,3,4].includes(col)) {
     let n = Number(raw);
     return isNaN(n) ? -1 : n;
   }
-  if (col === 7) {
+  if (col === 5) {
     let t = Date.parse(raw);
     return isNaN(t) ? 0 : t;
   }
@@ -150,12 +150,12 @@ function getTdValue(rows, index, col) {
     return getRowValue(rows, index);
   }
   let raw = getTdRawValue(rows, index, col);
-  // numeric columns: 1,2,4,6
-  if ([1,2,4,6].includes(col)) {
+  // numeric columns: 1,2,3,4
+  if ([1,2,3,4].includes(col)) {
     let n = Number(raw);
     return isNaN(n) ? -1 : n;
   }
-  if (col === 7) { // date column YYYY-MM-DD
+  if (col === 5) { // date column YYYY-MM-DD
     let t = Date.parse(raw);
     return isNaN(t) ? 0 : t;
   }
@@ -248,14 +248,15 @@ function updateSortIndicators(col, dir) {
         baseText = $th.text().replace(/[\s▲▼]+$/g,'').trim();
         $th.attr('data-base', baseText);
       }
-      if (c === col && !isNaN(c) && [0,1,2,4,6,7].includes(c)) {
-        $th.text(baseText + (dir === 'desc' ? ' ▼' : ' ▲'));
+      if (c === col && !isNaN(c) && [0,1,2,3,4,5].includes(c)) {
+        $th.html('').append(document.createTextNode(baseText + ' ')).append(
+          $('<span>', {class: 'sort-arrow', text: dir === 'desc' ? '▼' : '▲', 'aria-hidden': 'true'}));
         $th.addClass('is-sorted');
         $th.attr('aria-sort', dir === 'desc' ? 'descending' : 'ascending');
         $th.attr('tabindex', '0');
         $th.attr('role', 'columnheader');
       } else {
-        if ([0,1,2,4,6,7].includes(c)) {
+        if ([0,1,2,3,4,5].includes(c)) {
           $th.text(baseText);
           $th.removeClass('is-sorted');
           $th.removeAttr('aria-sort');
@@ -487,16 +488,16 @@ function update_table(data) {
     const NEW_ROW = $('<tr>', { id: extract_username_from_fork(name), class: "useful_forks_repo" });
     NEW_ROW.append(
       $('<td>').html(getRepoCol(name, false)).attr("value", name),
-      $('<td>').html(UF_TABLE_SEPARATOR + getStarCol(stars)).attr("value", stars),
-      $('<td>').html(UF_TABLE_SEPARATOR + getForkCol(forks)).attr("value", forks),
-      $('<td>').html(UF_TABLE_SEPARATOR),
+      $('<td>').html(getStarCol(stars)).attr("value", stars),
+      $('<td>').html(getForkCol(forks)).attr("value", forks),
       $('<td>', { class: "uf_badge" }).html(ahead_badge(ahead_by, ahead_url)).attr("value", ahead_by),
-      $('<td>').html(UF_TABLE_SEPARATOR),
       $('<td>', { class: "uf_badge" }).html(behind_badge(behind_by, behind_url)).attr("value", behind_by),
-      $('<td>').html(UF_TABLE_SEPARATOR + date_txt).attr("value", pushed_at)
+      $('<td>').html(date_txt).attr("value", pushed_at)
     );
     table_body.append(NEW_ROW);
   }
+  // Reveal the table only once there is something to show – keeps the landing page clean.
+  $('#' + UF_ID_TABLE).toggle(data.length > 0);
   sortTable();
 }
 

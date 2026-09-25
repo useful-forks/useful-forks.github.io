@@ -99,22 +99,42 @@ table {
   }
 }
 
-/* Sortable columns – Fix #48 */
-th.sortable {
-  user-select: none;
-  transition: background-color 0.15s ease;
-}
-th.sortable:hover {
-  background-color: #e8e8e8 !important;
-  color: #000;
-}
-th.sortable.is-sorted {
-  background-color: #e0e0e0 !important;
-  font-weight: bold;
+/* Sortable columns – Fix #48: slim table, subtle sort affordances */
+#useful_forks_table th,
+#useful_forks_table td {
+  padding: 0.3em 0.6em; /* slim rows */
 }
 #useful_forks_table thead th {
   white-space: nowrap;
-  font-weight: bold;
+  font-weight: 600;
+  font-size: 0.8rem;
   border-bottom: 2px solid #ccc;
   text-align: left;
+}
+th.sortable {
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: pointer;
+  border-radius: 4px 4px 0 0;
+  transition: background-color 0.15s ease;
+}
+th.sortable:hover {
+  background-color: #efefef;
+  color: #000;
+}
+th.sortable:focus {
+  outline: none;
+}
+th.sortable:focus-visible {
+  outline: 2px solid #3273dc;
+  outline-offset: -2px;
+}
+th.sortable.is-sorted {
+  background-color: #e9e9e9;
+  color: #111;
+}
+.sort-arrow {
+  font-size: 0.7em;
+  color: #777;
+  margin-left: 3px;
 }
