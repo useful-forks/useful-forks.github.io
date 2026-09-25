@@ -178,20 +178,7 @@ function updateBasedOnTable() {
     displayCsvExportBtn();
   }
   if (PRIVATE_SKIPPED_COUNT > 0) {
-    // UX note – does not overwrite existing msg, just console + optional non-intrusive banner
     console.info(`Filtered ${PRIVATE_SKIPPED_COUNT} private forks (Fix #55)`);
-    if (typeof JQ_ID_MSG !== 'undefined' && JQ_ID_MSG) {
-      try {
-        // append small muted note if not already present
-        if (!document.getElementById('private-skipped-note')) {
-          const note = document.createElement('div');
-          note.id = 'private-skipped-note';
-          note.className = 'is-size-7 has-text-grey mt-2';
-          note.textContent = `${PRIVATE_SKIPPED_COUNT} private forks hidden (no access). Enable private scope token to include if needed.`;
-          JQ_ID_MSG.append(note);
-        }
-      } catch {}
-    }
   }
 }
 
