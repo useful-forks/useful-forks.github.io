@@ -1,8 +1,8 @@
 :root {
   --uf-orange: #fca311;
   --uf-orange-dark: #c97e11;
-  --uf-blue: #14213d;
-  --uf-blue-dark: #0d1624;
+  --uf-blue: #1d2f55;
+  --uf-blue-dark: #13233e;
   --bg: #ffffff;
   --fg: #222222;
   --border: #dbdbdb;
@@ -447,6 +447,25 @@ body.dark {
     background-color: var(--fg);
     border-color: var(--fg);
     color: #121212;
+  }
+}
+
+/* Search input group (Bulma .field.has-addons): the repo input keeps Bulma's
+   dark #363636 border while the Settings / Find buttons use the light --fg
+   border, and the -1px seam overlap plus input-focus z-index make the buttons'
+   inner edges look missing. Unify the whole group on --fg in dark mode. */
+[data-theme="dark"] .search-container .field.has-addons .input.is-dark,
+[data-theme="dark"] .search-container .field.has-addons .input.is-dark:focus,
+[data-theme="dark"] .search-container .field.has-addons .input.is-dark:active {
+  border-color: var(--fg);
+  box-shadow: none;
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-theme="auto"] .search-container .field.has-addons .input.is-dark,
+  :root[data-theme="auto"] .search-container .field.has-addons .input.is-dark:focus,
+  :root[data-theme="auto"] .search-container .field.has-addons .input.is-dark:active {
+    border-color: var(--fg);
+    box-shadow: none;
   }
 }
 
