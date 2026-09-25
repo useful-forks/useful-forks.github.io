@@ -83,6 +83,11 @@ If after running `npm run dev` you get an error that mentions "`code: 'ERR_OSSL_
 
 Whenever you want to test changes to the `src/queries-logic.js` file, you will need to re-execute `npm run dev` for `dist/main.js` to recompile.
 
+### When deploying browser integrations
+For Chrome, the content of `/plugin` must be placed in a `.zip` (not the folder itself).
+
+For Firefox, use `npx web-ext build --source-dir=plugin/ --overwrite-dest` from the root of the project.
+
 ## Credits
 * Thanks to [raeleus](https://github.com/raeleus) for his design of the logo!
 * Thanks to [jkunstwald](https://github.com/jkunstwald/) for allowing me to apply the MIT license to what has been expanded from [his own initial work](https://github.com/jkunstwald/useful-forks). Here is a list of the improvements that were made:
