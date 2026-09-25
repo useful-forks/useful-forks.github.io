@@ -234,7 +234,8 @@ $('#useful_forks_inject').append(
                         $('<th>', {text: 'Forks', 'data-col': 2, class: 'sortable', 'data-base': 'Forks'}).css('cursor','pointer').attr('title','Sort by forks'),
                         $('<th>', {text: 'Ahead', 'data-col': 3, class: 'sortable', 'data-base': 'Ahead'}).css('cursor','pointer').attr('title','Sort by ahead'),
                         $('<th>', {text: 'Behind', 'data-col': 4, class: 'sortable', 'data-base': 'Behind'}).css('cursor','pointer').attr('title','Sort by behind'),
-                        $('<th>', {text: 'Last Push', 'data-col': 5, class: 'sortable', 'data-base': 'Last Push'}).css({'cursor':'pointer','white-space':'nowrap'}).attr('title','Sort by date')
+                        $('<th>', {text: 'Last Push', 'data-col': 5, class: 'sortable', 'data-base': 'Last Push'}).css({'cursor':'pointer','white-space':'nowrap'}).attr('title','Sort by date'),
+                        $('<th>', {text: 'Releases', 'data-col': 6, class: 'sortable', 'data-base': 'Releases'}).css('cursor','pointer').attr('title','Sort by releases')
                     )
                 ),
                 $('<tbody>')

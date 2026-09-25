@@ -132,7 +132,7 @@ function getRowValue(row, col) {
   if (!td) return "";
   let attr = td.getAttribute("value");
   let raw = attr === null ? "" : attr;
-  if ([1,2,3,4].includes(col)) {
+  if ([1,2,3,4,6].includes(col)) {
     let n = Number(raw);
     return isNaN(n) ? -1 : n;
   }
@@ -148,17 +148,18 @@ function getRowValue(row, col) {
 
 const SVG_TAG = '<svg class="octicon octicon-tag v-align-text-bottom" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" role="img"><title>Releases</title><path fill-rule="evenodd" d="M2.5 2.75a1 1 0 000 1.5l8.75 8.75a1 1 0 001.5 0l2-2a1 1 0 000-1.5l-8.75-8.75a1 1 0 00-1.5 0l-2 2zM5 6a1 1 0 100-2 1 1 0 000 2z"></path></svg>';
 
-function release_badge(has_releases, count, url) {
+function release_badge(has_releases, url) {
   if (!has_releases) return '';
-  const label = count > 1 ? count + ' releases' : 'has releases';
+  // The check is existence-based (listReleases with per_page 1), so the
+  // label stays uniform instead of implying an exact count.
   return `
   <a href="${url}" target="_blank" rel="noopener noreferrer" title="This fork has releases">
-    ${SVG_TAG} ${label}
+    ${SVG_TAG} has releases
   </a>`;
 }
 
-function getReleaseCol(has_releases, count, url) {
-  return release_badge(has_releases, count, url);
+function getReleaseCol(has_releases, url) {
+  return release_badge(has_releases, url);
 }
 
 function getTdValue(rows, index, col) {
@@ -168,8 +169,8 @@ function getTdValue(rows, index, col) {
     return getRowValue(rows, index);
   }
   let raw = getTdRawValue(rows, index, col);
-  // numeric columns: 1,2,3,4
-  if ([1,2,3,4].includes(col)) {
+  // numeric columns: 1,2,3,4,6
+  if ([1,2,3,4,6].includes(col)) {
     let n = Number(raw);
     return isNaN(n) ? -1 : n;
   }
@@ -266,7 +267,7 @@ function updateSortIndicators(col, dir) {
         baseText = $th.text().replace(/[\s▲▼]+$/g,'').trim();
         $th.attr('data-base', baseText);
       }
-      if (c === col && !isNaN(c) && [0,1,2,3,4,5].includes(c)) {
+      if (c === col && !isNaN(c) && [0,1,2,3,4,5,6].includes(c)) {
         $th.html('').append(document.createTextNode(baseText + ' ')).append(
           $('<span>', {class: 'sort-arrow', text: dir === 'desc' ? '▼' : '▲', 'aria-hidden': 'true'}));
         $th.addClass('is-sorted');
@@ -274,7 +275,7 @@ function updateSortIndicators(col, dir) {
         $th.attr('tabindex', '0');
         $th.attr('role', 'columnheader');
       } else {
-        if ([0,1,2,3,4,5].includes(c)) {
+        if ([0,1,2,3,4,5,6].includes(c)) {
           $th.text(baseText);
           $th.removeClass('is-sorted');
           $th.removeAttr('aria-sort');
@@ -536,7 +537,7 @@ function update_table(data) {
   for (const currFork of data) {
     const { name, stars, forks, ahead_by, ahead_url, behind_by, behind_url, pushed_at, releases_count, has_releases, releases_url } = currFork;
     const date_txt = compareDates(pushed_at, getDateCol(pushed_at));
-    const releases_txt = getReleaseCol(has_releases, releases_count, releases_url);
+    const releases_txt = getReleaseCol(has_releases, releases_url);
 
     const NEW_ROW = $('<tr>', { id: extract_username_from_fork(name), class: "useful_forks_repo" });
     NEW_ROW.append(
