@@ -172,18 +172,6 @@ body.dark {
   background: var(--sticky-bg);
   z-index: 2;
 }
-#uf-swipe-hint {
-  display: none;
-  text-align: center;
-  margin-top: 6px;
-}
-#uf-swipe-hint.is-visible {
-  display: block;
-}
-#uf-swipe-hint button {
-  font-size: 0.8em;
-}
-
 @media screen and (max-width: 768px) {
   .container {
     padding-left: 12px !important;
@@ -203,7 +191,7 @@ body.dark {
   #useful_forks_table thead th,
   #useful_forks_table tbody td {
     white-space: nowrap;
-    padding: 0.5em 0.35em;
+    padding: 0.15em 0.35em; /* keep rows as compact as desktop – taller padding enlarged rows on mobile (PR94 feedback) */
   }
   .uf_badge svg {
     transform: scale(0.9);
