@@ -54,9 +54,7 @@ JQ_TOKEN_FIELD.keyup(event => {
   if (event.keyCode === 13) { // 'ENTER'
     saveTokenBtnClicked();
   }
-  if (event.keyCode === 27) { // 'ESC'
-    closeTokenDialog();
-  }
+  /* ESC is handled globally in dialog-esc.js (covers the token dialog too). */
 });
 
 /* Get the locally saved Access Token. */
