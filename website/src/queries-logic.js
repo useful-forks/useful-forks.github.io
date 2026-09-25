@@ -148,18 +148,17 @@ function getRowValue(row, col) {
 
 const SVG_TAG = '<svg class="octicon octicon-tag v-align-text-bottom" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" role="img"><title>Releases</title><path fill-rule="evenodd" d="M2.5 2.75a1 1 0 000 1.5l8.75 8.75a1 1 0 001.5 0l2-2a1 1 0 000-1.5l-8.75-8.75a1 1 0 00-1.5 0l-2 2zM5 6a1 1 0 100-2 1 1 0 000 2z"></path></svg>';
 
-function release_badge(has_releases, url) {
-  if (!has_releases) return '';
-  // The check is existence-based (listReleases with per_page 1), so the
-  // label stays uniform instead of implying an exact count.
+function release_badge(count, url) {
+  if (!count || count < 1) return '';
+  const label = count === 1 ? '1 release' : `${count} releases`;
   return `
-  <a href="${url}" target="_blank" rel="noopener noreferrer" title="This fork has releases">
-    ${SVG_TAG} has releases
+  <a href="${url}" target="_blank" rel="noopener noreferrer" title="This fork has ${label}">
+    ${SVG_TAG} ${label}
   </a>`;
 }
 
-function getReleaseCol(has_releases, url) {
-  return release_badge(has_releases, url);
+function getReleaseCol(count, url) {
+  return release_badge(count, url);
 }
 
 function getTdValue(rows, index, col) {
@@ -474,18 +473,27 @@ function update_table_data(responseData, user, repo, parentDefaultBranch) {
         datum['behind_url'] = getBehindUrl(responseData.html_url);
         datum['pushed_at'] = getOnlyDate(currFork.pushed_at);
 
-        // Issue #75: check if fork has releases (compiled binaries)
+        // Issue #75: check if fork has releases (compiled binaries).
+        // With per_page=1 the Link header's rel="last" page number equals the
+        // total release count, so we get the real amount without fetching pages.
+        const getReleasesCount = (relHeaders, relData) => {
+          const link = relHeaders && (relHeaders.link || relHeaders.Link);
+          if (link) {
+            const last = link.match(/<[^>]*[?&]page=(\d+)[^>]*>\s*;\s*rel="last"/);
+            if (last) return parseInt(last[1], 10);
+          }
+          return relData ? relData.length : 0;
+        };
         const releasesPromise = () => octokit.repos.listReleases({
           owner: currFork.owner.login,
           repo: currFork.name,
           per_page: 1
         });
         const onReleasesSuccess = (relHeaders, relData) => {
-          if (relData && relData.length > 0) {
+          const count = getReleasesCount(relHeaders, relData);
+          if (count > 0) {
             datum['has_releases'] = true;
-            datum['releases_count'] = relData.length;
-            // If pagination indicates more releases, we still mark as has_releases.
-            // Keeping count as 1 is sufficient for badge, but we preserve length.
+            datum['releases_count'] = count;
           }
           TABLE_DATA.push(datum);
           if (TABLE_DATA.length > 1) showFilterContainer();
@@ -537,7 +545,7 @@ function update_table(data) {
   for (const currFork of data) {
     const { name, stars, forks, ahead_by, ahead_url, behind_by, behind_url, pushed_at, releases_count, has_releases, releases_url } = currFork;
     const date_txt = compareDates(pushed_at, getDateCol(pushed_at));
-    const releases_txt = getReleaseCol(has_releases, releases_url);
+    const releases_txt = getReleaseCol(releases_count, releases_url);
 
     const NEW_ROW = $('<tr>', { id: extract_username_from_fork(name), class: "useful_forks_repo" });
     NEW_ROW.append(
