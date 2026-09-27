@@ -339,6 +339,9 @@ function incrementCounters() {
 }
 
 function onRateLimitExceeded() {
+  if (ABORTED) return; // abortSearch() already finalized the UI; a late 403
+                       // (via the throttling plugin, bypassing onFailure) must not
+                       // clobber the abort message or pop the token dialog.
   if (!RATE_LIMIT_EXCEEDED) {
     console.warn('[useful-forks] GitHub API rate-limit exceeded. (Since useful-forks sends many requests at once, you might have a lot of `Error Code 403` in your browser Console Logs.)');
     RATE_LIMIT_EXCEEDED = true;
@@ -857,6 +860,7 @@ function setUpOctokitWithLatestToken() {
         }
       },
       onSecondaryRateLimit: (retryAfter, options, octokit) => { // slow down
+        if (ABORTED) return; // don't clobber the abort message with a late 429 notice
         setMsg(UF_MSG_SLOWER);
 
         // setup the progress bar
@@ -900,7 +904,9 @@ JQ_REPO_FIELD.keyup(event => {
 });
 
 /* ESC aborts the ongoing scan (#79), unless a dialog is open: ESC closes
-   dialogs (token, settings), so it must not also kill the scan. */
+   dialogs (token, settings), so it must not also kill the scan.
+   Capture phase: dialog-esc.js (loaded earlier) closes dialogs in the bubble
+   phase; running first lets this guard see the dialog while still open. */
 document.addEventListener('keydown', (event) => {
   if (event.key !== 'Escape' && event.key !== 'Esc') return;
   if (event.target && (event.target.tagName === 'INPUT'
@@ -909,7 +915,7 @@ document.addEventListener('keydown', (event) => {
   if (typeof JQ_TOKEN_POPUP !== 'undefined' && JQ_TOKEN_POPUP.hasClass('is-active')) return;
   if (typeof JQ_SETTINGS_POPUP !== 'undefined' && JQ_SETTINGS_POPUP.hasClass('is-active')) return;
   abortSearch();
-});
+}, true);
 
 /* Trigger an automatic query is a value was extracted from the URL Param. */
 if (JQ_REPO_FIELD.val()) {
