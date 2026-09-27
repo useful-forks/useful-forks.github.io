@@ -38,6 +38,11 @@ let ONGOING_REQUESTS_COUNTER = 0;
 let IS_USEFUL_FORK; // function that determines if a fork is useful or not
 let PRIVATE_SKIPPED_COUNT = 0;
 
+/* Abort state (#79, #16): set when the user stops the scan midway. In-flight
+   request handlers bail out via this flag and the results gathered so far are
+   preserved. A new search always starts from scratch (no resume). */
+let ABORTED = false;
+
 
 /** Used to reset the state for a brand new query. */
 function clear_old_data() {
@@ -55,6 +60,7 @@ function clear_old_data() {
   TOTAL_API_CALLS_COUNTER = 0;
   ONGOING_REQUESTS_COUNTER = 0;
   PRIVATE_SKIPPED_COUNT = 0;
+  ABORTED = false;
   shouldTriggerQueryOnTokenSave = false;
 }
 
@@ -322,7 +328,7 @@ function isEmpty(aList) {
 }
 
 function displayConditionalErrorMsg() {
-  if (!RATE_LIMIT_EXCEEDED)
+  if (!RATE_LIMIT_EXCEEDED && !ABORTED)
     setMsg(UF_MSG_ERROR);
 }
 
@@ -361,6 +367,8 @@ function allRequestsAreDone() {
 /** Detection of final request. */
 function decrementCounters() {
   ONGOING_REQUESTS_COUNTER--;
+  if (ONGOING_REQUESTS_COUNTER < 0) ONGOING_REQUESTS_COUNTER = 0;
+  if (ABORTED) return; // abortSearch() already finalized the UI; don't run it twice
   if (allRequestsAreDone()) {
     clearNonErrorMsg();
     removeProgressBar();
@@ -387,11 +395,12 @@ function updateBasedOnTable() {
 function searchNotAllowed() {
   if (shouldTriggerQueryOnTokenSave)
     return false;
-  return ONGOING_REQUESTS_COUNTER !== 0 || JQ_SEARCH_BTN.hasClass('is-loading');
+  if (ABORTED) return false; // a new search is always allowed after an abort
+  return ONGOING_REQUESTS_COUNTER !== 0 || JQ_SEARCH_BTN.hasClass('is-abortable');
 }
 
 function send(requestPromise, successFn, failureFn) {
-  if (RATE_LIMIT_EXCEEDED) {
+  if (RATE_LIMIT_EXCEEDED || ABORTED) {
     failureFn();
     return;
   }
@@ -399,11 +408,31 @@ function send(requestPromise, successFn, failureFn) {
   incrementCounters();
   requestPromise()
   .then(
-      response => successFn(response.headers, response.data)) // wrapped in a { data, headers, status, url } object
+      response => {
+        if (ABORTED) return; // drop late responses: preserved results stay as-is
+        successFn(response.headers, response.data);
+      }) // wrapped in a { data, headers, status, url } object
   .catch(
       () => failureFn())
   .finally(
       () => decrementCounters());
+}
+
+/** Stop the current scan but keep the results gathered so far (#79, #16).
+    There is no resume: clicking the search button afterwards starts a new scan. */
+function abortSearch() {
+  if (!JQ_SEARCH_BTN.hasClass('is-abortable')) return; // no scan in progress
+  ABORTED = true;
+  ONGOING_REQUESTS_COUNTER = 0; // in-flight handlers bail out via ABORTED; skip finalization
+  console.warn('[useful-forks] Search aborted by user, preserving', TABLE_DATA.length, 'results');
+  removeProgressBar();
+  enableQueryFields(); // restores the search button text and re-enables the fields
+  if (TABLE_DATA.length === 0) {
+    setMsg(UF_MSG_ABORTED);
+  } else {
+    setMsg(UF_MSG_ABORTED + ` Preserved ${TABLE_DATA.length} results.`);
+    displayCsvExportBtn();
+  }
 }
 
 /** Add bold to the date text if the date is earlier than the queried repo. */
@@ -441,7 +470,7 @@ function update_table_data(responseData, user, repo, parentDefaultBranch) {
   }
 
   for (const currFork of responseData) {
-    if (RATE_LIMIT_EXCEEDED) // we can skip everything below because they are only requests
+    if (RATE_LIMIT_EXCEEDED || ABORTED) // we can skip everything below because they are only requests
       continue;
 
     // Fix #55: Ignore private repos – listForks erroneously returns private forks
@@ -480,6 +509,7 @@ function update_table_data(responseData, user, repo, parentDefaultBranch) {
       head: `${extract_username_from_fork(currFork.full_name)}:${currFork.default_branch}`
     });
     const onSuccess = (responseHeaders, responseData) => {
+      if (ABORTED) return; // don't mutate results after the user aborted
       if (responseData.total_commits > 0) {
         // Double-check duplicate before push (normalized) – avoid race push
         const normDatum = normalizeRepoName(datum['name']);
@@ -515,6 +545,7 @@ function update_table_data(responseData, user, repo, parentDefaultBranch) {
           per_page: 1
         });
         const onReleasesSuccess = (relHeaders, relData) => {
+          if (ABORTED) return; // don't mutate results after the user aborted
           const count = getReleasesCount(relHeaders, relData);
           if (count > 0) {
             datum['has_releases'] = true;
@@ -525,6 +556,7 @@ function update_table_data(responseData, user, repo, parentDefaultBranch) {
           update_table_trying_use_filter();
         };
         const onReleasesFailure = () => {
+          if (ABORTED) return; // don't mutate results after the user aborted
           // Still push even if releases check fails (e.g., empty or 404)
           TABLE_DATA.push(datum);
           if (TABLE_DATA.length > 1) showFilterContainer();
@@ -651,7 +683,7 @@ function updateFilterFunction() {
 
 /** Paginated (index starts at 1) recursive forks scan. */
 function request_fork_page(page_number, user, repo, defaultBranch) {
-  if (RATE_LIMIT_EXCEEDED)
+  if (RATE_LIMIT_EXCEEDED || ABORTED)
     return;
 
   const requestPromise = () => octokit.repos.listForks({
@@ -662,6 +694,7 @@ function request_fork_page(page_number, user, repo, defaultBranch) {
     page: page_number
   });
   const onSuccess = (responseHeaders, responseData) => {
+    if (ABORTED) return; // don't mutate results or queue more pages after abort
     removeProgressBar();
 
     if (isEmpty(responseData)) // repo has not been forked
@@ -701,6 +734,7 @@ function initial_request(user, repo) {
     repo: repo
   });
   const onSuccess = (responseHeaders, responseData) => {
+    if (ABORTED) return;
     if (isEmpty(responseData))
       return;
 
@@ -852,12 +886,29 @@ function setUpOctokitWithLatestToken() {
 /* Setting up query triggers. */
 JQ_SEARCH_BTN.click(event => {
   event.preventDefault();
+  // While a scan is ongoing, the search button doubles as the abort control (#79, #16)
+  if (JQ_SEARCH_BTN.hasClass('is-abortable')) {
+    abortSearch();
+    return;
+  }
   initiate_search();
 });
 JQ_REPO_FIELD.keyup(event => {
   if (event.keyCode === 13) { // 'ENTER'
     initiate_search();
   }
+});
+
+/* ESC aborts the ongoing scan (#79), unless a dialog is open: ESC closes
+   dialogs (token, settings), so it must not also kill the scan. */
+document.addEventListener('keydown', (event) => {
+  if (event.key !== 'Escape' && event.key !== 'Esc') return;
+  if (event.target && (event.target.tagName === 'INPUT'
+      || event.target.tagName === 'TEXTAREA' || event.target.isContentEditable)) return;
+  if (!JQ_SEARCH_BTN.hasClass('is-abortable')) return;
+  if (typeof JQ_TOKEN_POPUP !== 'undefined' && JQ_TOKEN_POPUP.hasClass('is-active')) return;
+  if (typeof JQ_SETTINGS_POPUP !== 'undefined' && JQ_SETTINGS_POPUP.hasClass('is-active')) return;
+  abortSearch();
 });
 
 /* Trigger an automatic query is a value was extracted from the URL Param. */
