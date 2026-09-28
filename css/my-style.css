@@ -1,0 +1,425 @@
+:root {
+  --uf-orange: #fca311;
+  --uf-orange-dark: #c97e11;
+  --uf-blue: #1d2f55;
+  --uf-blue-dark: #13233e;
+  --bg: #ffffff;
+  --fg: #222222;
+  --border: #dbdbdb;
+  --table-bg: #ffffff;
+  --table-odd: #f5f5f5;
+  --table-hover: #e2e2e2;
+  --input-bg: #ffffff;
+  --footer-bg: #ffffff;
+  --msg-bg: #eff5fb;
+  --msg-fg: #296fa8;
+  --msg-border: #b8d8f0;
+  --muted-fg: #6b6b6b;       /* secondary text: .help, placeholders */
+  --placeholder-fg: #8a8a8a;
+}
+
+[data-theme="dark"] {
+  --bg: #121212;
+  --fg: #e0e0e0;
+  --border: #444;
+  --table-bg: #1e1e1e;
+  --table-odd: #2a2a2a;
+  --table-hover: #3a3a3a;
+  --input-bg: #2b2b2b;
+  --footer-bg: #121212;
+  --msg-bg: #1a2a3a;
+  --msg-fg: #cde4ff;
+  --msg-border: #2a4a6a;
+  --muted-fg: #b0b0b0;
+  --placeholder-fg: #a3a3a3;
+  color-scheme: dark;
+}
+[data-theme="light"] {
+  --bg: #ffffff;
+  --fg: #222222;
+  --border: #dbdbdb;
+  --table-bg: #ffffff;
+  --table-odd: #f5f5f5;
+  --table-hover: #e2e2e2;
+  --input-bg: #ffffff;
+  --footer-bg: #ffffff;
+  --msg-bg: #eff5fb;
+  --msg-fg: #296fa8;
+  --msg-border: #b8d8f0;
+  --muted-fg: #6b6b6b;
+  --placeholder-fg: #8a8a8a;
+  color-scheme: light;
+}
+
+.button.is-uf-orange {
+  background-color: var(--uf-orange);
+  border-color: transparent;
+  color: #fff;
+}
+.button.is-uf-orange:hover {
+  background-color: var(--uf-orange-dark);
+  border-color: transparent;
+  color: #fff;
+}
+.button.is-uf-blue {
+  background-color: var(--uf-blue);
+  border-color: transparent;
+  color: #fff;
+}
+.button.is-uf-blue:hover {
+  background-color: var(--uf-blue-dark);
+  border-color: transparent;
+  color: #fff;
+}
+
+/* html scope: beats Bulma's body{color/background-color} which loads later */
+html body {
+  background: var(--bg);
+  color: var(--fg);
+}
+html body strong, html body b {
+  color: var(--fg);
+}
+
+.footer {
+  background-color: var(--footer-bg) !important;
+  color: var(--fg);
+}
+
+#useful_forks_msg {
+  text-align: center;
+  margin-top: 20px;
+  margin-bottom: 20px;
+}
+#useful_forks_msg.box.has-background-info-light {
+  /* Bulma's .has-background-info-light carries !important – match it or the
+     banner stays white in dark mode */
+  background-color: var(--msg-bg) !important;
+  color: var(--msg-fg);
+  border-color: var(--msg-border);
+}
+
+#useful_forks_header {
+  text-align: center;
+  margin-bottom: 35px;
+}
+#useful_forks_inject {
+  margin-top: 20px;
+}
+
+.uf_badge svg {
+  display: table-cell;
+  padding-top: 3px;
+}
+
+/* Scoped to the table id: Bulma loads after this file, so the unscoped
+   `table` rule loses to Bulma's `.table { background-color: #fff }` and even
+   rows render white in dark mode while odd rows get the dark var. */
+#useful_forks_table {
+  margin: 0 auto;
+  background-color: var(--table-bg);
+  color: var(--fg);
+}
+#useful_forks_table tr:nth-child(odd) {
+  background-color: var(--table-odd);
+}
+#useful_forks_table tr:hover {
+  background-color: var(--table-hover);
+}
+#useful_forks_table th {
+  background-color: var(--table-bg);
+  color: var(--fg);
+  border-color: var(--border);
+}
+#useful_forks_table th.sortable:hover {
+  background-color: var(--table-hover);
+}
+#useful_forks_table th.sortable.is-sorted {
+  background-color: var(--table-odd);
+}
+
+/* body scope: Bulma loads after this file with equal specificity, so unscoped
+   rules lose and inputs stay white in dark mode */
+body .input, body .textarea, body .select select {
+  background-color: var(--input-bg);
+  color: var(--fg);
+  border-color: var(--border);
+}
+/* Bulma's .input::placeholder ties this specificity and loads later – scope up
+   or filter/search placeholders stay near-invisible in dark mode */
+body .input::placeholder,
+body .textarea::placeholder {
+  color: var(--placeholder-fg);
+  opacity: 1; /* override the browser's default placeholder dimming */
+}
+
+/* Bulma loads after this file, so these need the extra .modal-card scope to win.
+   Without it, Bulma's white modal-card-* backgrounds override the dark vars. */
+.modal-card .modal-card-head,
+.modal-card .modal-card-body,
+.modal-card .modal-card-foot {
+  background-color: var(--table-bg);
+  color: var(--fg);
+  border-color: var(--border);
+}
+.modal-card .modal-card-title {
+  color: var(--fg);
+}
+/* Bulma's .label (#363636) / .help (#7a7a7a) are unreadably dim on a dark modal */
+#uf_settings_popup .label,
+#useful_forks_token_popup .label {
+  color: var(--fg);
+}
+#uf_settings_popup .help,
+#useful_forks_token_popup .help {
+  color: var(--muted-fg);
+}
+#uf_settings_popup .help strong,
+#useful_forks_token_popup .help strong {
+  color: var(--fg);
+}
+
+/* footer mail button stays readable in dark mode */
+[data-theme="dark"] .footer .button.is-white {
+  background-color: var(--table-odd);
+  border-color: var(--border);
+  color: var(--fg);
+}
+
+/* Bulma's .title (#363636) ties unscoped specificity and loads later – scope up */
+html body .title,
+html body h1 {
+  color: var(--fg);
+}
+a {
+  color: #3273dc;
+}
+[data-theme="dark"] a,
+:root[data-theme="dark"] a {
+  color: #8ab4f8;
+}
+[data-theme="dark"] a:hover,
+:root[data-theme="dark"] a:hover {
+  color: #a8c7fa;
+}
+
+/* reduce badge brightness filter – keep readable */
+.badge {
+  filter: none;
+}
+
+#button-group {
+  visibility: hidden;
+}
+
+.search-container {
+  min-width: 60%;
+  max-width: 800px;
+  display: inline-block;
+}
+
+.allButFooter {
+  min-height: calc(100vh - 200px);
+}
+
+.navbar-item > img {
+  margin-right: 8px;
+}
+.navbar-item {
+  display: flex;
+  align-items: center;
+}
+
+@media screen and (max-width: 1023px) {
+  .navbar .navbar-menu {
+    background-color: var(--table-odd);
+    padding: 0;
+  }
+  .navbar .navbar-menu .navbar-item:hover {
+    background-color: #4a4a4a;
+    color: #f8f8f8;
+  }
+}
+
+@media screen and (min-width: 769px) {
+  .modal-card, .modal-content {
+    width: 660px;
+  }
+}
+
+@media screen and (min-width: 769px) {
+  .field-label.is-normal {
+    padding-top: 0;
+  }
+}
+
+/* Sortable columns – Fix #48: slim table, subtle sort affordances */
+#useful_forks_table th,
+#useful_forks_table td {
+  padding: 0.3em 0.6em; /* slim rows */
+}
+#useful_forks_table thead th {
+  white-space: nowrap;
+  font-weight: 600;
+  font-size: 0.8rem;
+  border-bottom: 2px solid #ccc;
+  text-align: left;
+}
+th.sortable {
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: pointer;
+  border-radius: 4px 4px 0 0;
+  transition: background-color 0.15s ease;
+}
+th.sortable:hover {
+  background-color: #efefef;
+  color: #000;
+}
+th.sortable:focus {
+  outline: none;
+}
+th.sortable:focus-visible {
+  outline: 2px solid #3273dc;
+  outline-offset: -2px;
+}
+th.sortable.is-sorted {
+  background-color: #e9e9e9;
+  color: #111;
+}
+.sort-arrow {
+  font-size: 0.7em;
+  color: #777;
+  margin-left: 3px;
+}
+/* Keep #48's hover/sorted affordances visible above the sticky header background */
+#useful_forks_table thead th.sortable:hover {
+  background-color: var(--th-hover-bg);
+  color: var(--th-hover-fg);
+}
+#useful_forks_table thead th.sortable.is-sorted {
+  background-color: var(--th-sorted-bg);
+  color: var(--th-sorted-fg);
+}
+
+/* Responsive table – Fix #19: small screens get weird table */
+:root {
+  --sticky-bg: #e8e8e8;      /* gray-ish tint for the column headers (light) */
+  --th-hover-bg: #dcdcdc;
+  --th-hover-fg: #000;
+  --th-sorted-bg: #cfcfcf;
+  --th-sorted-fg: #111;
+}
+body.dark {
+  --sticky-bg: #1e1e1e;
+  --th-hover-bg: #2e2e2e;
+  --th-hover-fg: #f5f5f5;
+  --th-sorted-bg: #3a3a3a;
+  --th-sorted-fg: #f5f5f5;
+}
+#useful_forks_wrapper {
+  width: 100%;
+  overflow-x: auto;
+}
+#useful_forks_data {
+  width: 100%;
+}
+#useful_forks_table {
+  width: 100%;
+  min-width: 640px; /* ensure readable columns, scroll on mobile */
+  border-collapse: collapse;
+  table-layout: auto;
+}
+#useful_forks_table thead th {
+  white-space: nowrap;
+  position: sticky;
+  top: 0;
+  background: var(--sticky-bg);
+  z-index: 2;
+}
+@media screen and (max-width: 768px) {
+  .container {
+    padding-left: 12px !important;
+    padding-right: 12px !important;
+  }
+  .search-container {
+    min-width: 100% !important;
+    max-width: 100% !important;
+  }
+  #useful_forks_wrapper {
+    font-size: 0.9em;
+  }
+  #useful_forks_table {
+    font-size: 0.85em;
+    min-width: 560px;
+  }
+  #useful_forks_table thead th,
+  #useful_forks_table tbody td {
+    white-space: nowrap;
+    padding: 0.15em 0.35em; /* keep rows as compact as desktop – taller padding enlarged rows on mobile (PR94 feedback) */
+  }
+  .uf_badge svg {
+    transform: scale(0.9);
+  }
+  #useful_forks_header {
+    margin-bottom: 20px;
+    font-size: 0.9em;
+    word-break: break-word;
+  }
+}
+
+/* Ultra-small: stack using flex wrapping and smaller fonts */
+@media screen and (max-width: 480px) {
+  #useful_forks_table {
+    font-size: 0.8em;
+    min-width: 500px;
+  }
+  /* Make repo name flex-friendly with spans */
+  .useful_forks_repo td:first-child {
+    max-width: 160px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+}
+/* ---- PR91 feedback round 2: remaining dark-mode contrast fixes ---- */
+
+/* .button.is-dark.is-outlined (search + CSV buttons): Bulma gives them dark
+   text on transparent – invisible on a dark page. Flip to light text/border. */
+[data-theme="dark"] .button.is-dark.is-outlined {
+  border-color: var(--fg);
+  color: var(--fg);
+}
+[data-theme="dark"] .button.is-dark.is-outlined:hover {
+  background-color: var(--fg);
+  border-color: var(--fg);
+  color: #121212;
+}
+
+/* Search input group (Bulma .field.has-addons): the repo input keeps Bulma's
+   dark #363636 border while the Settings / Find buttons use the light --fg
+   border, and the -1px seam overlap plus input-focus z-index make the buttons'
+   inner edges look missing. Unify the whole group on --fg in dark mode. */
+[data-theme="dark"] .search-container .field.has-addons .input.is-dark,
+[data-theme="dark"] .search-container .field.has-addons .input.is-dark:focus,
+[data-theme="dark"] .search-container .field.has-addons .input.is-dark:active {
+  border-color: var(--fg);
+  box-shadow: none;
+}
+
+/* Save buttons (.button.is-uf-orange): white on orange is ~2:1 – use near-black
+   text on the orange background in dark mode. */
+[data-theme="dark"] .button.is-uf-orange,
+[data-theme="dark"] .button.is-uf-orange:hover {
+  color: #1a1a1a;
+}
+
+/* Table row octicons (fork/star/eye/history SVGs) default to black fill –
+   invert to light in dark mode so they read as "reverted". */
+[data-theme="dark"] .octicon {
+  fill: var(--fg);
+}
+
+/* CSV download icon is dark artwork – invert it in dark mode too. */
+[data-theme="dark"] #uf_csv_export_btn img {
+  filter: invert(1);
+}

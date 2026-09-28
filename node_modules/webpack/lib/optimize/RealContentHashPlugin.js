@@ -1,0 +1,705 @@
+/*
+	MIT License http://www.opensource.org/licenses/mit-license.php
+	Author Tobias Koppers @sokra
+*/
+
+"use strict";
+
+const { SyncBailHook } = require("tapable");
+const { CachedSource, CompatSource, RawSource } = require("webpack-sources");
+const Compilation = require("../Compilation");
+const WebpackError = require("../errors/WebpackError");
+const { compareSelect, compareStrings } = require("../util/comparators");
+const createHash = require("../util/createHash");
+const createHooksRegistry = require("../util/createHooksRegistry");
+
+/**
+ * @import {
+ * 	HashFunction,
+ * 	HashDigest
+ * } from "../../declarations/WebpackOptions"
+ */
+/** @import { Source } from "webpack-sources" */
+/** @import { Etag } from "../Cache" */
+/** @import { AssetInfo } from "../Compilation" */
+/** @import Compiler from "../Compiler" */
+/** @typedef {typeof import("../util/Hash")} Hash */
+
+/**
+ * Defines the comparator type used by this module.
+ * @template T
+ * @typedef {import("../util/comparators").Comparator<T>} Comparator
+ */
+
+/** @type {Hashes} */
+const EMPTY_SET = new Set();
+
+/**
+ * Adds the provided item or item to this object.
+ * @template T
+ * @param {T | T[]} itemOrItems item or items
+ * @param {Set<T>} list list
+ */
+const addToList = (itemOrItems, list) => {
+	if (Array.isArray(itemOrItems)) {
+		for (const item of itemOrItems) {
+			list.add(item);
+		}
+	} else if (itemOrItems) {
+		list.add(itemOrItems);
+	}
+};
+
+/**
+ * Compares two non-empty buffer chunk arrays for byte-equality without
+ * allocating a concatenated buffer.
+ * @param {Buffer[]} a first chunk array
+ * @param {Buffer[]} b second chunk array
+ * @returns {boolean} true if the concatenations are byte-equal
+ */
+const bufferArraysEqual = (a, b) => {
+	let aIdx = 0;
+	let aOff = 0;
+	let bIdx = 0;
+	let bOff = 0;
+	while (aIdx < a.length && bIdx < b.length) {
+		const aBuf = a[aIdx];
+		const bBuf = b[bIdx];
+		const len = Math.min(aBuf.length - aOff, bBuf.length - bOff);
+		if (aBuf.compare(bBuf, bOff, bOff + len, aOff, aOff + len) !== 0) {
+			return false;
+		}
+		aOff += len;
+		bOff += len;
+		if (aOff === aBuf.length) {
+			aIdx++;
+			aOff = 0;
+		}
+		if (bOff === bBuf.length) {
+			bIdx++;
+			bOff = 0;
+		}
+	}
+	return aIdx === a.length && bIdx === b.length;
+};
+
+/**
+ * Map sources to their buffer chunks and deduplicate by total byte content,
+ * grouping by total length first to avoid full comparisons.
+ * @template T
+ * @param {T[]} input list
+ * @param {(item: T) => Source} fn map function returning a Source
+ * @returns {Buffer[][]} unique chunk arrays
+ */
+const mapAndDeduplicateSourceBuffers = (input, fn) => {
+	/** @type {Map<number, Buffer[][]>} */
+	const bySize = new Map();
+	/** @type {Buffer[][]} */
+	const result = [];
+	for (const value of input) {
+		const source = fn(value);
+		// TODO webpack 6: drop the `buffers` check, require webpack-sources >= 3.4
+		// and call `source.buffers()` unconditionally.
+		const chunks =
+			// TODO remove in webpack 6, this is protection against authors who directly use `webpack-sources` outdated version
+			typeof source.buffers === "function"
+				? source.buffers()
+				: [source.buffer()];
+		let total = 0;
+		for (const c of chunks) total += c.length;
+		const sameSize = bySize.get(total);
+		if (sameSize) {
+			let duplicate = false;
+			for (const other of sameSize) {
+				if (bufferArraysEqual(chunks, other)) {
+					duplicate = true;
+					break;
+				}
+			}
+			if (duplicate) continue;
+			sameSize.push(chunks);
+		} else {
+			bySize.set(total, [chunks]);
+		}
+		result.push(chunks);
+	}
+	return result;
+};
+
+/**
+ * Escapes regular expression metacharacters
+ * @param {string} str String to quote
+ * @returns {string} Escaped string
+ */
+const quoteMeta = (str) => str.replace(/[-[\]\\/{}()*+?.^$|]/g, "\\$&");
+
+/** @type {WeakMap<Source, CachedSource>} */
+const cachedSourceMap = new WeakMap();
+
+/**
+ * Returns cached source.
+ * @param {Source} source source
+ * @returns {CachedSource} cached source
+ */
+const toCachedSource = (source) => {
+	if (source instanceof CachedSource) {
+		return source;
+	}
+	const entry = cachedSourceMap.get(source);
+	if (entry !== undefined) return entry;
+	const newSource = new CachedSource(CompatSource.from(source));
+	cachedSourceMap.set(source, newSource);
+	return newSource;
+};
+
+/** @typedef {Set<string>} Hashes */
+
+/**
+ * Defines the asset info for real content hash type used by this module.
+ * @typedef {object} AssetInfoForRealContentHash
+ * @property {string} name
+ * @property {AssetInfo} info
+ * @property {Source} source
+ * @property {RawSource | undefined} newSource
+ * @property {RawSource | undefined} newSourceWithoutOwn
+ * @property {string} content
+ * @property {Hashes | undefined} ownHashes
+ * @property {Promise<void> | undefined} contentComputePromise
+ * @property {Promise<void> | undefined} contentComputeWithoutOwnPromise
+ * @property {Hashes | undefined} referencedHashes
+ * @property {Hashes} hashes
+ */
+
+const createCompilationHooks = () => ({
+	/**
+	 * @type {SyncBailHook<[Buffer[], string], string | void>}
+	 * @since 5.8.0
+	 */
+	updateHash: new SyncBailHook(["content", "oldHash"])
+});
+
+/**
+ * @typedef {ReturnType<typeof createCompilationHooks>} CompilationHooks
+ */
+
+/**
+ * Defines the real content hash plugin options type used by this module.
+ * @typedef {object} RealContentHashPluginOptions
+ * @property {HashFunction} hashFunction the hash function to use
+ * @property {HashDigest} hashDigest the hash digest to use
+ * @property {boolean=} onDemand run only where analyzable output marked a name for repair
+ */
+
+const PLUGIN_NAME = "RealContentHashPlugin";
+
+class RealContentHashPlugin {
+	/**
+	 * Creates an instance of RealContentHashPlugin.
+	 * @param {RealContentHashPluginOptions} options options
+	 */
+	constructor({ hashFunction, hashDigest, onDemand }) {
+		/** @type {HashFunction} */
+		this._hashFunction = hashFunction;
+		/** @type {HashDigest} */
+		this._hashDigest = hashDigest;
+		/** @type {boolean} */
+		this._onDemand = Boolean(onDemand);
+	}
+
+	/**
+	 * Applies the plugin by registering its hooks on the compiler.
+	 * @param {Compiler} compiler the compiler instance
+	 * @returns {void}
+	 */
+	apply(compiler) {
+		compiler.hooks.compilation.tap(PLUGIN_NAME, (compilation) => {
+			const cacheAnalyse = compilation.getCache(
+				"RealContentHashPlugin|analyse"
+			);
+			const cacheGenerate = compilation.getCache(
+				"RealContentHashPlugin|generate"
+			);
+			const hooks = RealContentHashPlugin.getCompilationHooks(compilation);
+			compilation.hooks.processAssets.tapPromise(
+				{
+					name: PLUGIN_NAME,
+					stage: Compilation.PROCESS_ASSETS_STAGE_OPTIMIZE_HASH
+				},
+				async () => {
+					// Set by the deferred fill where a baked name would leave a hashed name
+					// stale; only then is `[chunkhash]` repaired rather than left as named.
+					const repairing = compilation.runtimeTemplate.needsAnalyzableRepair();
+					if (this._onDemand && !repairing) return;
+					// On demand, only a name the fill left stale moves, and whatever names it.
+					const repairedAssets = this._onDemand
+						? compilation.runtimeTemplate.analyzableRepairedAssets()
+						: undefined;
+					const assets = compilation.getAssets();
+					/** @type {AssetInfoForRealContentHash[]} */
+					const assetsWithInfo = [];
+					/** @type {Map<string, [AssetInfoForRealContentHash]>} */
+					const hashToAssets = new Map();
+					// Inline `[contenthash:<digest>]` digest per hash, so the recomputed
+					// real hash is re-encoded in it instead of `output.hashDigest`.
+					/** @type {Map<string, string>} */
+					const hashToDigest = new Map();
+					for (const { source, info, name } of assets) {
+						const cachedSource = toCachedSource(source);
+						const content = /** @type {string} */ (cachedSource.source());
+						/** @type {Hashes} */
+						const hashes = new Set();
+						addToList(info.contenthash, hashes);
+						if (repairing) addToList(info.chunkhash, hashes);
+						if (info.contenthashDigest) {
+							for (const hash of Object.keys(info.contenthashDigest)) {
+								hashToDigest.set(hash, info.contenthashDigest[hash]);
+							}
+						}
+						/** @type {AssetInfoForRealContentHash} */
+						const data = {
+							name,
+							info,
+							source: cachedSource,
+							newSource: undefined,
+							newSourceWithoutOwn: undefined,
+							content,
+							ownHashes: undefined,
+							contentComputePromise: undefined,
+							contentComputeWithoutOwnPromise: undefined,
+							referencedHashes: undefined,
+							hashes
+						};
+						assetsWithInfo.push(data);
+						for (const hash of hashes) {
+							const list = hashToAssets.get(hash);
+							if (list === undefined) {
+								hashToAssets.set(hash, [data]);
+							} else {
+								list.push(data);
+							}
+						}
+					}
+					if (hashToAssets.size === 0) return;
+					const hashRegExp = new RegExp(
+						Array.from(hashToAssets.keys(), quoteMeta).join("|"),
+						"g"
+					);
+					await Promise.all(
+						assetsWithInfo.map(async (asset) => {
+							const { name, source, content, hashes } = asset;
+							if (Buffer.isBuffer(content)) {
+								asset.referencedHashes = EMPTY_SET;
+								asset.ownHashes = EMPTY_SET;
+								return;
+							}
+							const etag = cacheAnalyse.mergeEtags(
+								cacheAnalyse.getLazyHashedEtag(source),
+								[...hashes].join("|")
+							);
+							[asset.referencedHashes, asset.ownHashes] =
+								await cacheAnalyse.providePromise(name, etag, () => {
+									/** @type {Hashes} */
+									const referencedHashes = new Set();
+									/** @type {Hashes} */
+									const ownHashes = new Set();
+									const inContent = content.match(hashRegExp);
+									if (inContent) {
+										for (const hash of inContent) {
+											if (hashes.has(hash)) {
+												ownHashes.add(hash);
+												continue;
+											}
+											referencedHashes.add(hash);
+										}
+									}
+									return [referencedHashes, ownHashes];
+								});
+						})
+					);
+					/**
+					 * Returns the referenced hashes.
+					 * @param {string} hash the hash
+					 * @returns {undefined | Hashes} the referenced hashes
+					 */
+					const getDependencies = (hash) => {
+						const assets = hashToAssets.get(hash);
+						if (!assets) {
+							const referencingAssets = assetsWithInfo.filter((asset) =>
+								/** @type {Hashes} */ (asset.referencedHashes).has(hash)
+							);
+							const err = new WebpackError(`RealContentHashPlugin
+Some kind of unexpected caching problem occurred.
+An asset was cached with a reference to another asset (${hash}) that's not in the compilation anymore.
+Either the asset was incorrectly cached, or the referenced asset should also be restored from cache.
+Referenced by:
+${referencingAssets
+	.map((a) => {
+		const match = new RegExp(`.{0,20}${quoteMeta(hash)}.{0,20}`).exec(
+			a.content
+		);
+		return ` - ${a.name}: ...${match ? match[0] : "???"}...`;
+	})
+	.join("\n")}`);
+							compilation.errors.push(err);
+							return;
+						}
+						/** @type {Hashes} */
+						const hashes = new Set();
+						for (const { referencedHashes, ownHashes } of assets) {
+							if (!(/** @type {Hashes} */ (ownHashes).has(hash))) {
+								for (const hash of /** @type {Hashes} */ (ownHashes)) {
+									hashes.add(hash);
+								}
+							}
+							for (const hash of /** @type {Hashes} */ (referencedHashes)) {
+								hashes.add(hash);
+							}
+						}
+						return hashes;
+					};
+					// Tarjan: hashes naming each other come out as one group where a chain
+					// walk would never end, and groups arrive dependencies-first as needed.
+					/** @type {string[][]} */
+					const groupsInOrder = [];
+					/** @type {Map<string, number>} */
+					const indexOf = new Map();
+					/** @type {Map<string, number>} */
+					const lowOf = new Map();
+					/** @type {Set<string>} */
+					const onStack = new Set();
+					/** @type {string[]} */
+					const stack = [];
+					/**
+					 * Visits one hash and everything its assets reference.
+					 * @param {string} hash the hash
+					 * @returns {void}
+					 */
+					const strongConnect = (hash) => {
+						const index = indexOf.size;
+						indexOf.set(hash, index);
+						lowOf.set(hash, index);
+						stack.push(hash);
+						onStack.add(hash);
+						// An unowned reference reports the caching problem and stays a leaf.
+						const deps = getDependencies(hash);
+						if (deps) {
+							for (const dep of deps) {
+								if (!indexOf.has(dep)) {
+									strongConnect(dep);
+									lowOf.set(
+										hash,
+										Math.min(
+											/** @type {number} */ (lowOf.get(hash)),
+											/** @type {number} */ (lowOf.get(dep))
+										)
+									);
+								} else if (onStack.has(dep)) {
+									lowOf.set(
+										hash,
+										Math.min(
+											/** @type {number} */ (lowOf.get(hash)),
+											/** @type {number} */ (indexOf.get(dep))
+										)
+									);
+								}
+							}
+						}
+						if (lowOf.get(hash) === indexOf.get(hash)) {
+							/** @type {string[]} */
+							const group = [];
+							/** @type {string} */
+							let member;
+							do {
+								member = /** @type {string} */ (stack.pop());
+								onStack.delete(member);
+								if (hashToAssets.has(member)) group.push(member);
+							} while (member !== hash);
+							if (group.length > 0) groupsInOrder.push(group);
+						}
+					};
+					for (const hash of hashToAssets.keys()) {
+						if (!indexOf.has(hash)) strongConnect(hash);
+					}
+					/** @type {Map<string, string>} */
+					const hashToNewHash = new Map();
+					/**
+					 * Returns etag.
+					 * @param {AssetInfoForRealContentHash} asset asset info
+					 * @returns {Etag} etag
+					 */
+					const getEtag = (asset) =>
+						cacheGenerate.mergeEtags(
+							cacheGenerate.getLazyHashedEtag(asset.source),
+							Array.from(
+								/** @type {Hashes} */ (asset.referencedHashes),
+								(hash) => hashToNewHash.get(hash)
+							).join("|")
+						);
+					/**
+					 * Compute new content.
+					 * @param {AssetInfoForRealContentHash} asset asset info
+					 * @returns {Promise<void>}
+					 */
+					const computeNewContent = (asset) => {
+						if (asset.contentComputePromise) return asset.contentComputePromise;
+						return (asset.contentComputePromise = (async () => {
+							if (
+								/** @type {Hashes} */ (asset.ownHashes).size > 0 ||
+								[.../** @type {Hashes} */ (asset.referencedHashes)].some(
+									(hash) => hashToNewHash.get(hash) !== hash
+								)
+							) {
+								const identifier = asset.name;
+								const etag = getEtag(asset);
+								asset.newSource = await cacheGenerate.providePromise(
+									identifier,
+									etag,
+									() => {
+										const newContent = asset.content.replace(
+											hashRegExp,
+											(hash) => /** @type {string} */ (hashToNewHash.get(hash))
+										);
+										return new RawSource(newContent);
+									}
+								);
+							}
+						})());
+					};
+					/**
+					 * Compute new content without own.
+					 * @param {AssetInfoForRealContentHash} asset asset info
+					 * @returns {Promise<void>}
+					 */
+					const computeNewContentWithoutOwn = (asset) => {
+						if (asset.contentComputeWithoutOwnPromise) {
+							return asset.contentComputeWithoutOwnPromise;
+						}
+						return (asset.contentComputeWithoutOwnPromise = (async () => {
+							if (
+								/** @type {Hashes} */ (asset.ownHashes).size > 0 ||
+								[.../** @type {Hashes} */ (asset.referencedHashes)].some(
+									(hash) => hashToNewHash.get(hash) !== hash
+								)
+							) {
+								const identifier = `${asset.name}|without-own`;
+								const etag = getEtag(asset);
+								asset.newSourceWithoutOwn = await cacheGenerate.providePromise(
+									identifier,
+									etag,
+									() => {
+										const newContent = asset.content.replace(
+											hashRegExp,
+											(hash) => {
+												if (
+													/** @type {Hashes} */
+													(asset.ownHashes).has(hash)
+												) {
+													return "";
+												}
+												return /** @type {string} */ (hashToNewHash.get(hash));
+											}
+										);
+										return new RawSource(newContent);
+									}
+								);
+							}
+						})());
+					};
+					/** @type {Comparator<AssetInfoForRealContentHash>} */
+					const comparator = compareSelect((a) => a.name, compareStrings);
+					/**
+					 * Whether a group's names went stale: the fill rewrote an asset of theirs, or
+					 * one names a hash that already moved (groups arrive dependencies first).
+					 * @param {string[]} group the hashes assigned together
+					 * @returns {boolean} true when they have to be recomputed
+					 */
+					const staleOnDemand = (group) => {
+						const own = new Set(group);
+						for (const hash of group) {
+							for (const asset of /** @type {AssetInfoForRealContentHash[]} */ (
+								hashToAssets.get(hash)
+							)) {
+								if (
+									/** @type {ReadonlySet<string>} */ (repairedAssets).has(
+										asset.name
+									)
+								) {
+									return true;
+								}
+								for (const referenced of /** @type {Hashes} */ (
+									asset.referencedHashes
+								)) {
+									if (
+										!own.has(referenced) &&
+										hashToNewHash.get(referenced) !== referenced
+									) {
+										return true;
+									}
+								}
+							}
+						}
+						return false;
+					};
+					for (const group of groupsInOrder) {
+						if (repairedAssets !== undefined && !staleOnDemand(group)) {
+							for (const hash of group) hashToNewHash.set(hash, hash);
+							continue;
+						}
+						// A cycle is assigned as one group: members are told apart by stable
+						// markers, so the group hashes to a fixed point instead of chasing one.
+						if (group.length > 1) {
+							const members = group.sort();
+							/** @type {Map<string, string>} */
+							const markerOf = new Map(
+								members.map((hash, i) => [hash, `|webpack/scc/${i}|`])
+							);
+							for (let i = 0; i < members.length; i++) {
+								const oldHash = members[i];
+								const memberAssets =
+									/** @type {AssetInfoForRealContentHash[]} */
+									(hashToAssets.get(oldHash));
+								memberAssets.sort(comparator);
+								const hash = createHash(this._hashFunction);
+								if (compilation.outputOptions.hashSalt) {
+									hash.update(compilation.outputOptions.hashSalt);
+								}
+								// Two members can normalize to the same text; the position keeps
+								// their hashes apart, and sorting keeps the position stable.
+								hash.update(`${i}`);
+								for (const asset of memberAssets) {
+									if (Buffer.isBuffer(asset.content)) {
+										hash.update(asset.content);
+										continue;
+									}
+									const withoutOwn =
+										/** @type {Hashes} */
+										(asset.ownHashes).has(oldHash);
+									hash.update(
+										asset.content.replace(hashRegExp, (matched) => {
+											// Its own occurrences vanish, exactly as a lone hash's do.
+											if (
+												withoutOwn &&
+												/** @type {Hashes} */ (asset.ownHashes).has(matched)
+											) {
+												return "";
+											}
+											const marker = markerOf.get(matched);
+											if (marker !== undefined) return marker;
+											const mapped = hashToNewHash.get(matched);
+											return mapped === undefined ? matched : mapped;
+										})
+									);
+								}
+								const digest = hash.digest(
+									/** @type {HashDigest} */ (
+										hashToDigest.get(oldHash) || this._hashDigest
+									)
+								);
+								hashToNewHash.set(oldHash, digest.slice(0, oldHash.length));
+							}
+							continue;
+						}
+						const oldHash = group[0];
+						const assets =
+							/** @type {AssetInfoForRealContentHash[]} */
+							(hashToAssets.get(oldHash));
+						assets.sort(comparator);
+						await Promise.all(
+							assets.map((asset) =>
+								/** @type {Hashes} */ (asset.ownHashes).has(oldHash)
+									? computeNewContentWithoutOwn(asset)
+									: computeNewContent(asset)
+							)
+						);
+						const uniqueChunkArrays = mapAndDeduplicateSourceBuffers(
+							assets,
+							(asset) => {
+								if (/** @type {Hashes} */ (asset.ownHashes).has(oldHash)) {
+									return asset.newSourceWithoutOwn || asset.source;
+								}
+								return asset.newSource || asset.source;
+							}
+						);
+						/** @type {string | undefined} */
+						let newHash;
+						// Only materialize the public `Buffer[]` (one entry per unique
+						// asset) when something is tapped; otherwise the hot path feeds
+						// chunks into the hash directly, avoiding per-asset Buffer.concat.
+						if (hooks.updateHash.isUsed()) {
+							const assetsContent = uniqueChunkArrays.map((chunks) =>
+								chunks.length === 1 ? chunks[0] : Buffer.concat(chunks)
+							);
+							newHash =
+								hooks.updateHash.call(assetsContent, oldHash) || undefined;
+						}
+						if (!newHash) {
+							const hash = createHash(this._hashFunction);
+							if (compilation.outputOptions.hashSalt) {
+								hash.update(compilation.outputOptions.hashSalt);
+							}
+							for (const chunks of uniqueChunkArrays) {
+								for (const c of chunks) hash.update(c);
+							}
+							const digest = hash.digest(
+								/** @type {HashDigest} */ (
+									hashToDigest.get(oldHash) || this._hashDigest
+								)
+							);
+							newHash = digest.slice(0, oldHash.length);
+						}
+						hashToNewHash.set(oldHash, newHash);
+					}
+					await Promise.all(
+						assetsWithInfo.map(async (asset) => {
+							await computeNewContent(asset);
+							const newName = asset.name.replace(
+								hashRegExp,
+								(hash) => /** @type {string} */ (hashToNewHash.get(hash))
+							);
+
+							/**
+							 * @param {string | string[]} hash what the asset was named with
+							 * @returns {string | string[]} the same, repaired
+							 */
+							const repaired = (hash) =>
+								Array.isArray(hash)
+									? hash.map(
+											(hash) => /** @type {string} */ (hashToNewHash.get(hash))
+										)
+									: /** @type {string} */ (hashToNewHash.get(hash));
+							/** @type {AssetInfo} */
+							const infoUpdate = {};
+							if (asset.info.contenthash) {
+								infoUpdate.contenthash = repaired(asset.info.contenthash);
+							}
+							// Tracked only while repairing, so only then does it move with the name.
+							if (repairing && asset.info.chunkhash) {
+								infoUpdate.chunkhash = repaired(asset.info.chunkhash);
+							}
+
+							if (asset.newSource !== undefined) {
+								compilation.updateAsset(
+									asset.name,
+									asset.newSource,
+									infoUpdate
+								);
+							} else {
+								compilation.updateAsset(asset.name, asset.source, infoUpdate);
+							}
+
+							if (asset.name !== newName) {
+								compilation.renameAsset(asset.name, newName);
+							}
+						})
+					);
+				}
+			);
+		});
+	}
+}
+
+RealContentHashPlugin.getCompilationHooks = createHooksRegistry(
+	createCompilationHooks
+);
+
+module.exports = RealContentHashPlugin;

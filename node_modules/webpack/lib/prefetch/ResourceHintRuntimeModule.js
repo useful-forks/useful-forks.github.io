@@ -1,0 +1,138 @@
+/*
+	MIT License http://www.opensource.org/licenses/mit-license.php
+*/
+
+"use strict";
+
+const { SyncWaterfallHook } = require("tapable");
+const Compilation = require("../Compilation");
+const RuntimeGlobals = require("../RuntimeGlobals");
+const RuntimeModule = require("../RuntimeModule");
+const Template = require("../Template");
+const { guessAsAttribute } = require("./parseResourceHintOptions");
+
+/**
+ * @typedef {object} ResourceHintRuntimeModulePluginHooks
+ * @property {SyncWaterfallHook<[string]>} linkPrefetch
+ * @property {SyncWaterfallHook<[string]>} linkPreload
+ */
+
+/** @type {WeakMap<Compilation, ResourceHintRuntimeModulePluginHooks>} */
+const compilationHooksMap = new WeakMap();
+
+class ResourceHintRuntimeModule extends RuntimeModule {
+	/**
+	 * @param {Compilation} compilation the compilation
+	 * @returns {ResourceHintRuntimeModulePluginHooks} hooks
+	 */
+	static getCompilationHooks(compilation) {
+		if (!(compilation instanceof Compilation)) {
+			throw new TypeError(
+				"The 'compilation' argument must be an instance of Compilation"
+			);
+		}
+		let hooks = compilationHooksMap.get(compilation);
+		if (hooks === undefined) {
+			hooks = {
+				linkPrefetch: new SyncWaterfallHook(["source"]),
+				linkPreload: new SyncWaterfallHook(["source"])
+			};
+			compilationHooksMap.set(compilation, hooks);
+		}
+		return hooks;
+	}
+
+	/**
+	 * @param {"prefetch" | "preload"} rel link rel value
+	 */
+	constructor(rel) {
+		super(`asset ${rel}`, RuntimeModule.STAGE_ATTACH);
+		this._rel = rel;
+	}
+
+	/**
+	 * The `[handlerMap, key]` pairs this module installs onto a chunk handler map
+	 * such as `__webpack_require__.f`, or `null` where it cannot name them.
+	 * @returns {[string, string][] | null} installed chunk handlers (do not mutate)
+	 */
+	getInstalledChunkHandlers() {
+		return RuntimeModule.NO_CHUNK_HANDLERS;
+	}
+
+	/**
+	 * Generates runtime code for this runtime module.
+	 * @returns {string | null} runtime code
+	 */
+	generate() {
+		const compilation = /** @type {Compilation} */ (this.compilation);
+		const { runtimeTemplate, outputOptions } = compilation;
+		const { crossOriginLoading } = outputOptions;
+		const isNeutralPlatform = runtimeTemplate.isNeutralPlatform();
+		const rel = this._rel;
+		const fnName =
+			rel === "prefetch"
+				? RuntimeGlobals.prefetchAsset
+				: RuntimeGlobals.preloadAsset;
+		const hook =
+			ResourceHintRuntimeModule.getCompilationHooks(compilation)[
+				rel === "prefetch" ? "linkPrefetch" : "linkPreload"
+			];
+
+		const body = [
+			"if (installed[href]) return href;",
+			"installed[href] = 1;",
+			hook.call(
+				Template.asString([
+					"var link = document.createElement('link');",
+					`link.rel = ${JSON.stringify(rel)};`,
+					"link.href = href;",
+					"if (as) link.as = as;",
+					"if (type) link.type = type;",
+					"if (media) link.media = media;",
+					"if (fetchPriority) {",
+					Template.indent([
+						'link.setAttribute("fetchpriority", fetchPriority);'
+					]),
+					"}",
+					`if (${RuntimeGlobals.scriptNonce}) {`,
+					Template.indent(
+						`link.setAttribute("nonce", ${RuntimeGlobals.scriptNonce});`
+					),
+					"}",
+					crossOriginLoading
+						? crossOriginLoading === "use-credentials"
+							? 'link.crossOrigin = "use-credentials";'
+							: Template.asString([
+									"if (link.href.indexOf(window.location.origin + '/') !== 0) {",
+									Template.indent(
+										`link.crossOrigin = ${JSON.stringify(crossOriginLoading)};`
+									),
+									"}"
+								])
+						: ""
+				])
+			),
+			"document.head.appendChild(link);",
+			"return href;"
+		];
+
+		const fnBody = isNeutralPlatform
+			? ["if (typeof document === 'undefined') return href;", ...body]
+			: body;
+
+		// `Object.create(null)` keeps the dedupe map free of inherited
+		// properties (`toString`, `__proto__`, …) so any URL string is a
+		// safe key.
+		return Template.asString([
+			"var installed = Object.create(null);",
+			`${fnName} = ${runtimeTemplate.basicFunction(
+				"href, as, type, media, fetchPriority",
+				fnBody
+			)};`
+		]);
+	}
+}
+
+ResourceHintRuntimeModule.guessAsAttribute = guessAsAttribute;
+
+module.exports = ResourceHintRuntimeModule;

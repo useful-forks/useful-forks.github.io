@@ -1,0 +1,657 @@
+/*
+	MIT License http://www.opensource.org/licenses/mit-license.php
+*/
+
+"use strict";
+
+const RuntimeGlobals = require("../RuntimeGlobals");
+const Template = require("../Template");
+const HarmonyImportDependency = require("../dependencies/HarmonyImportDependency");
+const HelperRuntimeModule = require("./HelperRuntimeModule");
+
+/** @import { ModuleId } from "../ChunkGraph" */
+/** @import Module, { RuntimeRequirements, ExportsType } from "../Module" */
+/** @import ModuleGraph from "../ModuleGraph" */
+
+/**
+ * @typedef {object} DeferredCycleState
+ * @property {Map<Module, Set<Module>>} sccOf strongly-connected component per module (shared object per component)
+ * @property {Map<Module, Set<Module> | null>} peers memoized SCC peers (component minus the module) per deferred module
+ */
+
+/** @type {WeakMap<ModuleGraph, DeferredCycleState>} */
+const deferredCycleCache = new WeakMap();
+
+/**
+ * Materializes the active harmony-import targets of a module (deferred edges
+ * included, matching the spec's `RequestedModules` recursion).
+ * @param {ModuleGraph} moduleGraph the module graph
+ * @param {Module} module the module
+ * @returns {Module[]} imported modules
+ */
+function harmonyImportTargets(moduleGraph, module) {
+	const connections = moduleGraph.getOutgoingConnectionsByModule(module);
+	if (!connections) return [];
+	/** @type {Module[]} */
+	const targets = [];
+	for (const [dep, moduleConnections] of connections) {
+		if (
+			dep &&
+			moduleConnections.some(
+				(c) =>
+					c.dependency instanceof HarmonyImportDependency &&
+					c.isTargetActive(undefined)
+			)
+		) {
+			targets.push(dep);
+		}
+	}
+	return targets;
+}
+
+/**
+ * Assigns every module reachable from `seed` (through active harmony imports)
+ * to its strongly-connected component via an iterative Tarjan pass, writing the
+ * results into `sccOf`. Modules already assigned by an earlier pass are treated
+ * as finished, so across all deferred imports every edge is visited once
+ * (O(V + E) total) rather than re-walked per import.
+ * @param {ModuleGraph} moduleGraph the module graph
+ * @param {Module} seed the module to explore from
+ * @param {Map<Module, Set<Module>>} sccOf module-to-component map to populate
+ * @returns {void}
+ */
+function assignStronglyConnectedComponents(moduleGraph, seed, sccOf) {
+	if (sccOf.has(seed)) return;
+	/** @type {Map<Module, number>} */
+	const index = new Map();
+	/** @type {Map<Module, number>} */
+	const low = new Map();
+	/** @type {Set<Module>} */
+	const onStack = new Set();
+	/** @type {Module[]} */
+	const componentStack = [];
+	/** @type {{ node: Module, targets: Module[], i: number }[]} */
+	const work = [];
+	let counter = 0;
+	/**
+	 * @param {Module} node node to open
+	 */
+	const open = (node) => {
+		index.set(node, counter);
+		low.set(node, counter);
+		counter++;
+		componentStack.push(node);
+		onStack.add(node);
+		work.push({ node, targets: harmonyImportTargets(moduleGraph, node), i: 0 });
+	};
+	open(seed);
+	while (work.length > 0) {
+		const frame = work[work.length - 1];
+		if (frame.i < frame.targets.length) {
+			const next = frame.targets[frame.i++];
+			// Already in a finished component (from this or a prior pass): skip.
+			if (sccOf.has(next)) continue;
+			if (!index.has(next)) {
+				open(next);
+			} else if (onStack.has(next)) {
+				const nodeLow = /** @type {number} */ (low.get(frame.node));
+				const nextIndex = /** @type {number} */ (index.get(next));
+				if (nextIndex < nodeLow) low.set(frame.node, nextIndex);
+			}
+			continue;
+		}
+		work.pop();
+		const node = frame.node;
+		const nodeLow = /** @type {number} */ (low.get(node));
+		if (work.length > 0) {
+			const parent = work[work.length - 1].node;
+			if (nodeLow < /** @type {number} */ (low.get(parent))) {
+				low.set(parent, nodeLow);
+			}
+		}
+		if (nodeLow === index.get(node)) {
+			/** @type {Set<Module>} */
+			const component = new Set();
+			let member;
+			do {
+				member = /** @type {Module} */ (componentStack.pop());
+				onStack.delete(member);
+				component.add(member);
+			} while (member !== node);
+			for (const m of component) sccOf.set(m, component);
+		}
+	}
+}
+
+/**
+ * Per the TC39 import-defer spec's `ReadyForSyncExecution`, forcing evaluation
+ * of a deferred module must throw when any module in its transitive static
+ * import closure is currently evaluating. Only a module in `module`'s own
+ * strongly-connected component can be evaluating at that point (anything else it
+ * imports is either already evaluated or not started), so we emit just the SCC
+ * peers instead of the whole (potentially huge) forward closure.
+ * @param {ModuleGraph} moduleGraph the module graph
+ * @param {Module} module the deferred module
+ * @returns {Set<Module> | null} the SCC peers when cyclic, otherwise null
+ */
+function getDeferredCycleModules(moduleGraph, module) {
+	let state = deferredCycleCache.get(moduleGraph);
+	if (state === undefined) {
+		state = { sccOf: new Map(), peers: new Map() };
+		deferredCycleCache.set(moduleGraph, state);
+	}
+	const cached = state.peers.get(module);
+	if (cached !== undefined) return cached;
+	assignStronglyConnectedComponents(moduleGraph, module, state.sccOf);
+	const component = state.sccOf.get(module);
+	// A trivial component (size 1, no self-cycle peers) means no cycle; a direct
+	// self-loop is already covered by the `evaluating` check on `module` itself.
+	let result = null;
+	if (component !== undefined && component.size > 1) {
+		result = new Set(component);
+		result.delete(module);
+	}
+	state.peers.set(module, result);
+	return result;
+}
+
+/**
+ * Maps a defer-cycle closure to the runtime module ids whose `evaluating` flag
+ * the deferred namespace must check. `resolveId` maps a closure module to the
+ * runtime id that carries its evaluation state (its own id, or the id of the
+ * concatenated module that absorbed it); unresolved (`null`) members are
+ * dropped. Returns `null` when there is nothing to check.
+ * @param {Set<Module> | null} closure closure modules, or null when not cyclic
+ * @param {(module: Module) => ModuleId | null} resolveId maps a module to its runtime id
+ * @returns {ModuleId[] | null} deduplicated runtime ids, or null
+ */
+function getDeferredCycleModuleIds(closure, resolveId) {
+	if (closure === null) return null;
+	/** @type {Set<ModuleId>} */
+	const ids = new Set();
+	for (const module of closure) {
+		const id = resolveId(module);
+		if (id !== null) ids.add(id);
+	}
+	return ids.size > 0 ? [...ids] : null;
+}
+
+/**
+ * @param {ExportsType} exportsType exports type
+ * @returns {string} mode
+ */
+function getMakeDeferredNamespaceModeFromExportsType(exportsType) {
+	// number is from createFakeNamespaceObject mode ^ 1
+	if (exportsType === "namespace") return `/* ${exportsType} */ 8`;
+	if (exportsType === "default-only") return `/* ${exportsType} */ 0`;
+	if (exportsType === "default-with-named") return `/* ${exportsType} */ 2`;
+	if (exportsType === "dynamic") return `/* ${exportsType} */ 6`;
+	throw new Error(`Unknown exports type: ${exportsType}`);
+}
+
+/**
+ * @param {string} moduleId moduleId
+ * @param {ExportsType} exportsType exportsType
+ * @param {(ModuleId | null)[]} asyncDepsIds asyncDepsIds
+ * @param {ModuleId[] | null} syncCycleDepsIds transitive static closure ids when the module is part of a defer cycle
+ * @param {RuntimeRequirements} runtimeRequirements runtime requirements
+ * @returns {string} call make optimized deferred namespace object
+ */
+function getOptimizedDeferredModule(
+	moduleId,
+	exportsType,
+	asyncDepsIds,
+	syncCycleDepsIds,
+	runtimeRequirements
+) {
+	runtimeRequirements.add(RuntimeGlobals.makeOptimizedDeferredNamespaceObject);
+	const mode = getMakeDeferredNamespaceModeFromExportsType(exportsType);
+	const asyncDeps = asyncDepsIds.filter((x) => x !== null);
+	const hasSync = syncCycleDepsIds !== null && syncCycleDepsIds.length > 0;
+	// `syncDeps` is passed positionally after `asyncDeps`, so a `0` placeholder
+	// keeps the slot when the module has cycle deps but no async deps.
+	const args = [moduleId, mode];
+	if (asyncDeps.length > 0 || hasSync) {
+		args.push(asyncDeps.length > 0 ? JSON.stringify(asyncDeps) : "0");
+	}
+	if (hasSync) args.push(JSON.stringify(syncCycleDepsIds));
+	return `${RuntimeGlobals.makeOptimizedDeferredNamespaceObject}(${args.join(
+		", "
+	)})`;
+}
+
+class MakeOptimizedDeferredNamespaceObjectRuntimeModule extends HelperRuntimeModule {
+	/**
+	 * Returns true, if the runtime module should get it's own scope.
+	 * When false, `generate()` must emit complete statements ending with `;`
+	 * so a following runtime IIFE is not parsed as a call (ASI).
+	 * @returns {boolean} true, if the runtime module should get it's own scope
+	 */
+	shouldIsolate() {
+		return false;
+	}
+
+	/**
+	 * @param {boolean} hasAsyncRuntime if async module is used.
+	 */
+	constructor(hasAsyncRuntime) {
+		super("make optimized deferred namespace object");
+		/** @type {boolean} */
+		this.hasAsyncRuntime = hasAsyncRuntime;
+	}
+
+	/**
+	 * Generates runtime code for this runtime module.
+	 * @returns {string | null} runtime code
+	 */
+	generate() {
+		if (!this.compilation) return null;
+		const { runtimeTemplate } = this.compilation;
+		const cst = runtimeTemplate.renderConst();
+		const lt = runtimeTemplate.renderLet();
+		const fn = RuntimeGlobals.makeOptimizedDeferredNamespaceObject;
+		const hasAsync = this.hasAsyncRuntime;
+		return Template.asString([
+			// Note: must be a function (not arrow), because this is used in body!
+			// `asyncDeps` keeps a fixed positional slot even without async runtime
+			// so the trailing `syncDeps` (defer-cycle closure) always lines up.
+			`${fn} = function(moduleId, mode, asyncDeps, syncDeps) {`,
+			Template.indent([
+				`${cst} r = this;`,
+				hasAsync ? `${cst} isAsync = asyncDeps && asyncDeps.length;` : "",
+				`${cst} obj = {`,
+				Template.indent([
+					"get a() {",
+					Template.indent([
+						// Forcing a module that is already evaluating, a cycle reached
+						// through a deferred import, must throw rather than expose partial
+						// exports. `syncDeps` carries the closure that catches it first.
+						`${cst} cachedModule = __webpack_module_cache__[moduleId];`,
+						'if (cachedModule !== undefined && (cachedModule.evaluating || cachedModule.evaluatingAsync)) throw new TypeError("Cannot access a deferred module namespace while the module is being evaluated");',
+						"if (syncDeps) for (var i = 0; i < syncDeps.length; i++) {",
+						Template.indent([
+							`${cst} depModule = __webpack_module_cache__[syncDeps[i]];`,
+							'if (depModule !== undefined && (depModule.evaluating || depModule.evaluatingAsync)) throw new TypeError("Cannot access a deferred module namespace while a dependency is being evaluated");'
+						]),
+						"}",
+						`${lt} exports = r(moduleId);`,
+						hasAsync
+							? `if(isAsync) exports = exports[${RuntimeGlobals.asyncModuleExportSymbol}];`
+							: "",
+						// if exportsType is "namespace" we can generate the most optimized code,
+						// on the second access, we can avoid trigger the getter.
+						// we can also do this if exportsType is "dynamic" and there is a "__esModule" property on it.
+						'if(mode & 8 || (mode & 4 && exports.__esModule)) Object.defineProperty(this, "a", { value: exports });',
+						"return exports;"
+					]),
+					"}"
+				]),
+				"};",
+				hasAsync
+					? // `evaluating` is on the stack, so awaiting it would deadlock;
+						// `evaluating-async` is suspended and must still be awaited.
+						`if(isAsync) obj[${RuntimeGlobals.deferredModuleAsyncTransitiveDependenciesSymbol}] = asyncDeps.filter(${runtimeTemplate.basicFunction(
+							"id",
+							[
+								`${cst} dep = __webpack_module_cache__[id];`,
+								"if (dep && dep.evaluating) return false;",
+								"r(id);",
+								"return true;"
+							]
+						)});`
+					: "",
+				"return obj;"
+			]),
+			"};"
+		]);
+	}
+}
+
+class MakeDeferredNamespaceObjectRuntimeModule extends HelperRuntimeModule {
+	/**
+	 * Returns true, if the runtime module should get it's own scope.
+	 * When false, `generate()` must emit complete statements ending with `;`
+	 * so a following runtime IIFE is not parsed as a call (ASI).
+	 * @returns {boolean} true, if the runtime module should get it's own scope
+	 */
+	shouldIsolate() {
+		return false;
+	}
+
+	/**
+	 * @param {boolean} hasAsyncRuntime if async module is used.
+	 * @param {boolean} sealed a call site builds a namespace from a known export list
+	 * @param {boolean} synthesized a call site builds one from the module's exports
+	 */
+	constructor(hasAsyncRuntime, sealed, synthesized) {
+		super("make deferred namespace object");
+		/** @type {boolean} */
+		this.hasAsyncRuntime = hasAsyncRuntime;
+		/** @type {boolean} */
+		this.sealed = sealed;
+		/** @type {boolean} */
+		this.synthesized = synthesized;
+	}
+
+	/**
+	 * Generates runtime code for this runtime module.
+	 * @returns {string | null} runtime code
+	 */
+	generate() {
+		if (!this.compilation) return null;
+		const { runtimeTemplate } = this.compilation;
+		const cst = runtimeTemplate.renderConst();
+		const lt = runtimeTemplate.renderLet();
+		const fn = RuntimeGlobals.makeDeferredNamespaceObject;
+		const hasAsync = this.hasAsyncRuntime;
+		// A build reaches only the shapes its call sites ask for, so the other
+		// one's branches are dead weight in every bundle that ships this runtime.
+		const sealed = this.sealed;
+		const synthesized = this.synthesized;
+		const init = `${runtimeTemplate.optionalChaining("init", "()")};`;
+		return `${fn} = ${runtimeTemplate.basicFunction(
+			"moduleId, mode, exportNames",
+			[
+				// WHY: the TC39 import-defer spec makes a deferred namespace distinct
+				// from its eager counterpart, and one module reached from several defer
+				// sites must yield the same object, so the Proxy is cached per moduleId.
+				//
+				// Bit 16 is `createFakeNamespaceObject`'s "return value when it's
+				// Promise-like" flag, which `RuntimeTemplate.moduleNamespacePromise` adds
+				// for a dynamic import. It is irrelevant here: what is passed in is
+				// always the resolved module exports, after unwrapping the async-module
+				// export symbol where there is one, and never a Promise. Stripping it
+				// once leaves the cache key, the call below and everything downstream on
+				// one shape mode, so static defer (mode 8) and `await import.defer`
+				// (mode 8 | 16) share the same object. The key stays `(moduleId, mode)`
+				// so two importers reading one CJS module differently — as
+				// "default-with-named" against "namespace" — still get distinct entries.
+				"mode &= ~16;",
+				// Only a real ES module namespace has the spec's exotic shape; a
+				// synthesized one (JSON, asset, CommonJS interop) keeps the old form.
+				sealed && synthesized
+					? "if (!(mode & 8)) exportNames = undefined;"
+					: "",
+				`${lt} byMode = __webpack_module_deferred_namespace_cache__[moduleId];`,
+				"if (byMode && byMode[mode] !== undefined) return byMode[mode];",
+				"if (!byMode) byMode = __webpack_module_deferred_namespace_cache__[moduleId] = {};",
+				synthesized
+					? `${cst} cachedModule = __webpack_module_cache__[moduleId];`
+					: "",
+				synthesized
+					? "if (cachedModule && cachedModule.error === undefined && !(mode & 8)) {"
+					: "",
+				synthesized
+					? Template.indent([
+							`${lt} exports = cachedModule.exports;`,
+							hasAsync
+								? `if (${RuntimeGlobals.asyncModuleExportSymbol} in exports) exports = exports[${RuntimeGlobals.asyncModuleExportSymbol}];`
+								: "",
+							`return byMode[mode] = ${RuntimeGlobals.createFakeNamespaceObject}(exports, mode);`
+						])
+					: "",
+				synthesized ? "}" : "",
+				"",
+				`${lt} init = ${runtimeTemplate.basicFunction("", [
+					// A deferred namespace that forces evaluation of a module that is
+					// already evaluating (a cycle) must throw rather than expose its
+					// partial exports.
+					`${cst} evaluatingModule = __webpack_module_cache__[moduleId];`,
+					'if (evaluatingModule !== undefined && (evaluatingModule.evaluating || evaluatingModule.evaluatingAsync)) throw new TypeError("Cannot access a deferred module namespace while the module is being evaluated");',
+					`ns = ${RuntimeGlobals.require}(moduleId);`,
+					hasAsync
+						? `if (${RuntimeGlobals.asyncModuleExportSymbol} in ns) ns = ns[${RuntimeGlobals.asyncModuleExportSymbol}];`
+						: "",
+					"init = null;",
+					synthesized
+						? "if (mode & 8 || mode & 4 && ns.__esModule && typeof ns === 'object') {"
+						: "",
+					Template.indent([
+						// Drop only the read traps after init: with the namespace's own keys
+						// mirrored onto `ns_target`, default `Reflect` behavior already
+						// returns the right values through the live-binding getters.
+
+						// WHY: the spec makes `[[Set]]`, `[[Delete]]` and
+						// `[[DefineOwnProperty]]` on a Deferred Module Namespace always
+						// fail, yet the target stays extensible because it cannot be frozen
+						// up front — so without the mutation traps `ns.notExported = "x"`
+						// would silently create a property instead of returning false.
+
+						// A sealed target holds placeholder values, so the read traps stay to
+						// keep the live bindings visible.
+						sealed && synthesized ? "if (!exportNames) {" : "",
+						synthesized
+							? Template.indent([
+									"delete handler.get;",
+									"delete handler.has;",
+									"delete handler.ownKeys;",
+									"delete handler.getOwnPropertyDescriptor;"
+								])
+							: "",
+						sealed && synthesized ? "}" : ""
+					]),
+					synthesized ? "} else {" : "",
+					synthesized
+						? Template.indent([
+								`ns = ${RuntimeGlobals.createFakeNamespaceObject}(ns, mode);`
+							])
+						: "",
+					synthesized ? "}" : "",
+					// Mirror the resolved namespace's own properties onto the target, or
+					// the proxy invariants break: where a trap reports a non-configurable
+					// descriptor, the target must carry a matching one.
+
+					// `__esModule` and `Symbol.toStringTag` are skipped: the proxy
+					// synthesizes them whatever the namespace exposes, and the target is
+					// pre-populated with those values below.
+					synthesized
+						? `${cst} keys = ${sealed ? "exportNames ? [] : " : ""}Reflect.ownKeys(ns);`
+						: "",
+					synthesized ? "for (var i = 0; i < keys.length; i++) {" : "",
+					synthesized
+						? Template.indent([
+								`${cst} k = keys[i];`,
+								'if (k === "__esModule" || k === Symbol.toStringTag) continue;',
+								`if (!${runtimeTemplate.objectHasOwn("ns_target", "k")}) {`,
+								Template.indent([
+									"try { Object.defineProperty(ns_target, k, Reflect.getOwnPropertyDescriptor(ns, k)); } catch (_) {}"
+								]),
+								"}"
+							])
+						: "",
+					synthesized ? "}" : ""
+				])};`,
+				"",
+				// WHY: the proxy target is a fresh placeholder, separate from
+				// `__webpack_module_deferred_exports__[moduleId]`, which
+				// `__webpack_require__` reuses as `module.exports` for a deferred-loaded
+				// module and would conflict with the pre-populated synthetic `__esModule`
+				// and `Symbol.toStringTag` non-configurable properties. A dedicated
+				// target keeps the proxy invariant-compliant without interfering with the
+				// module's own exports object.
+				`${cst} ns_target = { __proto__: null };`,
+				// With the export list known at build time the target carries the spec's
+				// keys and is sealed, so `[[IsExtensible]]` is false up front.
+				sealed
+					? `${synthesized ? "if (exportNames) " : ""}for (var e = 0; e < exportNames.length; e++) ns_target[exportNames[e]] = undefined;`
+					: "",
+				// Pre-populate the synthetic properties with the non-configurable,
+				// non-writable, non-enumerable descriptors the spec gives a Module
+				// Namespace, which the trap below returns unchanged.
+
+				// `__esModule` is not one of the spec's keys, so a sealed namespace omits
+				// it; the synthesized form keeps it for interop.
+				synthesized
+					? `${sealed ? "if (!exportNames) " : ""}Object.defineProperty(ns_target, "__esModule", { value: true });`
+					: "",
+				'Object.defineProperty(ns_target, Symbol.toStringTag, { value: "Deferred Module" });',
+				sealed
+					? `${synthesized ? "if (exportNames) " : ""}Object.seal(ns_target);`
+					: "",
+				`${lt} ns = ns_target;`,
+				`${cst} handler = {`,
+				Template.indent([
+					"__proto__: null,",
+					// `IsSymbolLikeNamespaceKey` holds for any Symbol key and for `then`,
+					// and such a read must not evaluate the deferred module, so the checks
+					// below reach the pre-populated target without running `init()`.
+					`${runtimeTemplate.method("get", "_, name", [
+						"switch (name) {",
+						Template.indent([
+							// webpack's interop marker, read as a property by
+							// `o.__esModule ? o.default : o`, so a sealed namespace
+							// answers it too even though it is not one of its keys.
+							'case "__esModule": return true;',
+							'case Symbol.toStringTag: return "Deferred Module";',
+							'case "then": return undefined;'
+						]),
+						"}",
+						'if (typeof name === "symbol") return ns_target[name];',
+						init,
+						// A sealed namespace has exactly the spec's keys, so anything
+						// else is absent rather than read off the exports object.
+						sealed
+							? `${synthesized ? "if (exportNames) " : ""}return name in ns_target ? ns[name] : undefined;`
+							: "",
+						synthesized ? "return ns[name];" : ""
+					])},`,
+					`${runtimeTemplate.method("has", "_, name", [
+						"switch (name) {",
+						Template.indent(
+							[
+								synthesized
+									? `case "__esModule": ${sealed ? "if (!exportNames) " : ""}return true;${sealed ? " break;" : ""}`
+									: "",
+								"case Symbol.toStringTag:",
+								hasAsync
+									? `case ${RuntimeGlobals.deferredModuleAsyncTransitiveDependenciesSymbol}:`
+									: "",
+								Template.indent("return true;"),
+								'case "then":',
+								Template.indent("return false;")
+							].filter(Boolean)
+						),
+						"}",
+						'if (typeof name === "symbol") return name in ns_target;',
+						init,
+						sealed
+							? `${synthesized ? "if (exportNames) " : ""}return name in ns_target;`
+							: "",
+						synthesized ? "return name in ns;" : ""
+					])},`,
+					`${runtimeTemplate.method("ownKeys", "", [
+						init,
+						// The sealed target already carries the spec's keys, sorted.
+						sealed
+							? `${synthesized ? "if (exportNames) " : ""}return Reflect.ownKeys(ns_target);`
+							: "",
+						synthesized
+							? `${cst} filtered = Reflect.ownKeys(ns).filter(${runtimeTemplate.expressionFunction(
+									'x !== "then" && x !== Symbol.toStringTag',
+									"x"
+								)});`
+							: "",
+						synthesized
+							? `${cst} keys = ${
+									runtimeTemplate.supportsSpread()
+										? "[...filtered, Symbol.toStringTag]"
+										: "filtered.concat([Symbol.toStringTag])"
+								};`
+							: "",
+						synthesized ? "return keys;" : ""
+					])},`,
+					`${runtimeTemplate.method("getOwnPropertyDescriptor", "_, name", [
+						"switch (name) {",
+						Template.indent([
+							// Match the descriptors actually defined on `ns_target`, so the
+							// proxy invariant holds both for this result and for the
+							// post-init forwarding through the deleted-handler path.
+							synthesized
+								? `case "__esModule": ${sealed ? "if (!exportNames) " : ""}return { value: true, writable: false, enumerable: false, configurable: false };${sealed ? " break;" : ""}`
+								: "",
+							'case Symbol.toStringTag: return { value: "Deferred Module", writable: false, enumerable: false, configurable: false };',
+							'case "then": return undefined;'
+						]),
+						"}",
+						'if (typeof name === "symbol") return Reflect.getOwnPropertyDescriptor(ns_target, name);',
+						init,
+						// A namespace exposes data properties; webpack backs the exports
+						// with getters, so the spec's shape is synthesized here.
+						sealed
+							? `${synthesized ? "if (exportNames) " : ""}return name in ns_target ? { value: ns[name], writable: true, enumerable: true, configurable: false } : undefined;`
+							: "",
+						synthesized
+							? `${lt} desc = Reflect.getOwnPropertyDescriptor(ns, name);`
+							: "",
+						synthesized ? 'if (mode & 2 && name == "default" && !desc) {' : "",
+						synthesized
+							? Template.indent("desc = { value: ns, configurable: true };")
+							: "",
+						synthesized ? "}" : "",
+						synthesized ? "return desc;" : ""
+					])},`,
+					// `defineProperty` always rejects, yet must still evaluate on a string
+					// key, since the spec calls `[[GetOwnProperty]]` first. A Symbol key
+					// takes OrdinaryDefineOwnProperty and evaluates nothing.
+					`${runtimeTemplate.method("defineProperty", "_, name", [
+						'if (typeof name === "symbol" || name === "then") return false;',
+						init,
+						"return false;"
+					])},`,
+					// `deleteProperty` rejects too, and likewise still evaluates on a
+					// string key: the spec calls `GetModuleExportsList` for every
+					// non-symbol-like key.
+					`${runtimeTemplate.method("deleteProperty", "_, name", [
+						'if (typeof name === "symbol" || name === "then") return false;',
+						init,
+						"return false;"
+					])},`,
+					// `set` always returns false without triggering evaluation —
+					// the spec [[Set]] algorithm for Module Namespaces is just
+					// "return false" (no [[GetOwnProperty]], no eval).
+					`set: ${runtimeTemplate.returningFunction("false")},`
+				]),
+				"}",
+				// we don't fully emulate ES Module semantics in this Proxy to align with normal webpack esm namespace object.
+				"return byMode[mode] = new Proxy(ns_target, handler);"
+			]
+		)};`;
+	}
+}
+
+/**
+ * The module's export names, sorted, when the graph knows them exhaustively.
+ * Only a `namespace` module takes the sealed path, and names are never mangled
+ * here: materializing a namespace clears `canMangleUse` on every export.
+ * @param {ModuleGraph} moduleGraph the module graph
+ * @param {Module} module the deferred module
+ * @param {ExportsType} exportsType the module's exports type
+ * @returns {string[] | null} sorted export names, or null when unknown
+ */
+const getKnownExportNames = (moduleGraph, module, exportsType) => {
+	if (exportsType !== "namespace") return null;
+	const exportsInfo = moduleGraph.getExportsInfo(module);
+	if (exportsInfo.otherExportsInfo.provided !== false) return null;
+	const names = [];
+	for (const exportInfo of exportsInfo.orderedExports) {
+		// `false` is a definitive "not an export" (webpack records `__esModule`
+		// that way); anything but a definitive answer means the list is unknown.
+		if (exportInfo.provided === false) continue;
+		if (exportInfo.provided !== true) return null;
+		// A namespace never exposes `then`, so it is not one of the spec's keys.
+		if (exportInfo.name === "then") continue;
+		names.push(exportInfo.name);
+	}
+	return names.sort();
+};
+
+module.exports.MakeDeferredNamespaceObjectRuntimeModule =
+	MakeDeferredNamespaceObjectRuntimeModule;
+module.exports.MakeOptimizedDeferredNamespaceObjectRuntimeModule =
+	MakeOptimizedDeferredNamespaceObjectRuntimeModule;
+module.exports.getDeferredCycleModuleIds = getDeferredCycleModuleIds;
+module.exports.getDeferredCycleModules = getDeferredCycleModules;
+module.exports.getKnownExportNames = getKnownExportNames;
+module.exports.getMakeDeferredNamespaceModeFromExportsType =
+	getMakeDeferredNamespaceModeFromExportsType;
+module.exports.getOptimizedDeferredModule = getOptimizedDeferredModule;

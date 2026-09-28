@@ -1,0 +1,93 @@
+/*
+	MIT License http://www.opensource.org/licenses/mit-license.php
+*/
+
+"use strict";
+
+const RuntimeGlobals = require("../RuntimeGlobals");
+const RuntimeModule = require("../RuntimeModule");
+const Template = require("../Template");
+
+/** @import Compilation from "../Compilation" */
+
+/**
+ * Fires `<link rel="prefetch">` / `<link rel="preload">` for every asset
+ * referenced from this chunk via `new URL(..., import.meta.url)` carrying
+ * `webpackPrefetch` / `webpackPreload`, at chunk startup. Runs before any
+ * user module evaluates, so by the time user code reaches the
+ * corresponding `new URL(...)` (or hands the URL to `<img>`, `fetch`,
+ * `new Worker`, etc.), the browser already has the response in flight.
+ *
+ * The calls themselves are rendered by `ResourceHintPlugin`, while runtime
+ * requirements are still open — see `collectStartupAssetHintLines`.
+ */
+class StartupAssetHintRuntimeModule extends RuntimeModule {
+	/**
+	 * @param {string[]} lines the `<link>` calls this chunk fires at startup
+	 */
+	constructor(lines) {
+		super("startup asset hints", RuntimeModule.STAGE_TRIGGER);
+		this._lines = lines;
+	}
+
+	/**
+	 * The `[handlerMap, key]` pairs this module installs onto a chunk handler map
+	 * such as `__webpack_require__.f`, or `null` where it cannot name them.
+	 * @returns {[string, string][] | null} installed chunk handlers (do not mutate)
+	 */
+	getInstalledChunkHandlers() {
+		return RuntimeModule.NO_CHUNK_HANDLERS;
+	}
+
+	/**
+	 * Generates runtime code for this runtime module.
+	 * @returns {string | null} runtime code
+	 */
+	generate() {
+		const compilation = /** @type {Compilation} */ (this.compilation);
+		const lines = this._lines;
+		if (lines.length === 0) return null;
+		// `__webpack_nonce__` set in the entry module comes too late, the entry not
+		// having run, so the nonce is read off the `<script>` that loaded the bundle
+		// and the links match a CSP demanding the script's own.
+
+		// Classic output finds it on `document.currentScript`. ESM output leaves that
+		// null, so the loading `<script type="module">` is found by matching its
+		// `src` against `import.meta.url`.
+		const { module: isModule, importMetaName } = compilation.outputOptions;
+		const nonceSetup = isModule
+			? [
+					"if (typeof document !== 'undefined') {",
+					Template.indent([
+						`var url = ${importMetaName}.url;`,
+						"var scripts = document.getElementsByTagName('script');",
+						"for (var i = 0; i < scripts.length; i++) {",
+						Template.indent([
+							`if (scripts[i].src === url && scripts[i].nonce && !${RuntimeGlobals.scriptNonce}) {`,
+							Template.indent([
+								`${RuntimeGlobals.scriptNonce} = scripts[i].nonce;`,
+								"break;"
+							]),
+							"}"
+						]),
+						"}"
+					]),
+					"}"
+				]
+			: [
+					"if (typeof document !== 'undefined') {",
+					Template.indent([
+						"var currentScript = document.currentScript;",
+						`if (currentScript && currentScript.nonce && !${RuntimeGlobals.scriptNonce}) {`,
+						Template.indent(
+							`${RuntimeGlobals.scriptNonce} = currentScript.nonce;`
+						),
+						"}"
+					]),
+					"}"
+				];
+		return Template.asString([...nonceSetup, ...lines]);
+	}
+}
+
+module.exports = StartupAssetHintRuntimeModule;

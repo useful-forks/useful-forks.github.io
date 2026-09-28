@@ -1,0 +1,58 @@
+/*
+	MIT License http://www.opensource.org/licenses/mit-license.php
+*/
+
+"use strict";
+
+const RuntimeGlobals = require("../RuntimeGlobals");
+const RuntimeModule = require("../RuntimeModule");
+
+/** @import { PublicPath } from "../../declarations/WebpackOptions" */
+/** @import Compilation from "../Compilation" */
+
+class PublicPathRuntimeModule extends RuntimeModule {
+	/**
+	 * Returns true, if the runtime module should get it's own scope.
+	 * When false, `generate()` must emit complete statements ending with `;`
+	 * so a following runtime IIFE is not parsed as a call (ASI).
+	 * @returns {boolean} true, if the runtime module should get it's own scope
+	 */
+	shouldIsolate() {
+		return false;
+	}
+
+	/**
+	 * @param {PublicPath} publicPath public path
+	 */
+	constructor(publicPath) {
+		super("publicPath", RuntimeModule.STAGE_BASIC);
+		/** @type {PublicPath} */
+		this.publicPath = publicPath;
+	}
+
+	/**
+	 * The `[handlerMap, key]` pairs this module installs onto a chunk handler map
+	 * such as `__webpack_require__.f`, or `null` where it cannot name them.
+	 * @returns {[string, string][] | null} installed chunk handlers (do not mutate)
+	 */
+	getInstalledChunkHandlers() {
+		return RuntimeModule.NO_CHUNK_HANDLERS;
+	}
+
+	/**
+	 * Generates runtime code for this runtime module.
+	 * @returns {string | null} runtime code
+	 */
+	generate() {
+		const { publicPath } = this;
+		const compilation = /** @type {Compilation} */ (this.compilation);
+
+		return `${RuntimeGlobals.publicPath} = ${JSON.stringify(
+			compilation.getPath(publicPath || "", {
+				hash: compilation.hash || "XXXX"
+			})
+		)};`;
+	}
+}
+
+module.exports = PublicPathRuntimeModule;

@@ -1,0 +1,158 @@
+/*
+	MIT License http://www.opensource.org/licenses/mit-license.php
+	Author Tobias Koppers @sokra
+*/
+
+"use strict";
+
+const RuntimeGlobals = require("../RuntimeGlobals");
+const RuntimeModule = require("../RuntimeModule");
+const Template = require("../Template");
+const { compareModulesByIdentifier } = require("../util/comparators");
+
+/** @import Chunk, { ChunkId } from "../Chunk" */
+/** @import ChunkGraph, { ModuleId } from "../ChunkGraph" */
+/** @import Compilation from "../Compilation" */
+/** @import RemoteModule from "./RemoteModule" */
+
+class RemoteRuntimeModule extends RuntimeModule {
+	constructor() {
+		super("remotes loading");
+	}
+
+	/**
+	 * The `[handlerMap, key]` pairs this module installs onto a chunk handler map
+	 * such as `__webpack_require__.f`, or `null` where it cannot name them.
+	 * @returns {[string, string][] | null} installed chunk handlers (do not mutate)
+	 */
+	getInstalledChunkHandlers() {
+		return [[RuntimeGlobals.ensureChunkHandlers, "remotes"]];
+	}
+
+	/**
+	 * Generates runtime code for this runtime module.
+	 * @returns {string | null} runtime code
+	 */
+	generate() {
+		const compilation = /** @type {Compilation} */ (this.compilation);
+		const chunkGraph = /** @type {ChunkGraph} */ (this.chunkGraph);
+		const { runtimeTemplate, moduleGraph } = compilation;
+		/** @type {Record<ChunkId, ModuleId[]>} */
+		const chunkToRemotesMapping = {};
+		/** @type {Record<ModuleId, [string, string, ModuleId]>} */
+		const idToExternalAndNameMapping = {};
+		for (const chunk of /** @type {Chunk} */ (
+			this.chunk
+		).getAllReferencedChunks()) {
+			// ordered explicitly: an unordered read reflects whichever comparator
+			// last sorted the chunk's modules, which is not ours to depend on
+			const modules = chunkGraph.getOrderedChunkModulesIterableBySourceType(
+				chunk,
+				"remote",
+				compareModulesByIdentifier
+			);
+			if (!modules) continue;
+			/** @type {ModuleId[]} */
+			const remotes = (chunkToRemotesMapping[
+				/** @type {ChunkId} */
+				(chunk.id)
+			] = []);
+			for (const m of modules) {
+				const module = /** @type {RemoteModule} */ (m);
+				const name = module.internalRequest;
+				const id = /** @type {ModuleId} */ (chunkGraph.getModuleId(module));
+				const shareScope = module.shareScope;
+				const dep = module.dependencies[0];
+				const externalModule = moduleGraph.getModule(dep);
+				const externalModuleId =
+					/** @type {ModuleId} */
+					(externalModule && chunkGraph.getModuleId(externalModule));
+				remotes.push(id);
+				idToExternalAndNameMapping[id] = [shareScope, name, externalModuleId];
+			}
+		}
+		const cst = runtimeTemplate.renderConst();
+		const lt = runtimeTemplate.renderLet();
+		return Template.asString([
+			`${cst} chunkMapping = ${JSON.stringify(
+				chunkToRemotesMapping,
+				null,
+				"\t"
+			)};`,
+			`${cst} idToExternalAndNameMapping = ${JSON.stringify(
+				idToExternalAndNameMapping,
+				null,
+				"\t"
+			)};`,
+			`${
+				RuntimeGlobals.ensureChunkHandlers
+			}.remotes = ${runtimeTemplate.basicFunction("chunkId, promises", [
+				`if(${RuntimeGlobals.hasOwnProperty}(chunkMapping, chunkId)) {`,
+				Template.indent([
+					`chunkMapping[chunkId].forEach(${runtimeTemplate.basicFunction("id", [
+						`${lt} getScope = ${RuntimeGlobals.currentRemoteGetScope};`,
+						"if(!getScope) getScope = [];",
+						`${cst} data = idToExternalAndNameMapping[id];`,
+						"if(getScope.indexOf(data) >= 0) return;",
+						"getScope.push(data);",
+						"if(data.p) return promises.push(data.p);",
+						`${cst} onError = ${runtimeTemplate.basicFunction("error", [
+							'if(!error) error = new Error("Container missing");',
+							'if(typeof error.message === "string")',
+							Template.indent(
+								"error.message += '\\nwhile loading \"' + data[1] + '\" from ' + data[2];"
+							),
+							`${
+								RuntimeGlobals.moduleFactories
+							}[id] = ${runtimeTemplate.basicFunction("", ["throw error;"])}`,
+							"data.p = 0;"
+						])};`,
+						`${cst} handleFunction = ${runtimeTemplate.basicFunction(
+							"fn, arg1, arg2, d, next, first",
+							[
+								"try {",
+								Template.indent([
+									`${cst} promise = fn(arg1, arg2);`,
+									`if(${runtimeTemplate.optionalChaining("promise", "then")}) {`,
+									Template.indent([
+										`${cst} p = promise.then(${runtimeTemplate.returningFunction(
+											"next(result, d)",
+											"result"
+										)}, onError);`,
+										"if(first) promises.push(data.p = p); else return p;"
+									]),
+									"} else {",
+									Template.indent(["return next(promise, d, first);"]),
+									"}"
+								]),
+								"} catch(error) {",
+								Template.indent(["onError(error);"]),
+								"}"
+							]
+						)}`,
+						`${cst} onExternal = ${runtimeTemplate.returningFunction(
+							`external ? handleFunction(${RuntimeGlobals.initializeSharing}, data[0], 0, external, onInitialized, first) : onError()`,
+							"external, _, first"
+						)};`,
+						`${cst} onInitialized = ${runtimeTemplate.returningFunction(
+							"handleFunction(external.get, data[1], getScope, 0, onFactory, first)",
+							"_, external, first"
+						)};`,
+						`${cst} onFactory = ${runtimeTemplate.basicFunction("factory", [
+							"data.p = 1;",
+							`${
+								RuntimeGlobals.moduleFactories
+							}[id] = ${runtimeTemplate.basicFunction("module", [
+								"module.exports = factory();"
+							])}`
+						])};`,
+						`handleFunction(${RuntimeGlobals.require}, data[2], 0, 0, onExternal, 1);`
+					])});`
+				]),
+				"}"
+			])}`
+		]);
+	}
+}
+
+module.exports = RemoteRuntimeModule;
