@@ -91,8 +91,13 @@ function getTableBody() {
   return JQ_ID_TABLE.find($("tbody"));
 }
 function tableIsEmpty(table) {
+  // fixed logic: prefer TABLE_DATA source-of-truth, safe when called without arg before JQ init
+  if (typeof TABLE_DATA !== 'undefined') {
+    return TABLE_DATA.length === 0;
+  }
   if (table === undefined) { // faking overloaded function
-    table = getTableBody();
+    if (typeof JQ_ID_TABLE === 'undefined' || !JQ_ID_TABLE) return true;
+    try { table = getTableBody(); } catch(e) { return true; }
   }
   return table.children().length === 0;
 }
