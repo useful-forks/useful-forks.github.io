@@ -19,6 +19,8 @@ const UF_MSG_API_RATE     = "<b>GitHub API rate-limits exceeded.</b> Consider pr
     + "The amount of API calls you are allowed to do will re-accumulate over time: you can try again later on.<br>"
     + "It's also possible that the queried repository has so many forks that it's impossible to scan it completely without running out of API calls.<br>"
     + ":(";
+const UF_MSG_ABORTED       = "Search aborted. Preserved existing results.";
+const UF_MSG_ABORT_TOOLTIP = "Once aborted, the search cannot be resumed.";
 
 // list of messages which should not be cleared when the request ends
 const UF_PRESERVED_MSGS = [
@@ -152,16 +154,43 @@ function removeProgressBar() {
 function enableQueryFields() {
   JQ_REPO_FIELD.prop('disabled', false);
   JQ_SEARCH_BTN.prop('disabled', false);
-  JQ_SEARCH_BTN.removeClass('is-loading');
+  restoreSearchBtn();
 }
 function setQueryFieldsAsLoading() {
   JQ_REPO_FIELD.prop('disabled', true);
-  JQ_SEARCH_BTN.addClass('is-loading');
+  setSearchBtnAbortable();
 }
 function disableQueryFields() {
   JQ_REPO_FIELD.prop('disabled', true);
   JQ_SEARCH_BTN.prop('disabled', true);
-  JQ_SEARCH_BTN.removeClass('is-loading');
+  restoreSearchBtn();
+}
+
+/* While a scan is ongoing, the search button itself becomes the abort control
+   (#79, #16): it keeps its normal style but shows a spinner + "Click to abort"
+   text, gets a red border on hover (see my-style.css), and a tooltip explaining
+   there is no resume. The API-calls badge inside the button is left untouched. */
+function setSearchBtnAbortable() {
+  if (JQ_SEARCH_BTN.hasClass('is-abortable')) return;
+  JQ_SEARCH_BTN.addClass('is-abortable');
+  JQ_SEARCH_BTN.attr('title', UF_MSG_ABORT_TOOLTIP);
+  const btn = JQ_SEARCH_BTN[0];
+  Array.from(btn.childNodes).forEach(n => { if (n.nodeType === Node.TEXT_NODE) n.remove(); });
+  const spinner = document.createElement('span');
+  spinner.className = 'uf-spinner';
+  spinner.setAttribute('aria-hidden', 'true');
+  btn.appendChild(spinner);
+  btn.appendChild(document.createTextNode(' Click to abort'));
+}
+function restoreSearchBtn() {
+  if (!JQ_SEARCH_BTN.hasClass('is-abortable')) return;
+  JQ_SEARCH_BTN.removeClass('is-abortable');
+  JQ_SEARCH_BTN.removeAttr('title');
+  const btn = JQ_SEARCH_BTN[0];
+  const spinner = btn.querySelector('.uf-spinner');
+  if (spinner) spinner.remove();
+  Array.from(btn.childNodes).forEach(n => { if (n.nodeType === Node.TEXT_NODE) n.remove(); });
+  btn.appendChild(document.createTextNode('Find useful forks'));
 }
 
 function setQuery(query) {

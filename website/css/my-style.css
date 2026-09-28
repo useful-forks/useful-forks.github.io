@@ -423,3 +423,25 @@ body.dark {
 [data-theme="dark"] #uf_csv_export_btn img {
   filter: invert(1);
 }
+
+/* ---- Abortable search button (#79, #16) ----
+   While a scan is ongoing the search button doubles as the abort control:
+   normal style + spinner + "Click to abort" text, red border on hover. */
+#searchBtn.is-abortable:hover,
+[data-theme="dark"] #searchBtn.is-abortable:hover {
+  border-color: #f14668; /* Bulma danger red */
+}
+.uf-spinner {
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  border: 2px solid rgba(128, 128, 128, 0.4);
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: uf-spin 0.8s linear infinite;
+  margin-right: 0.5em;
+  vertical-align: -0.125em;
+}
+@keyframes uf-spin {
+  to { transform: rotate(360deg); }
+}
