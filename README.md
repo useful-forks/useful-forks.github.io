@@ -42,7 +42,7 @@ Below is a recording of what a scan would look like:
 Head to [Chrome's Web Store](https://chrome.google.com/webstore/detail/useful-forks/aflbdmaojedofngiigjpnlabhginodbf) to install the published extension.
 
 ### Firefox add-on
-Head to [Firefox Add-ons](https://addons.mozilla.org/firefox/addon/firefox-useful-forks/) to install the published add-on.
+Head to [Firefox Add-ons](https://addons.mozilla.org/addon/firefox-useful-forks/) to install the published add-on.
 
 Once activated, either one will automatically add a new "Useful" button on all GitHub repository pages:
 
