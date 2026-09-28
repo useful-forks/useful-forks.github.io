@@ -16,6 +16,7 @@ Sometimes, a project might be abandoned, or someone had a different idea of how 
 * [Releases](#releases)
   * [Online tool](#online-tool)
   * [Chrome extension](#chrome-extension)
+  * [Firefox add-on](#firefox-add-on)
   * [Bookmarklet](#bookmarklet)
 * [How it works](#how-it-works)
 * [Contributing](#contributing)
@@ -26,7 +27,7 @@ Sometimes, a project might be abandoned, or someone had a different idea of how 
 ## Releases
 There are several ways to access the tool.
 
-If you use Chrome, your best option would be to download the [Chrome extension](#chrome-extension). For other browsers, you may want to use the [bookmarklet](#bookmarklet).
+If you use Chrome, your best option would be to download the [Chrome extension](#chrome-extension). If you use Firefox, grab the [Firefox add-on](#firefox-add-on) instead. For other browsers, you may want to use the [bookmarklet](#bookmarklet).
 
 ### Online tool
 The project is [available online](https://useful-forks.github.io/) for free thanks to GitHub Pages.
@@ -40,7 +41,10 @@ Below is a recording of what a scan would look like:
 ### Chrome extension
 Head to [Chrome's Web Store](https://chrome.google.com/webstore/detail/useful-forks/aflbdmaojedofngiigjpnlabhginodbf) to install the published extension.
 
-Once it's activated, the extension will automatically add a new "Useful" button on all GitHub repository pages:
+### Firefox add-on
+Head to [Firefox Add-ons](https://addons.mozilla.org/addon/firefox-useful-forks/) to install the published add-on.
+
+Once activated, either one will automatically add a new "Useful" button on all GitHub repository pages:
 
 ![extension_btn](media/plugin_btn_highlighted.png "This is what the 'Useful' button looks like")
 
@@ -50,7 +54,7 @@ Here is what happens when you click it:
 
 This button will only appear when you visit GitHub repositories, and clicking it opens a new tab that will automatically trigger a search using [the online tool](#online-tool).
 
-Please note that this project will not be updating the [GitHub Releases](https://github.com/useful-forks/useful-forks.github.io/releases) page anymore. We will now go through Chrome's Web Store to publish updates.
+Please note that this project will not be updating the [GitHub Releases](https://github.com/useful-forks/useful-forks.github.io/releases) page anymore. We will now go through Chrome's Web Store and Firefox Add-ons to publish updates.
 
 ### Bookmarklet
 
