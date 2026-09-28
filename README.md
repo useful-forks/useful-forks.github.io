@@ -78,8 +78,8 @@ If you want to help, the structure of the repo is rather simple. In terms of fol
 
 ### Website instructions
 To run the website locally, you will need:
-* NodeJS (suggested v14.15+)
-* NPM (suggested v6.14+)
+* NodeJS (suggested v20+)
+* NPM (suggested v8+)
 
 Bring a terminal to the ``website`` folder and execute `npm install`, and then `npm run dev`.
 
